@@ -11,7 +11,7 @@ import argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build CLI argument parser."""
+    """Build the placeholder inference CLI for the power-spectrum family."""
     parser = argparse.ArgumentParser(description="Power-spectrum inference entrypoint.")
     parser.add_argument(
         "--describe",
@@ -22,7 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """CLI entrypoint."""
+    """Run the current power-spectrum inference status command.
+
+    For now this command is intentionally honest rather than ambitious: it can
+    describe the state of the inference layer, but it does not yet load real
+    checkpoints or emit physical predictions.
+    """
     args = build_parser().parse_args()
     if args.describe:
         print(

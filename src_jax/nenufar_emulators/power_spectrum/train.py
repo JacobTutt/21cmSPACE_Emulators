@@ -68,7 +68,12 @@ def run_synthetic_smoke(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build CLI argument parser."""
+    """Build the command-line interface for power-spectrum development tasks.
+
+    The CLI is intentionally narrow for now. It exists to expose inspection and
+    verification tasks while the real dataset-driven training path is still
+    being migrated.
+    """
     parser = argparse.ArgumentParser(description="Power-spectrum emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
@@ -89,8 +94,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """CLI entrypoint.
 
-    The hard failure on the default path is deliberate: until dataset loading
-    exists, the command should be explicit about what it can and cannot do.
+    The hard failure on the default path is deliberate. Until real dataset
+    loading exists, the command should say plainly what it can do today rather
+    than pretending to support a production workflow.
     """
     args = build_parser().parse_args()
     spec = default_power_spectrum_spec()

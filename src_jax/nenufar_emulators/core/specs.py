@@ -37,16 +37,18 @@ class AxisSpec:
     nsample: int | None = None
 
     def feature_name(self) -> str:
-        """Return the feature name after transformation.
+        """Return the model-facing name for this axis.
 
-        The old code frequently referred to transformed quantities as
-        ``log10k`` or ``log10fradio``. We preserve that convention here so the
-        new code can mirror legacy feature ordering and remain readable.
+        In practice this is the column name that will appear in prepared
+        feature matrices and checkpoint metadata. The old code frequently used
+        names such as ``log10k`` or ``log10fradio`` for transformed variables,
+        and we preserve that convention so legacy feature ordering stays
+        recognizable.
         """
         return self.name if self.transform == "identity" else f"{self.transform}{self.name}"
 
     def validate(self) -> None:
-        """Validate internal consistency."""
+        """Check that the axis description is usable by loaders and trainers."""
         if not self.name:
             raise ValueError("Axis name must be non-empty.")
         if self.limits is not None and self.limits[0] >= self.limits[1]:
@@ -68,11 +70,16 @@ class ParameterSpec:
     discrete_values: tuple[float, ...] | None = None
 
     def feature_name(self) -> str:
-        """Return the parameter name after transformation."""
+        """Return the model-facing name for this parameter.
+
+        As with axes, this is the practical column name used once the raw
+        science quantity has been transformed into the feature space seen by
+        the emulator.
+        """
         return self.name if self.transform == "identity" else f"{self.transform}{self.name}"
 
     def validate(self) -> None:
-        """Validate internal consistency."""
+        """Check that the parameter description is usable and unambiguous."""
         if not self.name:
             raise ValueError("Parameter name must be non-empty.")
         if self.discrete_values is not None and len(self.discrete_values) == 0:
@@ -146,9 +153,14 @@ class EmulatorSpec:
         return tuple(names)
 
     def parameter_names(self) -> tuple[str, ...]:
-        """Return untransformed parameter names."""
+        """Return the raw physical parameter names in their declared order.
+
+        This is mainly for dataset-loading and inference code that still needs
+        to talk in the language of the original science tables rather than the
+        transformed feature matrix.
+        """
         return tuple(parameter.name for parameter in self.parameters)
 
     def axis_names(self) -> tuple[str, ...]:
-        """Return untransformed axis names."""
+        """Return the raw physical axis names in their declared order."""
         return tuple(axis.name for axis in self.axes)

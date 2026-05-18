@@ -57,7 +57,12 @@ LEGACY_FRAD_COLUMNS = (
 
 
 def default_global_signal_spec() -> EmulatorSpec:
-    """Return the baseline frad-style global-signal emulator contract."""
+    """Return the baseline HERA-style global-signal contract using ``fradio``.
+
+    This is the closest equivalent to the standard modern global-signal setup
+    in the old repository: one redshift axis plus the transformed astrophysical
+    parameters used for ``T21``-like emulators.
+    """
     return EmulatorSpec(
         name="t21_global_signal",
         family="global_signal",
@@ -106,7 +111,11 @@ def t21_arad_spec() -> EmulatorSpec:
 
 
 def ts_arad_spec() -> EmulatorSpec:
-    """Return the old `Ts` Arad global-signal emulator contract."""
+    """Return the old `Ts` Arad emulator contract.
+
+    The main practical difference from ``T21`` is that the target was trained
+    in ``log10`` space and sampled on a denser redshift grid.
+    """
     return EmulatorSpec(
         name="ts_arad_global_signal",
         family="global_signal",
@@ -118,7 +127,7 @@ def ts_arad_spec() -> EmulatorSpec:
 
 
 def trad_frad_spec() -> EmulatorSpec:
-    """Return the old `Trad` frad global-signal emulator contract."""
+    """Return the old ``Trad`` emulator contract using ``fradio`` inputs."""
     return EmulatorSpec(
         name="trad_frad_global_signal",
         family="global_signal",
@@ -154,7 +163,11 @@ def tk_frad_spec() -> EmulatorSpec:
 
 
 def prepare_hera_idr4_frad_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA IDR4 frad arrays for Trad/T_today-style emulators."""
+    """Prepare HERA IDR4 tables for ``Trad`` and ``T_today`` style emulators.
+
+    This applies the same feature dropping and log transforms used by the old
+    scripts so that later JAX training code sees the same effective inputs.
+    """
     return prepare_feature_matrix(
         raw_parameters,
         HERA_IDR4_COLUMNS,
@@ -180,7 +193,11 @@ def prepare_hera_cosmic_string_arad_parameters(raw_parameters: np.ndarray) -> Pr
 
 
 def prepare_legacy_frad_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare old 9-parameter frad arrays for TK-style emulators."""
+    """Prepare the older 9-parameter ``fradio`` tables for ``TK`` emulators.
+
+    This path exists because ``TK`` did not use the newer 12-column HERA table
+    that the other migrated global-signal emulators expect.
+    """
     return prepare_feature_matrix(
         raw_parameters,
         LEGACY_FRAD_COLUMNS,

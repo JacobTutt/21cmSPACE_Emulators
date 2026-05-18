@@ -20,7 +20,7 @@ ActivationName = Literal["relu", "tanh", "gelu"]
 
 
 def _activation_fn(name: ActivationName):
-    """Resolve the configured activation string to a JAX function."""
+    """Translate a human-readable activation name into the JAX callable used at runtime."""
     activations = {
         "relu": jax.nn.relu,
         "tanh": jnp.tanh,
@@ -49,6 +49,27 @@ class DenseMLP(nnx.Module):
         init_scale: float = 1e-1,
         rngs: nnx.Rngs,
     ) -> None:
+        """Construct a dense feed-forward network for tiled emulator inputs.
+
+        Parameters
+        ----------
+        in_features:
+            Width of the input feature vector. In practice this is the number
+            of tiled axis coordinates plus the number of physical parameters.
+        hidden_features:
+            Width of each hidden layer.
+        hidden_layers:
+            Number of hidden layers before the final linear readout.
+        out_features:
+            Output width. The emulators currently use ``1`` because they
+            predict one scalar target per tiled row.
+        activation:
+            Non-linearity applied after each hidden linear layer.
+        init_scale:
+            Standard deviation used for normal weight initialization.
+        rngs:
+            NNX random-number container used to initialize parameters.
+        """
         self.in_features = in_features
         self.hidden_features = hidden_features
         self.hidden_layers = hidden_layers
@@ -92,7 +113,7 @@ class DenseMLP(nnx.Module):
         )
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        """Run a forward pass through the MLP."""
+        """Map a batch of tiled emulator features to predicted scalar values."""
         act_fn = _activation_fn(self.activation)
         x = inputs
         for layer in self.hidden:
@@ -109,7 +130,12 @@ def init_mlp(
     activation: ActivationName = "relu",
     scale: float = 1e-1,
 ) -> DenseMLP:
-    """Initialize and return a live Flax NNX MLP object."""
+    """Create an initialized NNX MLP ready for training or inference.
+
+    This small helper keeps model construction consistent across tests, CLI
+    smoke runs, and the shared trainer. The caller provides shape choices and a
+    random seed; the helper returns a fully initialized live NNX module.
+    """
     return DenseMLP(
         in_features=in_features,
         hidden_features=hidden_features,
@@ -128,9 +154,9 @@ def forward_mlp(
 ) -> jnp.ndarray:
     """Run a dense MLP forward pass using the provided NNX model.
 
-    ``activation`` is kept as an optional compatibility check for call sites
-    that still think in the older functional API. The model itself is the
-    source of truth for which activation the network uses.
+    The extra ``activation`` argument is only a compatibility guard for older
+    call sites that still think in terms of a functional API. The model object
+    itself is the real source of truth for the network configuration.
     """
     if activation is not None and activation != model.activation:
         raise ValueError(

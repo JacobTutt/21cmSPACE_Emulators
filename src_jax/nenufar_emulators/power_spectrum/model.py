@@ -1,4 +1,9 @@
-"""Power-spectrum model definitions."""
+"""Power-spectrum model definitions.
+
+This module separates two ideas that are easy to conflate during migration:
+the lightweight development-time defaults used by the new code, and the
+legacy-aligned bundles that intentionally mirror the old scripts.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,11 @@ from nenufar_emulators.core.legacy import (
 
 @dataclass(frozen=True)
 class PowerSpectrumModelConfig:
-    """Development-time MLP configuration for power-spectrum emulators."""
+    """Small readable config for the shared power-spectrum MLP shape.
+
+    This is the sort of object you would pass around inside the new codebase
+    when you do not need exact old-script parity.
+    """
 
     hidden_features: int = 100
     hidden_layers: int = 6
@@ -21,7 +30,11 @@ class PowerSpectrumModelConfig:
 
 @dataclass(frozen=True)
 class LegacyPowerSpectrumBundle:
-    """Legacy-aligned model and training defaults for one emulator."""
+    """One named package of old-script defaults for a power-spectrum emulator.
+
+    Each bundle answers a practical question: "if I want to reproduce the old
+    script's architecture and trainer settings, which numbers should I use?"
+    """
 
     name: str
     mlp: LegacyMLPConfig
@@ -30,7 +43,7 @@ class LegacyPowerSpectrumBundle:
 
 
 def delta21_frad_legacy_bundle() -> LegacyPowerSpectrumBundle:
-    """Return defaults matching the old `Delta21` PyTorch script."""
+    """Return the exact default bundle for the legacy `Delta21` training path."""
     return LegacyPowerSpectrumBundle(
         name="Delta21",
         mlp=LegacyMLPConfig(input_dim=11, hidden_dim=100, n_hidden_blocks=6),
@@ -45,7 +58,7 @@ def delta21_frad_legacy_bundle() -> LegacyPowerSpectrumBundle:
 
 
 def sdc3b_pk_legacy_bundle() -> LegacyPowerSpectrumBundle:
-    """Return defaults matching the old `SDC3b_Pk` PyTorch script."""
+    """Return the exact default bundle for the legacy `SDC3b_Pk` training path."""
     return LegacyPowerSpectrumBundle(
         name="SDC3b_Pk",
         mlp=LegacyMLPConfig(input_dim=7, hidden_dim=100, n_hidden_blocks=6),

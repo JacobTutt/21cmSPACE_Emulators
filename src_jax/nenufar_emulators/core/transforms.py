@@ -1,4 +1,10 @@
-"""Named transforms used across configuration and preprocessing."""
+"""Small named transforms used by specs, preprocessing, and inference.
+
+The old emulator code frequently worked in transformed coordinates, for
+example ``log10(k)`` or ``log10(Delta21 + 1)``. These helpers keep those rules
+explicit so the transformation applied during training can later be inverted in
+inference or plotting code.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,20 @@ import numpy as np
 
 
 def apply_transform(values: np.ndarray, transform: str, offset: float = 0.0) -> np.ndarray:
-    """Apply a named transform to values."""
+    """Apply a configured transform exactly as the emulator expects it.
+
+    Parameters
+    ----------
+    values:
+        Raw physical values such as axis coordinates, parameters, or targets.
+    transform:
+        Name of the transform to apply. ``"identity"`` leaves the values
+        unchanged, while ``"log10"`` applies base-10 logarithms.
+    offset:
+        Additive offset applied before ``log10``. This is used for targets
+        such as power spectra that may need a positive shift before taking a
+        logarithm.
+    """
     arr = np.asarray(values, dtype=float)
     if transform == "identity":
         return arr
@@ -16,7 +35,12 @@ def apply_transform(values: np.ndarray, transform: str, offset: float = 0.0) -> 
 
 
 def invert_transform(values: np.ndarray, transform: str, offset: float = 0.0) -> np.ndarray:
-    """Invert a named transform."""
+    """Undo a configured transform and recover physical-space values.
+
+    This function exists for the other half of the emulator lifecycle. Training
+    often happens in transformed space for numerical reasons, but downstream
+    science code usually wants predictions back in the original physical units.
+    """
     arr = np.asarray(values, dtype=float)
     if transform == "identity":
         return arr

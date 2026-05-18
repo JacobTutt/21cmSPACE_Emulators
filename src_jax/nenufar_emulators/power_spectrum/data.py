@@ -92,7 +92,9 @@ def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> Prepared
     """Prepare HERA IDR4 12-parameter arrays for the old `Delta21` emulator.
 
     The raw table contains 12 columns, but the legacy emulator dropped `zeta`,
-    `feed`, and `delay` before training.
+    `feed`, and `delay` before training. It also logged the star-formation and
+    radio-efficiency style parameters, while keeping `alpha`, `nu_0`, and
+    `pop` available as explicitly discrete metadata.
     """
     return prepare_feature_matrix(
         raw_parameters,
@@ -104,7 +106,11 @@ def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> Prepared
 
 
 def prepare_sdc3b_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare SDC3b parameter arrays for the old SDC3b power emulator."""
+    """Prepare raw SDC3b parameters for the SDC3b power-spectrum emulator.
+
+    This path is simpler than the HERA one because the legacy SDC3b setup did
+    not discard columns or apply log transforms at this stage.
+    """
     return prepare_feature_matrix(
         raw_parameters,
         SDC3B_COLUMNS,

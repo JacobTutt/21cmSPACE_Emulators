@@ -20,11 +20,23 @@ def tile_spectra(
     axes: tuple[np.ndarray, ...],
     targets: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, tuple[int, ...]]:
-    """Tile spectral targets into `[axes, params] -> scalar` samples.
+    """Flatten spectra into scalar-regression training examples.
 
-    Parameters are repeated for every coordinate in the spectral grid, while
-    the axis coordinates are meshed together once and then repeated across
-    simulation samples.
+    This is the practical heart of the emulator formulation used in both the
+    old code and this rewrite. A full spectrum is converted into many rows of
+    the form ``[axis coordinates, astrophysical parameters] -> scalar target``.
+    That lets one dense MLP architecture serve both power-spectrum and
+    global-signal emulators.
+
+    Parameters
+    ----------
+    parameters:
+        Array of simulation parameters with shape ``(nsamples, nparams)``.
+    axes:
+        Tuple of one-dimensional axis arrays, for example ``(z, k)`` for power
+        spectra or ``(z,)`` for global signals.
+    targets:
+        Spectral targets with shape ``(nsamples, *axis_shape)``.
     """
     params = np.asarray(parameters, dtype=float)
     y = np.asarray(targets, dtype=float)
@@ -58,10 +70,12 @@ def reconstruct_spectra(
     nsamples: int,
     axis_shape: tuple[int, ...],
 ) -> np.ndarray:
-    """Reconstruct spectral outputs from flattened scalar predictions.
+    """Restore flattened emulator outputs back to spectrum-shaped arrays.
 
-    This is the inverse of :func:`tile_spectra` at the shape level. It does not
-    try to infer the original axes themselves, only the expected tensor shape.
+    This is the shape-level inverse of :func:`tile_spectra`. It exists because
+    the neural network trains on flattened scalar targets, while downstream
+    science code usually wants predictions back in per-simulation spectral
+    arrays.
     """
     preds = np.asarray(flat_predictions, dtype=float)
     expected = nsamples * int(np.prod(axis_shape))

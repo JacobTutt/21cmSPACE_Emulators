@@ -34,15 +34,22 @@ class FeatureScaling:
     std: float
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to plain metadata."""
+        """Return a serializer-friendly view of the scaling rule.
+
+        This is mainly used when packaging checkpoints or inspection outputs,
+        where plain dictionaries are easier to store and inspect than nested
+        dataclass instances.
+        """
         return asdict(self)
 
     @classmethod
     def from_values(cls, name: str, values: np.ndarray, method: ScaleMethod) -> "FeatureScaling":
-        """Build scaling metadata from observed values.
+        """Summarize one feature column into reusable scaling metadata.
 
-        Zero-variance inputs are assigned a unit standard deviation so later
-        z-score transforms remain numerically well-defined.
+        The intent is that training code computes these statistics once from
+        the training set, stores them in the checkpoint, and then inference
+        code reuses the exact same numbers later. Zero-variance inputs are
+        assigned a unit standard deviation so z-score scaling stays defined.
         """
         arr = np.asarray(values, dtype=float)
         return cls(
@@ -67,7 +74,13 @@ class FeatureScaler:
         self.scaling = scaling
 
     def transform(self, matrix: np.ndarray) -> np.ndarray:
-        """Scale a 2D feature matrix in feature-order."""
+        """Scale a feature matrix column by column using stored metadata.
+
+        The expected input is a 2D matrix whose columns are already in the
+        canonical emulator feature order. This is the form produced by the
+        tiling and feature-preparation utilities before data is sent to the
+        neural network.
+        """
         arr = np.asarray(matrix, dtype=float).copy()
         if arr.ndim != 2:
             raise ValueError("transform expects a 2D matrix.")
@@ -78,7 +91,12 @@ class FeatureScaler:
         return arr
 
     def inverse_transform(self, matrix: np.ndarray) -> np.ndarray:
-        """Invert scaling on a 2D feature matrix in feature-order."""
+        """Undo scaling on a feature matrix and recover physical-space values.
+
+        This is useful when inspecting saved features, debugging checkpoint
+        inputs, or exporting predictions back into a form that is easier to
+        compare against the original science tables.
+        """
         arr = np.asarray(matrix, dtype=float).copy()
         if arr.ndim != 2:
             raise ValueError("inverse_transform expects a 2D matrix.")
@@ -90,7 +108,7 @@ class FeatureScaler:
 
 
 def _apply_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
-    """Apply the scaling rule stored for one feature."""
+    """Apply one feature's stored scaling rule to a single column of values."""
     arr = np.asarray(values, dtype=float)
     if feature.method == "identity":
         return arr
@@ -105,7 +123,7 @@ def _apply_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
 
 
 def _invert_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
-    """Invert the scaling rule stored for one feature."""
+    """Undo one feature's stored scaling rule for a single column of values."""
     arr = np.asarray(values, dtype=float)
     if feature.method == "identity":
         return arr

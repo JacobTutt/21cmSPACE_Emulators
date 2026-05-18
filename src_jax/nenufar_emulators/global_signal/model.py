@@ -1,4 +1,8 @@
-"""Global-signal model definitions."""
+"""Global-signal model definitions.
+
+As with the power-spectrum module, this file keeps development-time defaults
+separate from bundles that are meant to mirror the old repository exactly.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from nenufar_emulators.core.legacy import (
 
 @dataclass(frozen=True)
 class GlobalSignalModelConfig:
-    """Development-time MLP configuration for global-signal emulators."""
+    """Readable default MLP config for new global-signal development work."""
 
     hidden_features: int = 100
     hidden_layers: int = 6
@@ -21,7 +25,7 @@ class GlobalSignalModelConfig:
 
 @dataclass(frozen=True)
 class LegacyGlobalSignalBundle:
-    """Legacy-aligned model and training defaults for one emulator."""
+    """Named group of old-script defaults for one global-signal emulator."""
 
     name: str
     mlp: LegacyMLPConfig
@@ -30,7 +34,7 @@ class LegacyGlobalSignalBundle:
 
 
 def t21_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return defaults matching the old `T21` PyTorch script."""
+    """Return the legacy defaults for the old `T21` training script."""
     return LegacyGlobalSignalBundle(
         name="T21",
         mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),
@@ -45,7 +49,7 @@ def t21_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
 
 
 def ts_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return defaults matching the old `Ts` PyTorch script."""
+    """Return the legacy defaults for the old `Ts` training script."""
     return LegacyGlobalSignalBundle(
         name="Ts",
         mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),
@@ -60,7 +64,7 @@ def ts_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
 
 
 def tk_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return defaults matching the old `TK` PyTorch script."""
+    """Return the legacy defaults for the old `TK` training script."""
     return LegacyGlobalSignalBundle(
         name="TK",
         mlp=LegacyMLPConfig(input_dim=9, hidden_dim=100, n_hidden_blocks=6),
@@ -75,7 +79,7 @@ def tk_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
 
 
 def trad_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return defaults matching the old `Trad` PyTorch script."""
+    """Return the legacy defaults for the old `Trad` training script."""
     return LegacyGlobalSignalBundle(
         name="Trad",
         mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),
@@ -90,7 +94,7 @@ def trad_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
 
 
 def t_today_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return defaults matching the old `T_today` PyTorch script."""
+    """Return the legacy defaults for the old `T_today` training script."""
     return LegacyGlobalSignalBundle(
         name="T_today",
         mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),

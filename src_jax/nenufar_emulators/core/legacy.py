@@ -35,7 +35,12 @@ class LegacyMLPConfig:
 
 @dataclass(frozen=True)
 class LegacyOptimizerConfig:
-    """Optimizer defaults mirrored from the old training scripts."""
+    """Optimizer defaults mirrored from the old training scripts.
+
+    These values are stored separately from the model config because the old
+    repository often reused the same MLP shape with slightly different trainer
+    settings depending on the emulator family.
+    """
 
     optimizer_name: str = "Adam"
     learning_rate: float = 1e-3
@@ -90,6 +95,23 @@ def prepare_feature_matrix(
     4. record which remaining parameters should still be treated as discrete
 
     This helper makes that recipe reusable and easy to test.
+
+    Parameters
+    ----------
+    raw:
+        Two-dimensional raw parameter table read from a legacy file.
+    column_names:
+        Names attached to the columns in ``raw``. These define the only valid
+        lookup order for the table.
+    transform_params:
+        Parameters that should be mapped into ``log10`` feature space before
+        training, mirroring the old scripts.
+    discard_params:
+        Parameters present in the raw table but intentionally excluded from the
+        emulator input for this particular model.
+    discrete_params:
+        Parameters whose allowed values should be tracked explicitly because
+        they were treated as discrete choices in the old pipeline.
     """
     array = np.asarray(raw, dtype=float)
     if array.ndim != 2:

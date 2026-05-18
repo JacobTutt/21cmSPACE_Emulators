@@ -23,9 +23,10 @@ from nenufar_emulators.core.network import ActivationName, DenseMLP, init_mlp
 class TrainingHistory:
     """Training curves returned by the shared trainer.
 
-    Using a dataclass rather than a raw tuple makes future extensions
-    straightforward if we later want to track learning-rate schedules, best
-    checkpoints, or auxiliary metrics.
+    In practical terms, this is the minimum information a human usually wants
+    to inspect after a training run: did the training loss go down, and did the
+    validation loss behave sensibly? Using a dataclass keeps that information
+    named and extensible.
     """
 
     train_losses: list[float]
@@ -47,7 +48,7 @@ def train_mlp_regressor(
     epochs: int = 50,
     seed: int = 0,
 ) -> tuple[DenseMLP, TrainingHistory]:
-    """Train a small MLP regressor on in-memory arrays.
+    """Train the shared dense emulator network on prepared in-memory arrays.
 
     This trainer is intentionally array-based because the repository does not
     yet have production dataset loaders. It is still sufficient for:
@@ -55,6 +56,31 @@ def train_mlp_regressor(
     - synthetic smoke testing
     - validating model and tiling contracts
     - prototyping legacy-aligned configuration bundles
+
+    Parameters
+    ----------
+    train_features, validation_features:
+        Two-dimensional feature matrices already in the model input space.
+        These are usually produced by parameter preparation, tiling, and
+        scaling steps earlier in the pipeline.
+    train_targets, validation_targets:
+        One-dimensional target arrays aligned row-by-row with the feature
+        matrices.
+    hidden_features, hidden_layers, activation:
+        Network architecture choices for the shared MLP.
+    learning_rate, weight_decay:
+        Optimizer settings passed to Optax AdamW.
+    batch_size:
+        Number of training examples processed per gradient update.
+    epochs:
+        Number of full passes over the training set.
+    seed:
+        Random seed used for model initialization and batch shuffling.
+
+    Returns
+    -------
+    DenseMLP, TrainingHistory
+        The trained live NNX model and the recorded train/validation curves.
     """
     key = jax.random.PRNGKey(seed)
     model = init_mlp(
@@ -77,7 +103,12 @@ def train_mlp_regressor(
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
     ) -> jnp.ndarray:
-        """Run one gradient-update step on a mini-batch."""
+        """Run one optimizer step on a mini-batch.
+
+        In practice this means: make predictions, measure squared-error loss,
+        compute gradients with respect to trainable parameters, and update the
+        live NNX model in place through the optimizer wrapper.
+        """
 
         def loss_fn(current_model: DenseMLP) -> jnp.ndarray:
             preds = current_model(batch_features).squeeze(-1)
@@ -93,7 +124,7 @@ def train_mlp_regressor(
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
     ) -> jnp.ndarray:
-        """Evaluate loss on one validation mini-batch without updating weights."""
+        """Evaluate mini-batch loss without changing model parameters."""
         preds = model_instance(batch_features).squeeze(-1)
         return mse(preds, batch_targets)
 

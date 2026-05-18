@@ -1,4 +1,9 @@
-"""Global-signal inference entrypoints."""
+"""Global-signal inference entrypoints.
+
+This is currently a placeholder surface for the future inference workflow.
+Keeping it in the tree now makes it clear where checkpoint loading and
+prediction APIs will eventually live.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build CLI argument parser."""
+    """Build the placeholder inference CLI for global-signal emulators."""
     parser = argparse.ArgumentParser(description="Global-signal inference entrypoint.")
     parser.add_argument(
         "--describe",
@@ -17,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """CLI entrypoint."""
+    """Run the current global-signal inference status command."""
     args = build_parser().parse_args()
     if args.describe:
         print(

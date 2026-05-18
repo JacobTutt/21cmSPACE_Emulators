@@ -66,7 +66,7 @@ def run_synthetic_smoke(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build CLI argument parser."""
+    """Build the command-line interface for global-signal development tasks."""
     parser = argparse.ArgumentParser(description="Global-signal emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
@@ -85,7 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """CLI entrypoint."""
+    """Run the current global-signal CLI.
+
+    At this stage the command is mainly for visibility and verification: it can
+    print contracts, print legacy defaults, and run a smoke test, but it does
+    not yet train on the real science datasets.
+    """
     args = build_parser().parse_args()
     spec = default_global_signal_spec()
 
