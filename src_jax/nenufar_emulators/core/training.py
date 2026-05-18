@@ -1,8 +1,9 @@
 """Minimal JAX training utilities for emulator development.
 
-This is deliberately a small, transparent training loop. It is meant to be
-easy to audit during the migration phase before we introduce more elaborate
-training infrastructure or dataset abstractions.
+The goal of this module is still the same as before: keep the optimization
+logic small and auditable. The difference is that it now supports both the new
+dataset-driven workflow and the older direct-array fallback used in tests and
+small synthetic experiments.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import optax
 from flax import nnx
 
 from nenufar_emulators.core.batching import iter_batches
+from nenufar_emulators.core.datasets import SpectrumDataset, TiledBatch
 from nenufar_emulators.core.metrics import mse
 from nenufar_emulators.core.network import ActivationName, DenseMLP, init_mlp
 
@@ -50,8 +52,8 @@ def train_mlp_regressor(
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared dense emulator network on prepared in-memory arrays.
 
-    This trainer is intentionally array-based because the repository does not
-    yet have production dataset loaders. It is still sufficient for:
+    This trainer is intentionally array-based and now serves as the fallback
+    path beneath the newer dataset-driven workflow. It is still useful for:
 
     - synthetic smoke testing
     - validating model and tiling contracts
@@ -160,6 +162,110 @@ def train_mlp_regressor(
             shuffle=False,
         ):
             validation_loss += float(eval_step(model, batch_features, batch_targets))
+            validation_batches += 1
+        validation_loss /= max(validation_batches, 1)
+
+        train_losses.append(train_loss)
+        validation_losses.append(validation_loss)
+
+    return model, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)
+
+
+def train_mlp_dataset(
+    train_dataset: SpectrumDataset,
+    validation_dataset: SpectrumDataset,
+    *,
+    hidden_features: int = 64,
+    hidden_layers: int = 2,
+    activation: ActivationName = "relu",
+    learning_rate: float = 1e-3,
+    weight_decay: float = 1e-4,
+    batch_size: int = 256,
+    epochs: int = 50,
+    seed: int = 0,
+) -> tuple[DenseMLP, TrainingHistory]:
+    """Train the shared MLP directly from dataset objects.
+
+    This is the preferred training entrypoint once data has been wrapped in the
+    new loader architecture. The datasets are responsible for preprocessing,
+    batching, and tiling, while this function only handles optimization.
+
+    Both datasets must be created with ``tiling=True`` so their batch iterators
+    yield :class:`~nenufar_emulators.core.datasets.TiledBatch` objects.
+    """
+    if not train_dataset.tiling or not validation_dataset.tiling:
+        raise ValueError("train_mlp_dataset expects train and validation datasets with tiling=True.")
+
+    example_batch = next(train_dataset.get_batch_iterator(batch_size=1, shuffle=False))
+    if not isinstance(example_batch, TiledBatch):
+        raise ValueError("Expected tiled batches from the training dataset.")
+
+    key = jax.random.PRNGKey(seed)
+    model = init_mlp(
+        key=key,
+        in_features=int(example_batch.features.shape[1]),
+        hidden_features=hidden_features,
+        hidden_layers=hidden_layers,
+        activation=activation,
+    )
+    optimizer = nnx.Optimizer(
+        model,
+        optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay),
+        wrt=nnx.Param,
+    )
+
+    @nnx.jit
+    def train_step(
+        model_instance: DenseMLP,
+        optimizer_instance: nnx.Optimizer,
+        batch_features: jnp.ndarray,
+        batch_targets: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Run one optimizer step on one already-tiled mini-batch."""
+
+        def loss_fn(current_model: DenseMLP) -> jnp.ndarray:
+            preds = current_model(batch_features).squeeze(-1)
+            return mse(preds, batch_targets)
+
+        loss, grads = nnx.value_and_grad(loss_fn)(model_instance)
+        optimizer_instance.update(model_instance, grads)
+        return loss
+
+    @nnx.jit
+    def eval_step(
+        model_instance: DenseMLP,
+        batch_features: jnp.ndarray,
+        batch_targets: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Evaluate loss on a tiled mini-batch without updating the model."""
+        preds = model_instance(batch_features).squeeze(-1)
+        return mse(preds, batch_targets)
+
+    train_losses: list[float] = []
+    validation_losses: list[float] = []
+
+    for _ in range(epochs):
+        key, train_key = jax.random.split(key)
+        train_loss = 0.0
+        train_batches = 0
+        for batch in train_dataset.get_batch_iterator(
+            batch_size,
+            shuffle=True,
+            key=train_key,
+        ):
+            if not isinstance(batch, TiledBatch):
+                raise ValueError("Training dataset yielded an untiled batch unexpectedly.")
+            loss = train_step(model, optimizer, batch.features, batch.targets)
+            train_loss += float(loss)
+            train_batches += 1
+        train_loss /= max(train_batches, 1)
+
+        validation_loss = 0.0
+        validation_batches = 0
+        for batch in validation_dataset.get_batch_iterator(batch_size, shuffle=False):
+            if not isinstance(batch, TiledBatch):
+                raise ValueError("Validation dataset yielded an untiled batch unexpectedly.")
+            validation_loss += float(eval_step(model, batch.features, batch.targets))
             validation_batches += 1
         validation_loss /= max(validation_batches, 1)
 

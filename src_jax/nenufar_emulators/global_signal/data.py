@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDataset
 from nenufar_emulators.core.legacy import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
 HERA_IDR4_COLUMNS = (
@@ -204,4 +206,45 @@ def prepare_legacy_frad_parameters(raw_parameters: np.ndarray) -> PreparedFeatur
         transform_params=("fstar", "Vc", "fX", "fradio"),
         discard_params=("zeta",),
         discrete_params=("alpha", "nu_0"),
+    )
+
+
+def build_global_signal_dataset(
+    spectra: np.ndarray,
+    axes: tuple[np.ndarray, ...],
+    parameters: PreparedFeatures | np.ndarray,
+    *,
+    spec: EmulatorSpec | None = None,
+    parameter_names: tuple[str, ...] | None = None,
+    forward_pipeline: NormalisationPipeline | list[NormalisationPipeline] | None = None,
+    tiling: bool = True,
+) -> SpectrumDataset:
+    """Build a global-signal dataset using the declared emulator contract.
+
+    As with the power-spectrum helper, the spec-driven transform pipeline is
+    attached by default so axis, parameter, and target conventions stay aligned
+    with the old emulator definitions.
+    """
+    emulator_spec = default_global_signal_spec() if spec is None else spec
+    if isinstance(parameters, PreparedFeatures):
+        parameter_values = parameters.values
+        parameter_names = parameters.feature_names
+    else:
+        if parameter_names is None:
+            parameter_names = emulator_spec.parameter_names()
+        parameter_values = np.asarray(parameters, dtype=float)
+
+    pipelines: list[NormalisationPipeline] = [SpecTransformPipeline(emulator_spec)]
+    if forward_pipeline is not None:
+        pipelines.extend(
+            forward_pipeline if isinstance(forward_pipeline, list) else [forward_pipeline]
+        )
+    return SpectrumDataset(
+        spectra=np.asarray(spectra, dtype=float),
+        axes=tuple(np.asarray(axis, dtype=float) for axis in axes),
+        parameters=np.asarray(parameter_values, dtype=float),
+        axis_names=emulator_spec.axis_names(),
+        parameter_names=parameter_names,
+        forward_pipeline=pipelines,
+        tiling=tiling,
     )

@@ -1,8 +1,9 @@
-"""Mini-batch helpers for array-based training.
+"""Mini-batch helpers for the array-based training fallback.
 
-Right now the repository does not yet have a full dataset abstraction. This
-module fills that gap with one small helper that slices in-memory arrays into
-mini-batches in the same shape expected by the shared training loop.
+The repository now has a proper dataset abstraction for the main training
+path, but these helpers still matter for low-level tests and simple synthetic
+array experiments where constructing a dataset object would add noise rather
+than clarity.
 """
 
 from __future__ import annotations
@@ -23,9 +24,8 @@ def iter_batches(
 ) -> Iterator[tuple[jnp.ndarray, jnp.ndarray]]:
     """Yield feature/target mini-batches from matching in-memory arrays.
 
-    In practice this is the bridge between the current "all data already in
-    memory" stage of the project and the eventual streamed data-loader stage.
-    It handles only two responsibilities:
+    In practice this is the lightweight alternative to the dataset-owned batch
+    iterators. It handles only two responsibilities:
 
     - verify that features and targets line up sample-by-sample
     - optionally shuffle sample order once per epoch before slicing batches
