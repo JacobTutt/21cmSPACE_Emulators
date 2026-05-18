@@ -1,4 +1,13 @@
-"""Power-spectrum emulator specifications."""
+"""Power-spectrum emulator specifications.
+
+This module groups together two kinds of information:
+
+- repository-native emulator contracts used by the new code
+- legacy parameter-table preparation rules inherited from the old scripts
+
+Keeping both in one place makes it obvious which legacy conventions each new
+power-spectrum emulator is trying to reproduce.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +35,12 @@ SDC3B_COLUMNS = ("zeta_eff", "zeta_exp", "rmfp", "Vc")
 
 
 def default_power_spectrum_spec() -> EmulatorSpec:
-    """Return the baseline power-spectrum emulator contract."""
+    """Return the baseline HERA-style power-spectrum emulator contract.
+
+    This mirrors the old `Delta21` setup: two tiled axes (`z`, `k`) plus nine
+    astrophysical parameters after dropping unused columns and applying the
+    legacy log transforms.
+    """
     return EmulatorSpec(
         name="delta21_power_spectrum",
         family="power_spectrum",
@@ -51,7 +65,12 @@ def default_power_spectrum_spec() -> EmulatorSpec:
 
 
 def sdc3b_power_spectrum_spec() -> EmulatorSpec:
-    """Return the baseline SDC3b power-spectrum emulator contract."""
+    """Return the baseline SDC3b power-spectrum emulator contract.
+
+    The SDC3b emulator uses a different scientific parameterization and a
+    three-axis power-spectrum target, so its spec is kept separate from the
+    HERA-style Delta21 path.
+    """
     return EmulatorSpec(
         name="sdc3b_power_spectrum",
         family="power_spectrum",
@@ -70,7 +89,11 @@ def sdc3b_power_spectrum_spec() -> EmulatorSpec:
 
 
 def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA IDR4 12-parameter arrays for the old `Delta21` emulator."""
+    """Prepare HERA IDR4 12-parameter arrays for the old `Delta21` emulator.
+
+    The raw table contains 12 columns, but the legacy emulator dropped `zeta`,
+    `feed`, and `delay` before training.
+    """
     return prepare_feature_matrix(
         raw_parameters,
         HERA_IDR4_COLUMNS,

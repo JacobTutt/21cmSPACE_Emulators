@@ -1,4 +1,9 @@
-"""Legacy-compatible configuration and preprocessing helpers."""
+"""Legacy-compatible configuration and preprocessing helpers.
+
+This module exists to make the migration explicit. Rather than scattering
+knowledge of the old repository through ad hoc comments, we encode the legacy
+assumptions in small data structures and preparation helpers.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,12 @@ import numpy as np
 
 @dataclass(frozen=True)
 class LegacyMLPConfig:
-    """Configuration matching the old PyTorch MLP semantics."""
+    """Configuration matching the old PyTorch MLP semantics.
+
+    The important subtlety is that the old model defined one input-to-hidden
+    layer plus ``n_hidden`` additional hidden blocks. The JAX helper in this
+    repository counts hidden layers directly, so we expose both views.
+    """
 
     input_dim: int
     hidden_dim: int = 100
@@ -34,7 +44,11 @@ class LegacyOptimizerConfig:
 
 @dataclass(frozen=True)
 class LegacyTrainingConfig:
-    """Training defaults mirrored from the old training scripts."""
+    """Training defaults mirrored from the old training scripts.
+
+    These are intentionally the *script* defaults, not the synthetic-test
+    defaults used for fast verification in this repository.
+    """
 
     epochs: int
     batch_size: int
@@ -46,7 +60,12 @@ class LegacyTrainingConfig:
 
 @dataclass(frozen=True)
 class PreparedFeatures:
-    """Prepared feature matrix plus associated metadata."""
+    """Prepared feature matrix plus associated metadata.
+
+    We keep the transformed feature names and discrete-value metadata together
+    with the numeric array so later loaders and checkpoint code can retain the
+    original scientific meaning of each column.
+    """
 
     feature_names: tuple[str, ...]
     values: np.ndarray
@@ -61,7 +80,17 @@ def prepare_feature_matrix(
     discard_params: tuple[str, ...],
     discrete_params: tuple[str, ...],
 ) -> PreparedFeatures:
-    """Prepare feature arrays using the same rules as the old code."""
+    """Prepare feature arrays using the same rules as the old code.
+
+    The old training scripts all followed the same broad recipe:
+
+    1. start from a raw parameter table with science-facing column names
+    2. drop parameters not used by a given emulator
+    3. log-transform selected columns
+    4. record which remaining parameters should still be treated as discrete
+
+    This helper makes that recipe reusable and easy to test.
+    """
     array = np.asarray(raw, dtype=float)
     if array.ndim != 2:
         raise ValueError("raw parameter array must be 2D.")
@@ -69,6 +98,8 @@ def prepare_feature_matrix(
         raise ValueError("column_names length does not match raw parameter width.")
 
     name_to_index = {name: idx for idx, name in enumerate(column_names)}
+    # Preserve the original column order after dropping unused parameters, so
+    # the feature matrix remains aligned with the legacy scripts.
     keep_names = [name for name in column_names if name not in discard_params]
 
     discrete_values: dict[str, tuple[float, ...]] = {}
@@ -84,6 +115,8 @@ def prepare_feature_matrix(
     for name in keep_names:
         values = array[:, name_to_index[name]].copy()
         if name in transform_params:
+            # Legacy code generally transformed by renaming the feature to the
+            # ``log10...`` form rather than storing a separate transform map.
             prepared_columns.append(np.log10(values))
             prepared_names.append(f"log10{name}")
         else:

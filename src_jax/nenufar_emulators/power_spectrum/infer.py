@@ -1,4 +1,9 @@
-"""Power-spectrum inference entrypoints."""
+"""Power-spectrum inference entrypoints.
+
+Inference support is intentionally not over-promised yet. This placeholder CLI
+exists so the repository already has a visible place where real checkpoint
+loading and spectrum prediction will eventually live.
+"""
 
 from __future__ import annotations
 

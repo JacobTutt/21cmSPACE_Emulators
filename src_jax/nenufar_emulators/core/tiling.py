@@ -1,4 +1,14 @@
-"""Utilities for tiling spectral data into scalar regression samples."""
+"""Utilities for tiling spectral data into scalar regression samples.
+
+This tiling step is one of the defining ideas behind the old emulator
+implementation and the new JAX rewrite. Instead of predicting an entire
+spectrum at once, the network learns a scalar map:
+
+``[axis values, astrophysical parameters] -> one target value``
+
+That makes it easy to share the same dense MLP machinery across both
+power-spectrum and global-signal emulators.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +20,12 @@ def tile_spectra(
     axes: tuple[np.ndarray, ...],
     targets: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, tuple[int, ...]]:
-    """Tile spectral targets into `[axes, params] -> scalar` samples."""
+    """Tile spectral targets into `[axes, params] -> scalar` samples.
+
+    Parameters are repeated for every coordinate in the spectral grid, while
+    the axis coordinates are meshed together once and then repeated across
+    simulation samples.
+    """
     params = np.asarray(parameters, dtype=float)
     y = np.asarray(targets, dtype=float)
     if params.ndim != 2:
@@ -25,8 +40,12 @@ def tile_spectra(
     if y.shape[1:] != axis_shape:
         raise ValueError("target axis shape does not match provided axes.")
 
+    # Build the canonical coordinate grid once. Using ``indexing="ij"``
+    # preserves the natural axis order from the stored target arrays.
     mesh = np.meshgrid(*axis_arrays, indexing="ij")
     tiled_axes = np.stack([grid.ravel() for grid in mesh], axis=-1)
+    # Repeat axis coordinates for every simulation and repeat simulation
+    # parameters for every point in the spectral grid.
     repeated_axes = np.tile(tiled_axes, (params.shape[0], 1))
     repeated_params = np.repeat(params, repeats=tiled_axes.shape[0], axis=0)
     features = np.concatenate([repeated_axes, repeated_params], axis=-1)
@@ -39,7 +58,11 @@ def reconstruct_spectra(
     nsamples: int,
     axis_shape: tuple[int, ...],
 ) -> np.ndarray:
-    """Reconstruct spectral outputs from flattened scalar predictions."""
+    """Reconstruct spectral outputs from flattened scalar predictions.
+
+    This is the inverse of :func:`tile_spectra` at the shape level. It does not
+    try to infer the original axes themselves, only the expected tensor shape.
+    """
     preds = np.asarray(flat_predictions, dtype=float)
     expected = nsamples * int(np.prod(axis_shape))
     if preds.size != expected:

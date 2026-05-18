@@ -1,4 +1,9 @@
-"""Power-spectrum training entrypoints."""
+"""Power-spectrum training entrypoints.
+
+At the moment these entrypoints are intentionally modest: they expose the
+specifications and synthetic smoke runs needed to verify the repository before
+real datasets are wired in.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +24,12 @@ def run_synthetic_smoke(
     epochs: int = 20,
     batch_size: int = 64,
 ) -> dict[str, float]:
-    """Run a small synthetic end-to-end smoke training exercise."""
+    """Run a small synthetic end-to-end smoke training exercise.
+
+    This does not attempt to mimic the real science signal faithfully. Its job
+    is to verify that the power-spectrum spec, tiling logic, and legacy-aligned
+    architecture bundle are internally consistent.
+    """
     spec = default_power_spectrum_spec()
     bundle = delta21_frad_legacy_bundle()
     rng = np.random.default_rng(0)
@@ -28,6 +38,8 @@ def run_synthetic_smoke(
     k = np.geomspace(0.05, 0.5, 6)
     parameters = rng.normal(size=(nsamples, len(spec.parameters)))
 
+    # Build a smooth target that depends on both tiled axes and the parameter
+    # vector, so the smoke test exercises the full input pipeline.
     zz, kk = np.meshgrid(z, k, indexing="ij")
     base_signal = np.log10(zz + 1.0) + np.log10(kk + 1.0)
     targets = np.empty((nsamples, len(z), len(k)), dtype=float)
@@ -75,7 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """CLI entrypoint."""
+    """CLI entrypoint.
+
+    The hard failure on the default path is deliberate: until dataset loading
+    exists, the command should be explicit about what it can and cannot do.
+    """
     args = build_parser().parse_args()
     spec = default_power_spectrum_spec()
 

@@ -1,4 +1,9 @@
-"""Global-signal training entrypoints."""
+"""Global-signal training entrypoints.
+
+Like the power-spectrum CLI, this module is currently focused on verification
+and transparency rather than on pretending the production training workflow is
+already complete.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +24,12 @@ def run_synthetic_smoke(
     epochs: int = 20,
     batch_size: int = 64,
 ) -> dict[str, float]:
-    """Run a synthetic end-to-end smoke training exercise."""
+    """Run a synthetic end-to-end smoke training exercise.
+
+    The synthetic target is deliberately simple but still depends on both the
+    redshift axis and the parameter vector so it exercises the same tiled-input
+    path that a real global-signal emulator will use.
+    """
     spec = default_global_signal_spec()
     bundle = t21_arad_legacy_bundle()
     rng = np.random.default_rng(1)
@@ -29,6 +39,9 @@ def run_synthetic_smoke(
 
     targets = np.empty((nsamples, len(z)), dtype=float)
     for idx in range(nsamples):
+        # The sinusoid gives the mock signal a recognisable one-dimensional
+        # structure, while the parameter sum ensures the emulator must use the
+        # non-axis inputs as well.
         targets[idx] = np.sin(z / 4.0) + 0.05 * parameters[idx].sum()
 
     features, flat_targets, _ = tile_spectra(parameters, (z,), targets)

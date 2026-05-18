@@ -1,4 +1,10 @@
-"""Feature scaling metadata and application helpers."""
+"""Feature scaling metadata and application helpers.
+
+The old PyTorch code stored enough scaling information to rebuild priors and
+perform inference later. This module is the beginning of the same idea in the
+new codebase: scaling is treated as explicit metadata, not an accidental side
+effect of training.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,12 @@ ScaleMethod = Literal["identity", "zscore", "minmax_minus_one_to_one"]
 
 @dataclass(frozen=True)
 class FeatureScaling:
-    """Scaling rule for one named feature."""
+    """Scaling rule for one named feature.
+
+    We store several summary statistics even when only one scaling method is
+    used, because later checkpoint readers and diagnostics typically need more
+    context than the trainer itself.
+    """
 
     name: str
     method: ScaleMethod
@@ -28,7 +39,11 @@ class FeatureScaling:
 
     @classmethod
     def from_values(cls, name: str, values: np.ndarray, method: ScaleMethod) -> "FeatureScaling":
-        """Build scaling metadata from observed values."""
+        """Build scaling metadata from observed values.
+
+        Zero-variance inputs are assigned a unit standard deviation so later
+        z-score transforms remain numerically well-defined.
+        """
         arr = np.asarray(values, dtype=float)
         return cls(
             name=name,
@@ -41,7 +56,12 @@ class FeatureScaling:
 
 
 class FeatureScaler:
-    """Apply per-feature scaling using stored metadata."""
+    """Apply per-feature scaling using stored metadata.
+
+    The scaler is intentionally simple and works on matrices in canonical
+    feature order. That keeps it easy to compose with synthetic tests and
+    future dataset loaders.
+    """
 
     def __init__(self, scaling: tuple[FeatureScaling, ...]) -> None:
         self.scaling = scaling
@@ -70,6 +90,7 @@ class FeatureScaler:
 
 
 def _apply_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
+    """Apply the scaling rule stored for one feature."""
     arr = np.asarray(values, dtype=float)
     if feature.method == "identity":
         return arr
@@ -84,6 +105,7 @@ def _apply_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
 
 
 def _invert_scaling(values: np.ndarray, feature: FeatureScaling) -> np.ndarray:
+    """Invert the scaling rule stored for one feature."""
     arr = np.asarray(values, dtype=float)
     if feature.method == "identity":
         return arr

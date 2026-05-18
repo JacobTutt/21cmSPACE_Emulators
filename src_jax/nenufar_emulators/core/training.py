@@ -1,4 +1,9 @@
-"""Minimal JAX training utilities for emulator development."""
+"""Minimal JAX training utilities for emulator development.
+
+This is deliberately a small, transparent training loop. It is meant to be
+easy to audit during the migration phase before we introduce more elaborate
+training infrastructure or dataset abstractions.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,12 @@ from nenufar_emulators.core.network import forward_mlp, init_mlp
 
 @dataclass(frozen=True)
 class TrainingHistory:
-    """Training curves returned by the shared trainer."""
+    """Training curves returned by the shared trainer.
+
+    Using a dataclass rather than a raw tuple makes future extensions
+    straightforward if we later want to track learning-rate schedules, best
+    checkpoints, or auxiliary metrics.
+    """
 
     train_losses: list[float]
     validation_losses: list[float]
@@ -36,7 +46,15 @@ def train_mlp_regressor(
     epochs: int = 50,
     seed: int = 0,
 ) -> tuple[list[dict[str, jnp.ndarray]], TrainingHistory]:
-    """Train a small MLP regressor on in-memory arrays."""
+    """Train a small MLP regressor on in-memory arrays.
+
+    This trainer is intentionally array-based because the repository does not
+    yet have production dataset loaders. It is still sufficient for:
+
+    - synthetic smoke testing
+    - validating model and tiling contracts
+    - prototyping legacy-aligned configuration bundles
+    """
     key = jax.random.PRNGKey(seed)
     params = init_mlp(
         key=key,
@@ -54,6 +72,7 @@ def train_mlp_regressor(
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
     ) -> tuple[list[dict[str, jnp.ndarray]], optax.OptState, jnp.ndarray]:
+        """Run one gradient-update step on a mini-batch."""
         def loss_fn(p: list[dict[str, jnp.ndarray]]) -> jnp.ndarray:
             preds = forward_mlp(p, batch_features, activation=activation).squeeze(-1)
             return mse(preds, batch_targets)
@@ -69,6 +88,7 @@ def train_mlp_regressor(
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
     ) -> jnp.ndarray:
+        """Evaluate loss on one validation mini-batch without updating weights."""
         preds = forward_mlp(model_params, batch_features, activation=activation).squeeze(-1)
         return mse(preds, batch_targets)
 
@@ -79,6 +99,8 @@ def train_mlp_regressor(
         key, train_key = jax.random.split(key)
         train_loss = 0.0
         train_batches = 0
+        # Training batches are shuffled each epoch, mirroring the behavior we
+        # will want once real dataset iterators are connected.
         for batch_features, batch_targets in iter_batches(
             train_features,
             train_targets,
@@ -93,6 +115,8 @@ def train_mlp_regressor(
 
         validation_loss = 0.0
         validation_batches = 0
+        # Validation is intentionally deterministic so changes in reported loss
+        # reflect model updates rather than batch-order noise.
         for batch_features, batch_targets in iter_batches(
             validation_features,
             validation_targets,
@@ -105,7 +129,5 @@ def train_mlp_regressor(
 
         train_losses.append(train_loss)
         validation_losses.append(validation_loss)
-
-        _ = epoch
 
     return params, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)

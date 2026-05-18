@@ -1,4 +1,16 @@
-"""Repository-level emulator specifications."""
+"""Repository-level emulator specifications.
+
+These dataclasses are intentionally small, but they carry a large part of the
+design intent for the repository:
+
+- they describe the *physical* inputs seen by an emulator
+- they record which variables are transformed before training
+- they define the canonical feature order expected by model code
+
+Keeping this logic in one place makes later data-loader and checkpoint code
+easier to reason about and avoids repeating legacy naming conventions in
+multiple modules.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +24,12 @@ FamilyName = Literal["power_spectrum", "global_signal"]
 
 @dataclass(frozen=True)
 class AxisSpec:
-    """Specification for a physical axis used by an emulator."""
+    """Specification for a physical axis used by an emulator.
+
+    Examples are redshift, wavenumber, or observed frequency. The `transform`
+    field describes how the axis is represented in feature space, not how it is
+    stored in raw science files.
+    """
 
     name: str
     transform: TransformName = "identity"
@@ -20,7 +37,12 @@ class AxisSpec:
     nsample: int | None = None
 
     def feature_name(self) -> str:
-        """Return the feature name after transformation."""
+        """Return the feature name after transformation.
+
+        The old code frequently referred to transformed quantities as
+        ``log10k`` or ``log10fradio``. We preserve that convention here so the
+        new code can mirror legacy feature ordering and remain readable.
+        """
         return self.name if self.transform == "identity" else f"{self.transform}{self.name}"
 
     def validate(self) -> None:
@@ -35,7 +57,11 @@ class AxisSpec:
 
 @dataclass(frozen=True)
 class ParameterSpec:
-    """Specification for a model parameter."""
+    """Specification for a model parameter.
+
+    `discrete_values` is used for parameters that were treated as discrete in
+    the legacy training scripts, such as `alpha`, `nu_0`, and `pop`.
+    """
 
     name: str
     transform: TransformName = "identity"
@@ -55,7 +81,13 @@ class ParameterSpec:
 
 @dataclass(frozen=True)
 class EmulatorSpec:
-    """High-level emulator definition used by training and inference code."""
+    """High-level emulator definition used by training and inference code.
+
+    This is the contract we want real loaders, trainers, checkpoints, and
+    inference code to agree on. The main benefit is that the *scientific* input
+    semantics are described once, while the implementation details can evolve
+    underneath.
+    """
 
     name: str
     family: FamilyName
@@ -68,7 +100,13 @@ class EmulatorSpec:
         self.validate()
 
     def validate(self) -> None:
-        """Validate emulator configuration consistency."""
+        """Validate emulator configuration consistency.
+
+        Most checks here are guarding against ambiguous feature ordering. That
+        matters because even a correct model architecture will behave
+        nonsensically if two features collide after log-transformation or if an
+        axis name is accidentally reused as a parameter name.
+        """
         if not self.name:
             raise ValueError("Emulator name must be non-empty.")
         if not self.axes:
@@ -97,7 +135,12 @@ class EmulatorSpec:
             parameter.validate()
 
     def input_feature_names(self) -> tuple[str, ...]:
-        """Return transformed input feature names in model-input order."""
+        """Return transformed input feature names in model-input order.
+
+        The order is always ``axes`` first and then ``parameters``. This is the
+        same ordering assumed by the tiling code and is meant to mirror the old
+        scalar-regression emulator formulation.
+        """
         names = [axis.feature_name() for axis in self.axes]
         names.extend(parameter.feature_name() for parameter in self.parameters)
         return tuple(names)

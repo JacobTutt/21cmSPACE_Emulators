@@ -1,4 +1,10 @@
-"""Global-signal emulator specifications."""
+"""Global-signal emulator specifications.
+
+The old repository used several distinct one-dimensional emulators under the
+broader "global signal" label. This module makes those variants explicit so the
+new code can migrate them one by one without losing track of their differing
+parameterizations and target transforms.
+"""
 
 from __future__ import annotations
 
@@ -51,7 +57,7 @@ LEGACY_FRAD_COLUMNS = (
 
 
 def default_global_signal_spec() -> EmulatorSpec:
-    """Return the baseline global-signal emulator contract."""
+    """Return the baseline frad-style global-signal emulator contract."""
     return EmulatorSpec(
         name="t21_global_signal",
         family="global_signal",
@@ -75,7 +81,11 @@ def default_global_signal_spec() -> EmulatorSpec:
 
 
 def t21_arad_spec() -> EmulatorSpec:
-    """Return the old `T21`/`Ts` style Arad global-signal emulator contract."""
+    """Return the old `T21`/`Ts` style Arad global-signal emulator contract.
+
+    `T21` and `Ts` share the same input parameterization in the legacy code but
+    differ in their target transforms and sampling density.
+    """
     return EmulatorSpec(
         name="t21_arad_global_signal",
         family="global_signal",
@@ -120,7 +130,11 @@ def trad_frad_spec() -> EmulatorSpec:
 
 
 def tk_frad_spec() -> EmulatorSpec:
-    """Return the old `TK` frad global-signal emulator contract."""
+    """Return the old `TK` frad global-signal emulator contract.
+
+    `TK` is the main legacy oddball in this family because it uses the older
+    9-parameter frad table rather than the newer 12-parameter HERA table.
+    """
     return EmulatorSpec(
         name="tk_frad_global_signal",
         family="global_signal",
@@ -151,7 +165,11 @@ def prepare_hera_idr4_frad_parameters(raw_parameters: np.ndarray) -> PreparedFea
 
 
 def prepare_hera_cosmic_string_arad_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA cosmic-string Arad arrays for T21/Ts-style emulators."""
+    """Prepare HERA cosmic-string Arad arrays for T21/Ts-style emulators.
+
+    The legacy scripts used `Arad` here instead of `fradio`, so the transformed
+    feature name becomes `log10Arad` rather than `log10fradio`.
+    """
     return prepare_feature_matrix(
         raw_parameters,
         HERA_COSMIC_STRING_ARAD_COLUMNS,
