@@ -32,7 +32,7 @@ def test_synthetic_training_smoke() -> None:
     train_targets = train_features @ weights + 0.1
     validation_targets = validation_features @ weights + 0.1
 
-    params, history = train_mlp_regressor(
+    model, history = train_mlp_regressor(
         jnp.asarray(train_features),
         jnp.asarray(train_targets),
         jnp.asarray(validation_features),
@@ -45,7 +45,7 @@ def test_synthetic_training_smoke() -> None:
         weight_decay=0.0,
         seed=0,
     )
-    preds = forward_mlp(params, jnp.asarray(validation_features)).squeeze(-1)
+    preds = forward_mlp(model, jnp.asarray(validation_features)).squeeze(-1)
     mse = jnp.mean(jnp.square(preds - validation_targets))
     assert history.train_losses[-1] < history.train_losses[0]
     assert float(mse) < 0.1

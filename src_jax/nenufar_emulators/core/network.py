@@ -1,8 +1,10 @@
-"""Generic JAX MLP building blocks.
+"""Generic Flax NNX MLP building blocks.
 
-The goal here is not to lock in a final network API yet. Instead, this module
-provides a very small, readable baseline that mirrors the dense feed-forward
-structure used in the legacy PyTorch emulators.
+This module holds the shared dense network used across the migration work.
+The architecture is intentionally simple and close to the old PyTorch
+emulators: a stack of linear layers, a configurable hidden activation, and a
+final linear readout. Using ``flax.nnx`` keeps the code more object-oriented
+than raw JAX while still fitting cleanly into JAX/Optax training loops.
 """
 
 from __future__ import annotations
@@ -11,9 +13,91 @@ from typing import Literal
 
 import jax
 import jax.numpy as jnp
+from flax import nnx
 
 
 ActivationName = Literal["relu", "tanh", "gelu"]
+
+
+def _activation_fn(name: ActivationName):
+    """Resolve the configured activation string to a JAX function."""
+    activations = {
+        "relu": jax.nn.relu,
+        "tanh": jnp.tanh,
+        "gelu": jax.nn.gelu,
+    }
+    return activations[name]
+
+
+class DenseMLP(nnx.Module):
+    """Simple dense MLP implemented with Flax NNX.
+
+    NNX is a better fit than Linen for this repository because it keeps the
+    model object alive through training in a way that feels closer to PyTorch.
+    That makes the code easier to read during migration, while still using
+    JAX-compatible parameter containers and Optax optimizers.
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int,
+        hidden_layers: int,
+        *,
+        out_features: int = 1,
+        activation: ActivationName = "relu",
+        init_scale: float = 1e-1,
+        rngs: nnx.Rngs,
+    ) -> None:
+        self.in_features = in_features
+        self.hidden_features = hidden_features
+        self.hidden_layers = hidden_layers
+        self.out_features = out_features
+        self.activation = activation
+        self.init_scale = init_scale
+
+        kernel_init = jax.nn.initializers.normal(stddev=init_scale)
+        self.hidden = nnx.List()
+
+        # The first layer lifts the tiled emulator features into hidden space.
+        # Remaining hidden layers keep the width fixed, matching the legacy MLP
+        # shape used in the PyTorch implementation.
+        if hidden_layers > 0:
+            self.hidden.append(
+                nnx.Linear(
+                    in_features,
+                    hidden_features,
+                    kernel_init=kernel_init,
+                    rngs=rngs,
+                )
+            )
+            for _ in range(hidden_layers - 1):
+                self.hidden.append(
+                    nnx.Linear(
+                        hidden_features,
+                        hidden_features,
+                        kernel_init=kernel_init,
+                        rngs=rngs,
+                    )
+                )
+            readout_in_features = hidden_features
+        else:
+            readout_in_features = in_features
+
+        self.readout = nnx.Linear(
+            readout_in_features,
+            out_features,
+            kernel_init=kernel_init,
+            rngs=rngs,
+        )
+
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Run a forward pass through the MLP."""
+        act_fn = _activation_fn(self.activation)
+        x = inputs
+        for layer in self.hidden:
+            x = act_fn(layer(x))
+        return self.readout(x)
 
 
 def init_mlp(
@@ -22,45 +106,35 @@ def init_mlp(
     hidden_features: int,
     out_features: int = 1,
     hidden_layers: int = 2,
+    activation: ActivationName = "relu",
     scale: float = 1e-1,
-) -> list[dict[str, jnp.ndarray]]:
-    """Initialize a dense MLP as a JAX pytree.
-
-    The returned list-of-dicts structure is intentionally plain: it is easy to
-    inspect in tests, easy to pass into Optax, and easy to serialize later.
-    """
-    layer_sizes = [in_features]
-    layer_sizes.extend([hidden_features] * hidden_layers)
-    layer_sizes.append(out_features)
-    keys = jax.random.split(key, len(layer_sizes) - 1)
-    params: list[dict[str, jnp.ndarray]] = []
-    for idx, (in_dim, out_dim) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        k = keys[idx]
-        params.append(
-            {
-                "weights": scale * jax.random.normal(k, (in_dim, out_dim)),
-                "bias": jnp.zeros((out_dim,), dtype=jnp.float32),
-            }
-        )
-    return params
+) -> DenseMLP:
+    """Initialize and return a live Flax NNX MLP object."""
+    return DenseMLP(
+        in_features=in_features,
+        hidden_features=hidden_features,
+        hidden_layers=hidden_layers,
+        out_features=out_features,
+        activation=activation,
+        init_scale=scale,
+        rngs=nnx.Rngs(key),
+    )
 
 
 def forward_mlp(
-    params: list[dict[str, jnp.ndarray]],
+    model: DenseMLP,
     inputs: jnp.ndarray,
-    activation: ActivationName = "relu",
+    activation: ActivationName | None = None,
 ) -> jnp.ndarray:
-    """Run a dense MLP forward pass.
+    """Run a dense MLP forward pass using the provided NNX model.
 
-    Hidden layers use the requested non-linearity; the final layer stays linear
-    because the emulator target transform, if any, is handled outside the
-    network itself.
+    ``activation`` is kept as an optional compatibility check for call sites
+    that still think in the older functional API. The model itself is the
+    source of truth for which activation the network uses.
     """
-    act_fn = getattr(jax.nn, activation)
-    x = inputs
-    # Apply activation only on hidden layers so the caller retains full control
-    # over any output-space transform such as log10 or offset handling.
-    for layer in params[:-1]:
-        x = act_fn(jnp.dot(x, layer["weights"]) + layer["bias"])
-    final = params[-1]
-    return jnp.dot(x, final["weights"]) + final["bias"]
+    if activation is not None and activation != model.activation:
+        raise ValueError(
+            "Requested activation does not match the instantiated model. "
+            f"Expected {model.activation!r}, received {activation!r}."
+        )
+    return model(inputs)

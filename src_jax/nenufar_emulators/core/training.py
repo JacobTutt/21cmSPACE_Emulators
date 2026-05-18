@@ -12,10 +12,11 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 import optax
+from flax import nnx
 
 from nenufar_emulators.core.batching import iter_batches
 from nenufar_emulators.core.metrics import mse
-from nenufar_emulators.core.network import forward_mlp, init_mlp
+from nenufar_emulators.core.network import ActivationName, DenseMLP, init_mlp
 
 
 @dataclass(frozen=True)
@@ -39,13 +40,13 @@ def train_mlp_regressor(
     *,
     hidden_features: int = 64,
     hidden_layers: int = 2,
-    activation: str = "relu",
+    activation: ActivationName = "relu",
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
     batch_size: int = 256,
     epochs: int = 50,
     seed: int = 0,
-) -> tuple[list[dict[str, jnp.ndarray]], TrainingHistory]:
+) -> tuple[DenseMLP, TrainingHistory]:
     """Train a small MLP regressor on in-memory arrays.
 
     This trainer is intentionally array-based because the repository does not
@@ -56,40 +57,44 @@ def train_mlp_regressor(
     - prototyping legacy-aligned configuration bundles
     """
     key = jax.random.PRNGKey(seed)
-    params = init_mlp(
+    model = init_mlp(
         key=key,
         in_features=int(train_features.shape[1]),
         hidden_features=hidden_features,
         hidden_layers=hidden_layers,
+        activation=activation,
     )
-    optimizer = optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay)
-    opt_state = optimizer.init(params)
+    optimizer = nnx.Optimizer(
+        model,
+        optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay),
+        wrt=nnx.Param,
+    )
 
-    @jax.jit
+    @nnx.jit
     def train_step(
-        model_params: list[dict[str, jnp.ndarray]],
-        state: optax.OptState,
+        model_instance: DenseMLP,
+        optimizer_instance: nnx.Optimizer,
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
-    ) -> tuple[list[dict[str, jnp.ndarray]], optax.OptState, jnp.ndarray]:
+    ) -> jnp.ndarray:
         """Run one gradient-update step on a mini-batch."""
-        def loss_fn(p: list[dict[str, jnp.ndarray]]) -> jnp.ndarray:
-            preds = forward_mlp(p, batch_features, activation=activation).squeeze(-1)
+
+        def loss_fn(current_model: DenseMLP) -> jnp.ndarray:
+            preds = current_model(batch_features).squeeze(-1)
             return mse(preds, batch_targets)
 
-        loss, grads = jax.value_and_grad(loss_fn)(model_params)
-        updates, new_state = optimizer.update(grads, state, model_params)
-        new_params = optax.apply_updates(model_params, updates)
-        return new_params, new_state, loss
+        loss, grads = nnx.value_and_grad(loss_fn)(model_instance)
+        optimizer_instance.update(model_instance, grads)
+        return loss
 
-    @jax.jit
+    @nnx.jit
     def eval_step(
-        model_params: list[dict[str, jnp.ndarray]],
+        model_instance: DenseMLP,
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
     ) -> jnp.ndarray:
         """Evaluate loss on one validation mini-batch without updating weights."""
-        preds = forward_mlp(model_params, batch_features, activation=activation).squeeze(-1)
+        preds = model_instance(batch_features).squeeze(-1)
         return mse(preds, batch_targets)
 
     train_losses: list[float] = []
@@ -108,7 +113,7 @@ def train_mlp_regressor(
             shuffle=True,
             key=train_key,
         ):
-            params, opt_state, loss = train_step(params, opt_state, batch_features, batch_targets)
+            loss = train_step(model, optimizer, batch_features, batch_targets)
             train_loss += float(loss)
             train_batches += 1
         train_loss /= max(train_batches, 1)
@@ -123,11 +128,11 @@ def train_mlp_regressor(
             batch_size,
             shuffle=False,
         ):
-            validation_loss += float(eval_step(params, batch_features, batch_targets))
+            validation_loss += float(eval_step(model, batch_features, batch_targets))
             validation_batches += 1
         validation_loss /= max(validation_batches, 1)
 
         train_losses.append(train_loss)
         validation_losses.append(validation_loss)
 
-    return params, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)
+    return model, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)
