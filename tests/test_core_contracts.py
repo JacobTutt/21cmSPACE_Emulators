@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import numpy as np
+import jax
+import jax.numpy as jnp
 
-from nenufar_emulators.core.checkpointing import CheckpointMetadata
+from nenufar_emulators.core.checkpointing import CheckpointMetadata, load, save
+from nenufar_emulators.core.network import forward_mlp, init_mlp
+from nenufar_emulators.core.normalisation import StandardizationPipeline
 from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.core.transforms import apply_transform, invert_transform
+from nenufar_emulators.global_signal.data import build_global_signal_dataset, default_global_signal_spec
 
 
 def test_transform_round_trip_log10() -> None:
@@ -64,3 +69,96 @@ def test_checkpoint_metadata_to_dict() -> None:
     assert serialized["model_name"] == "t21-test"
     assert serialized["emulator_spec"]["name"] == "t21"
     assert len(serialized["input_scaling"]) == 2
+
+
+def test_checkpoint_archive_round_trip(tmp_path) -> None:
+    spec = default_global_signal_spec()
+    parameters = np.column_stack(
+        [
+            np.array([1e-2, 1e-1]),
+            np.array([1e-3, 1e-2]),
+            np.array([10.0, 20.0]),
+            np.array([100.0, 1000.0]),
+            np.array([1.0, 1.3]),
+            np.array([0.1, 0.2]),
+            np.array([0.05, 0.06]),
+            np.array([1e2, 1e3]),
+            np.array([2.0, 3.0]),
+        ]
+    )
+    spectra = np.array(
+        [
+            np.linspace(-1.0, 1.0, 5),
+            np.linspace(-0.5, 1.5, 5),
+        ]
+    )
+    z = np.linspace(6.0, 10.0, 5)
+    base_dataset = build_global_signal_dataset(
+        spectra,
+        (z,),
+        parameters,
+        spec=spec,
+        tiling=False,
+    )
+    standardization = StandardizationPipeline.from_batch(
+        base_dataset.as_batch(),
+        standardize_axes=True,
+        standardize_parameters=True,
+    )
+    train_dataset = build_global_signal_dataset(
+        spectra,
+        (z,),
+        parameters,
+        spec=spec,
+        forward_pipeline=[standardization],
+        tiling=True,
+    )
+    metadata = CheckpointMetadata(
+        model_name="t21-test",
+        package_version="0.1.0",
+        emulator_spec=spec,
+        input_scaling=(
+            FeatureScaling.from_values("z", z, "identity"),
+            FeatureScaling.from_values("log10fstarII", np.log10(parameters[:, 0]), "zscore"),
+        ),
+        training_config={"epochs": 2},
+    )
+    model = init_mlp(
+        jax.random.PRNGKey(0),
+        in_features=len(spec.input_feature_names()),
+        hidden_features=8,
+        hidden_layers=2,
+    )
+    features = jnp.asarray(
+        [
+            [0.0, -2.0, -3.0, 1.0, 2.0, 1.0, 0.1, 0.05, 2.0, 2.0],
+            [1.0, -1.0, -2.0, 1.3, 3.0, 1.3, 0.2, 0.06, 3.0, 3.0],
+        ],
+        dtype=jnp.float32,
+    )
+    expected = forward_mlp(model, features)
+    archive_path = save(
+        tmp_path / "demo_model",
+        model,
+        train_losses=[1.0, 0.5],
+        val_losses=[1.2, 0.6],
+        loss="mse",
+        train_dataset=train_dataset,
+        val_dataset=train_dataset,
+        metadata=metadata,
+        epochs=2,
+        patience=1,
+        learning_rate=1e-3,
+        weight_decay=1e-4,
+    )
+    loaded = load(archive_path)
+    recovered = forward_mlp(loaded["model"], features)
+
+    assert archive_path.name.endswith(".nenemu")
+    assert np.allclose(np.asarray(recovered), np.asarray(expected))
+    assert loaded["metadata"].model_name == "t21-test"
+    assert loaded["hyperparams"]["hidden_features"] == 8
+    assert loaded["train_dataset"].tiling is True
+    assert loaded["train_dataset"].parameter_names[0] == "fstarII"
+    assert loaded["train_dataset"].as_batch().parameter_names[0] == "log10fstarII"
+    assert len(loaded["train_pipeline"]) == 2

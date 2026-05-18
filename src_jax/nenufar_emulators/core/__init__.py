@@ -1,6 +1,6 @@
 """Shared core utilities for emulator specifications and metadata."""
 
-from nenufar_emulators.core.checkpointing import CheckpointMetadata
+from nenufar_emulators.core.checkpointing import CheckpointMetadata, load, save
 from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumBatch, SpectrumDataset, TiledBatch
 from nenufar_emulators.core.legacy import (
     LegacyMLPConfig,
@@ -40,7 +40,9 @@ __all__ = [
     "TiledBatch",
     "forward_mlp",
     "init_mlp",
+    "load",
     "prepare_feature_matrix",
     "reconstruct_spectra",
+    "save",
     "tile_spectra",
 ]
