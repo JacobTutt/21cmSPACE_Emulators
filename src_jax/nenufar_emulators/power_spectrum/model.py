@@ -1,0 +1,2 @@
+"""Power-spectrum model definitions."""
+

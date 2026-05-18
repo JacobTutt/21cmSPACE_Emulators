@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nenufar-emulators"
+version = "0.1.0"
+description = "JAX-native emulators for NenuFAR-era 21-cm inference workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "jax",
+  "optax",
+  "numpy",
+  "scipy",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src_jax"}
+
+[tool.setuptools.packages.find]
+where = ["src_jax"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

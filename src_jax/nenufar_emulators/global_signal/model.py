@@ -1,0 +1,2 @@
+"""Global-signal model definitions."""
+

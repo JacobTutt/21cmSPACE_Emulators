@@ -1,0 +1,2 @@
+"""Power-spectrum inference entrypoints."""
+

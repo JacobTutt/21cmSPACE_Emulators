@@ -1,0 +1,2 @@
+"""Global-signal emulator package."""
+
