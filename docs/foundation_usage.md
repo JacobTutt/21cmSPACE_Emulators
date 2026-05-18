@@ -46,6 +46,13 @@ Print the baseline emulator specs:
 .venv/bin/nenufar-global-train --print-spec
 ```
 
+Print the legacy-aligned defaults migrated from the old PyTorch scripts:
+
+```bash
+.venv/bin/nenufar-power-train --print-legacy-config
+.venv/bin/nenufar-global-train --print-legacy-config
+```
+
 ## What These Smoke Runs Verify
 
 - model input dimensionality is consistent with the emulator spec

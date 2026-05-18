@@ -11,6 +11,7 @@ import numpy as np
 from nenufar_emulators.core.tiling import tile_spectra
 from nenufar_emulators.core.training import train_mlp_regressor
 from nenufar_emulators.global_signal.data import default_global_signal_spec
+from nenufar_emulators.global_signal.model import t21_arad_legacy_bundle
 
 
 def run_synthetic_smoke(
@@ -20,6 +21,7 @@ def run_synthetic_smoke(
 ) -> dict[str, float]:
     """Run a synthetic end-to-end smoke training exercise."""
     spec = default_global_signal_spec()
+    bundle = t21_arad_legacy_bundle()
     rng = np.random.default_rng(1)
     nsamples = 24
     z = np.linspace(6.0, 20.0, 20)
@@ -36,12 +38,12 @@ def run_synthetic_smoke(
         jnp.asarray(flat_targets[:split]),
         jnp.asarray(features[split:]),
         jnp.asarray(flat_targets[split:]),
-        hidden_features=32,
-        hidden_layers=2,
+        hidden_features=bundle.mlp.hidden_dim,
+        hidden_layers=bundle.mlp.total_hidden_layers,
         epochs=epochs,
         batch_size=batch_size,
-        learning_rate=5e-3,
-        weight_decay=0.0,
+        learning_rate=bundle.optimizer.learning_rate,
+        weight_decay=bundle.optimizer.weight_decay,
         seed=1,
     )
     return {
@@ -54,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
     parser = argparse.ArgumentParser(description="Global-signal emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
+    parser.add_argument(
+        "--print-legacy-config",
+        action="store_true",
+        help="Print the legacy-aligned model and training defaults.",
+    )
     parser.add_argument(
         "--synthetic-smoke",
         action="store_true",
@@ -71,6 +78,9 @@ def main() -> None:
 
     if args.print_spec:
         pprint(spec)
+        return
+    if args.print_legacy_config:
+        pprint(t21_arad_legacy_bundle())
         return
     if args.synthetic_smoke:
         result = run_synthetic_smoke(epochs=args.epochs, batch_size=args.batch_size)
