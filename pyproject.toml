@@ -20,6 +20,12 @@ dev = [
   "pytest",
 ]
 
+[project.scripts]
+nenufar-power-train = "nenufar_emulators.power_spectrum.train:main"
+nenufar-power-infer = "nenufar_emulators.power_spectrum.infer:main"
+nenufar-global-train = "nenufar_emulators.global_signal.train:main"
+nenufar-global-infer = "nenufar_emulators.global_signal.infer:main"
+
 [tool.setuptools]
 package-dir = {"" = "src_jax"}
 
@@ -28,3 +34,4 @@ where = ["src_jax"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src_jax"]
