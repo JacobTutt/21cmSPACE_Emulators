@@ -1,13 +1,17 @@
-"""Minimal JAX training utilities for emulator development.
+"""Shared JAX training utilities for emulator fitting.
 
-The goal of this module is still the same as before: keep the optimization
-logic small and auditable. The difference is that it now supports both the new
-dataset-driven workflow and the older direct-array fallback used in tests and
-small synthetic experiments.
+The repository has two real training entrypoints:
+
+- prepared legacy arrays for HERA-style migration workflows
+- dataset objects for the newer spec/pipeline-driven path
+
+Both are implemented here so batching and optimization logic stay in one
+place, rather than being scattered across helper modules.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import jax
@@ -15,7 +19,6 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from nenufar_emulators.core.batching import iter_batches
 from nenufar_emulators.core.datasets import SpectrumDataset, TiledBatch
 from nenufar_emulators.core.metrics import mse
 from nenufar_emulators.core.network import ActivationName, DenseMLP, init_mlp
@@ -49,6 +52,32 @@ def clone_model_state(model: DenseMLP) -> nnx.State:
     )
 
 
+def _iter_array_batches(
+    features: jnp.ndarray,
+    targets: jnp.ndarray,
+    batch_size: int,
+    *,
+    shuffle: bool,
+    key: jax.Array | None = None,
+) -> Iterator[tuple[jnp.ndarray, jnp.ndarray]]:
+    """Yield mini-batches from already-prepared in-memory arrays.
+
+    This helper stays private because array batching is only an implementation
+    detail of the legacy-array trainer. The public batching contract for the
+    broader codebase lives on :class:`SpectrumDataset`.
+    """
+    if len(features) != len(targets):
+        raise ValueError("features and targets must have the same length.")
+    indices = jnp.arange(len(features))
+    if shuffle:
+        if key is None:
+            key = jax.random.PRNGKey(0)
+        indices = jax.random.permutation(key, indices)
+    for start in range(0, len(indices), batch_size):
+        batch_index = indices[start : start + batch_size]
+        yield features[batch_index], targets[batch_index]
+
+
 def train_mlp_regressor(
     train_features: jnp.ndarray,
     train_targets: jnp.ndarray,
@@ -68,12 +97,13 @@ def train_mlp_regressor(
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared dense emulator network on prepared in-memory arrays.
 
-    This trainer is intentionally array-based and now serves as the fallback
-    path beneath the newer dataset-driven workflow. It is still useful for:
+    This trainer is intentionally array-based because the migrated HERA
+    workflows still prepare explicit feature/target matrices before fitting.
+    It is also useful for:
 
     - synthetic smoke testing
     - validating model and tiling contracts
-    - prototyping legacy-aligned configuration bundles
+    - fitting legacy-prepared HERA training rows directly
 
     Parameters
     ----------
@@ -163,9 +193,7 @@ def train_mlp_regressor(
         key, train_key = jax.random.split(key)
         train_loss = 0.0
         train_batches = 0
-        # Training batches are shuffled each epoch, mirroring the behavior we
-        # will want once real dataset iterators are connected.
-        for batch_features, batch_targets in iter_batches(
+        for batch_features, batch_targets in _iter_array_batches(
             train_features,
             train_targets,
             batch_size,
@@ -179,9 +207,7 @@ def train_mlp_regressor(
 
         validation_loss = 0.0
         validation_batches = 0
-        # Validation is intentionally deterministic so changes in reported loss
-        # reflect model updates rather than batch-order noise.
-        for batch_features, batch_targets in iter_batches(
+        for batch_features, batch_targets in _iter_array_batches(
             validation_features,
             validation_targets,
             batch_size,
