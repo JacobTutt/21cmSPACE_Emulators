@@ -89,9 +89,16 @@ def test_prepare_legacy_frad_parameters_matches_old_tk_contract() -> None:
 
 def test_legacy_bundles_match_old_training_defaults() -> None:
     assert delta21_frad_legacy_bundle().mlp.input_dim == 11
+    assert delta21_frad_legacy_bundle().mlp.total_hidden_layers == 4
+    assert delta21_frad_legacy_bundle().mlp.hidden_dim == 100
+    assert delta21_frad_legacy_bundle().mlp.activation == "relu"
     assert delta21_frad_legacy_bundle().training.batch_size == 20000
     assert sdc3b_pk_legacy_bundle().mlp.input_dim == 7
     assert t21_arad_legacy_bundle().training.save_after_epochs == 5
+    assert t21_frad_legacy_bundle().mlp.input_dim == 10
+    assert t21_frad_legacy_bundle().mlp.total_hidden_layers == 4
+    assert t21_frad_legacy_bundle().mlp.hidden_dim == 20
+    assert t21_frad_legacy_bundle().mlp.activation == "tanh"
     assert t21_frad_legacy_bundle().training.save_after_epochs == 5
     assert ts_arad_legacy_bundle().training.save_after_epochs == 2
     assert tk_frad_legacy_bundle().mlp.input_dim == 9

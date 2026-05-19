@@ -43,10 +43,20 @@ class LegacyPowerSpectrumBundle:
 
 
 def delta21_frad_legacy_bundle() -> LegacyPowerSpectrumBundle:
-    """Return the exact default bundle for the legacy `Delta21` training path."""
+    """Return the paper-like HERA IDR4 `Delta21` architecture and trainer.
+
+    This intentionally follows the older `poweremu`-style hidden-layer layout
+    rather than the later deeper PyTorch refactor: four hidden layers of width
+    100 with ReLU activations.
+    """
     return LegacyPowerSpectrumBundle(
         name="Delta21",
-        mlp=LegacyMLPConfig(input_dim=11, hidden_dim=100, n_hidden_blocks=6),
+        mlp=LegacyMLPConfig(
+            input_dim=11,
+            hidden_dim=100,
+            n_hidden_blocks=3,
+            activation="relu",
+        ),
         optimizer=LegacyOptimizerConfig(),
         training=LegacyTrainingConfig(
             epochs=10000,

@@ -49,15 +49,20 @@ def t21_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
 
 
 def t21_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
-    """Return the HERA IDR4 `T21` defaults with the old training settings.
+    """Return the HERA IDR4 `T21` defaults with a `globalemu`-like network.
 
-    The architecture and trainer settings match the old `T21` branch. The
-    practical difference from the older Arad variant is the scientific meaning
-    of the radio-efficiency parameter, not the MLP shape.
+    For the HERA IDR4 migration we prefer the narrower `tanh` architecture
+    recorded in the old `globalemu` run metadata over the later deep-ReLU
+    unified PyTorch path.
     """
     return LegacyGlobalSignalBundle(
         name="T21",
-        mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),
+        mlp=LegacyMLPConfig(
+            input_dim=10,
+            hidden_dim=20,
+            n_hidden_blocks=3,
+            activation="tanh",
+        ),
         optimizer=LegacyOptimizerConfig(),
         training=LegacyTrainingConfig(
             epochs=10000,
