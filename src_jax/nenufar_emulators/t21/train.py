@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
+from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from pprint import pprint
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -15,6 +20,7 @@ from nenufar_emulators.t21.data import (
     t21_spec,
 )
 from nenufar_emulators.t21.model import t21_config
+from nenufar_emulators.serialization import CheckpointMetadata, save
 from nenufar_emulators.trainer import train_mlp_dataset, train_mlp_regressor
 
 
@@ -106,6 +112,101 @@ def run_synthetic_smoke(
     }
 
 
+def _installed_package_version() -> str:
+    """Return the installed package version or a development fallback."""
+    try:
+        return version("nenufar-emulators")
+    except PackageNotFoundError:
+        return "0.1.0"
+
+
+def _write_training_summary(summary_path: Path, summary: dict[str, Any]) -> None:
+    """Write a human-readable JSON summary beside a saved model package."""
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2))
+
+
+def train_t21_from_dataset_root(
+    dataset_root: str,
+    *,
+    output_path: str | Path | None = None,
+    epochs: int | None = None,
+    batch_size: int | None = None,
+    shuffle_seed: int = 42,
+) -> dict[str, Any]:
+    """Prepare, train, and save a T21 model package from HERA IDR4 data."""
+    prepared = prepare_hera_idr4_t21_training_split(
+        dataset_root,
+        shuffle_seed=shuffle_seed,
+    )
+    config = t21_config()
+    model, history = train_mlp_regressor(
+        jnp.asarray(prepared.train_features),
+        jnp.asarray(prepared.train_targets),
+        jnp.asarray(prepared.validation_features),
+        jnp.asarray(prepared.validation_targets),
+        hidden_features=config.mlp.hidden_dim,
+        hidden_layers=config.mlp.total_hidden_layers,
+        activation=config.mlp.activation,
+        learning_rate=config.optimizer.learning_rate,
+        weight_decay=config.optimizer.weight_decay,
+        batch_size=config.training.batch_size if batch_size is None else batch_size,
+        epochs=config.training.epochs if epochs is None else epochs,
+        seed=shuffle_seed,
+        early_stopping_patience=(
+            config.training.early_stopping_patience if config.training.early_stop else None
+        ),
+        early_stopping_min_delta=config.training.early_stopping_min_delta,
+    )
+
+    output = Path("t21_model.nenemu") if output_path is None else Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    metadata = CheckpointMetadata(
+        model_name="t21",
+        package_version=_installed_package_version(),
+        emulator_spec=t21_spec(),
+        input_scaling=prepared.feature_scaling,
+        training_config={
+            "mlp": asdict(config.mlp),
+            "optimizer": asdict(config.optimizer),
+            "training": asdict(config.training),
+            "feature_names": list(prepared.feature_names),
+            "dataset_root": str(dataset_root),
+            "shuffle_seed": shuffle_seed,
+        },
+    )
+    package_path = save(
+        output,
+        model,
+        train_losses=history.train_losses,
+        val_losses=history.validation_losses,
+        loss=config.training.loss_name,
+        metadata=metadata,
+        epochs=config.training.epochs if epochs is None else epochs,
+        patience=config.training.early_stopping_patience if config.training.early_stop else None,
+        learning_rate=config.optimizer.learning_rate,
+        weight_decay=config.optimizer.weight_decay,
+    )
+
+    summary = {
+        "package_path": str(package_path),
+        "summary_path": str(package_path.with_suffix(".summary.json")),
+        "feature_names": list(prepared.feature_names),
+        "train_features_shape": list(prepared.train_features.shape),
+        "train_targets_shape": list(prepared.train_targets.shape),
+        "validation_features_shape": list(prepared.validation_features.shape),
+        "validation_targets_shape": list(prepared.validation_targets.shape),
+        "final_train_loss": history.train_losses[-1],
+        "final_validation_loss": history.validation_losses[-1],
+        "best_epoch": history.best_epoch,
+        "best_validation_loss": history.best_validation_loss,
+        "trained_model_type": type(model).__name__,
+    }
+    _write_training_summary(package_path.with_suffix(".summary.json"), summary)
+    return summary
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface for T21 development tasks."""
     parser = argparse.ArgumentParser(description="T21 emulator entrypoint.")
@@ -129,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--prepare-only",
         action="store_true",
         help="Prepare real HERA IDR4 arrays and print a summary without training.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Path to the output .nenemu package written after training.",
     )
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
@@ -173,33 +279,14 @@ def main() -> None:
             pprint(summary)
             return
 
-        config = t21_config()
-        model, history = train_mlp_regressor(
-            jnp.asarray(prepared.train_features),
-            jnp.asarray(prepared.train_targets),
-            jnp.asarray(prepared.validation_features),
-            jnp.asarray(prepared.validation_targets),
-            hidden_features=config.mlp.hidden_dim,
-            hidden_layers=config.mlp.total_hidden_layers,
-            activation=config.mlp.activation,
-            learning_rate=config.optimizer.learning_rate,
-            weight_decay=config.optimizer.weight_decay,
-            batch_size=config.training.batch_size if args.batch_size is None else args.batch_size,
-            epochs=config.training.epochs if args.epochs is None else args.epochs,
-            seed=args.shuffle_seed,
-            early_stopping_patience=(
-                config.training.early_stopping_patience if config.training.early_stop else None
-            ),
-            early_stopping_min_delta=config.training.early_stopping_min_delta,
+        summary = train_t21_from_dataset_root(
+            args.dataset_root,
+            output_path=args.output,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            shuffle_seed=args.shuffle_seed,
         )
-        pprint(
-            {
-                **summary,
-                "final_train_loss": history.train_losses[-1],
-                "final_validation_loss": history.validation_losses[-1],
-                "trained_model_type": type(model).__name__,
-            }
-        )
+        pprint(summary)
         return
 
     raise SystemExit(
