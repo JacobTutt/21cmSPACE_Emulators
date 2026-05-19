@@ -42,7 +42,7 @@ def test_prepare_hera_idr4_delta21_split_matches_old_shape_rules(tmp_path: Path)
 
 def test_prepare_hera_idr4_t21_split_matches_old_shape_rules(tmp_path: Path) -> None:
     dataset_root = write_mock_hera_idr4_dataset(tmp_path)
-    prepared = prepare_hera_idr4_t21_training_split(dataset_root, interpolation_seed=11)
+    prepared = prepare_hera_idr4_t21_training_split(dataset_root, shuffle_seed=11)
 
     assert prepared.feature_names == (
         "z",
@@ -56,10 +56,10 @@ def test_prepare_hera_idr4_t21_split_matches_old_shape_rules(tmp_path: Path) -> 
         "log10fradio",
         "pop",
     )
-    assert prepared.train_features.shape == (800, 10)
-    assert prepared.train_targets.shape == (800,)
-    assert prepared.validation_features.shape == (3, 10)
-    assert prepared.validation_targets.shape == (3,)
+    assert prepared.train_features.shape == (600, 10)
+    assert prepared.train_targets.shape == (600,)
+    assert prepared.validation_features.shape == (400, 10)
+    assert prepared.validation_targets.shape == (400,)
     scaling_by_name = {feature.name: feature.method for feature in prepared.feature_scaling}
     assert scaling_by_name["tau"] == "zscore"
     assert scaling_by_name["z"] == "minmax_minus_one_to_one"

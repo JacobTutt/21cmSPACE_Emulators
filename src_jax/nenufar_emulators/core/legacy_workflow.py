@@ -14,6 +14,11 @@ performed a specific sequence of steps that materially defined the emulator:
 This module reproduces that sequence in a reusable, testable form so the new
 JAX code can prepare the same learning problem without dragging the old
 PyTorch implementation along with it.
+
+For one-dimensional global-signal emulators we also support a second workflow:
+split by simulation, resample every signal onto one shared redshift grid, then
+flatten that fixed grid into scalar rows. That is closer in spirit to the old
+``globalemu`` pipeline than the random-interpolation ``poweremu`` workflow.
 """
 
 from __future__ import annotations
@@ -88,6 +93,89 @@ def prepare_legacy_training_split(
         seed=interpolation_seed,
     )
     validation_features, validation_targets = generate_validation_rows(
+        validation_parameters,
+        validation_target,
+        axes=axes,
+        axis_specs=axis_specs,
+    )
+
+    scaler = build_legacy_feature_scaler(
+        train_features,
+        feature_names=feature_names,
+        method_overrides=scale_method,
+    )
+    scaled_train = scaler.transform(train_features).astype(np.float32)
+    scaled_validation = scaler.transform(validation_features).astype(np.float32)
+    train_targets = np.asarray(train_targets, dtype=np.float32)
+    validation_targets = np.asarray(validation_targets, dtype=np.float32)
+
+    scaled_train, train_targets = shuffle_rows(scaled_train, train_targets, seed=shuffle_seed)
+    scaled_validation, validation_targets = shuffle_rows(
+        scaled_validation,
+        validation_targets,
+        seed=shuffle_seed,
+    )
+
+    return LegacyPreparedSplit(
+        feature_names=feature_names,
+        train_features=scaled_train,
+        train_targets=train_targets,
+        validation_features=scaled_validation,
+        validation_targets=validation_targets,
+        feature_scaling=scaler.scaling,
+    )
+
+
+def prepare_fixed_grid_training_split(
+    *,
+    axes: tuple[np.ndarray, ...],
+    axis_specs: tuple[AxisSpec, ...],
+    parameters: PreparedFeatures,
+    target: np.ndarray,
+    scale_method: dict[str, str],
+    data_log: bool,
+    offset: float | None,
+    train_size: float = 0.66,
+    test_size: float = 0.34,
+    random_state: int = 42,
+    shuffle_seed: int = 42,
+) -> LegacyPreparedSplit:
+    """Prepare a shared-grid training split for global-signal-style emulators.
+
+    This workflow differs from :func:`prepare_legacy_training_split` in one
+    important way: it does not draw random interpolation points independently
+    for each simulation. Instead it constructs one fixed axis grid from the
+    declared emulator spec, resamples every training and validation signal onto
+    that grid, and then flattens the result into scalar rows.
+
+    That mirrors the operational shape of the old ``globalemu`` preprocessing:
+    one common redshift grid for all simulations, deterministic labels on that
+    grid, and only the simulation split remaining stochastic.
+    """
+    transformed_target = apply_legacy_target_transform(
+        target,
+        data_log=data_log,
+        offset=offset,
+        rng=np.random.default_rng(shuffle_seed),
+    )
+    train_parameters, validation_parameters, train_target, validation_target = split_simulations(
+        parameters.values,
+        transformed_target,
+        train_size=train_size,
+        test_size=test_size,
+        random_state=random_state,
+    )
+
+    axis_feature_names = tuple(axis.feature_name() for axis in axis_specs)
+    feature_names = (*axis_feature_names, *parameters.feature_names)
+
+    train_features, train_targets = generate_resampled_rows(
+        train_parameters,
+        train_target,
+        axes=axes,
+        axis_specs=axis_specs,
+    )
+    validation_features, validation_targets = generate_resampled_rows(
         validation_parameters,
         validation_target,
         axes=axes,
@@ -242,6 +330,42 @@ def generate_validation_rows(
     return np.hstack((tiled_axes, tiled_parameters)), cropped_target.ravel()
 
 
+def generate_resampled_rows(
+    parameters: np.ndarray,
+    target: np.ndarray,
+    *,
+    axes: tuple[np.ndarray, ...],
+    axis_specs: tuple[AxisSpec, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resample every simulation onto one shared axis grid, then flatten rows.
+
+    The shared-grid strategy is a better match for the old global-signal
+    workflow than the per-simulation random interpolation used for power
+    spectra. All simulations see the same axis coordinates, so differences in
+    the resulting training rows come only from the physical parameters and the
+    underlying signal values.
+    """
+    transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
+    sampled_axes = build_fixed_axis_grid(
+        transformed_axes,
+        transformed_limits,
+        axis_specs,
+    )
+    grids = np.meshgrid(*sampled_axes, indexing="ij")
+    combinations = np.vstack([grid.ravel() for grid in grids]).T
+
+    row_features: list[np.ndarray] = []
+    row_targets: list[np.ndarray] = []
+    for parameter_row, target_row in zip(parameters, target, strict=True):
+        interpolator = RegularGridInterpolator(transformed_axes, target_row, method="linear")
+        interpolated = interpolator(combinations)
+        tiled_parameters = np.tile(parameter_row, (combinations.shape[0], 1))
+        row_features.append(np.hstack((combinations, tiled_parameters)))
+        row_targets.append(np.asarray(interpolated, dtype=float))
+
+    return np.vstack(row_features), np.hstack(row_targets)
+
+
 def transformed_axis_configuration(
     axes: tuple[np.ndarray, ...],
     axis_specs: tuple[AxisSpec, ...],
@@ -257,6 +381,32 @@ def transformed_axis_configuration(
             limits = apply_transform(np.asarray(axis_spec.limits, dtype=float), axis_spec.transform)
             transformed_limits.append((float(limits[0]), float(limits[1])))
     return tuple(transformed_axes), tuple(transformed_limits)
+
+
+def build_fixed_axis_grid(
+    transformed_axes: tuple[np.ndarray, ...],
+    transformed_limits: tuple[tuple[float, float], ...],
+    axis_specs: tuple[AxisSpec, ...],
+) -> tuple[np.ndarray, ...]:
+    """Construct the deterministic axis grid used in fixed-grid workflows.
+
+    If an axis spec declares ``nsample`` we interpolate onto that many evenly
+    spaced points in feature space. Otherwise we keep the original axis values
+    cropped to the declared limits.
+    """
+    sampled_axes = []
+    for axis_values, (low, high), axis_spec in zip(
+        transformed_axes,
+        transformed_limits,
+        axis_specs,
+        strict=True,
+    ):
+        if axis_spec.nsample is None:
+            mask = np.logical_and(axis_values >= low, axis_values <= high)
+            sampled_axes.append(np.asarray(axis_values[mask], dtype=float))
+            continue
+        sampled_axes.append(np.linspace(low, high, axis_spec.nsample, dtype=float))
+    return tuple(sampled_axes)
 
 
 def build_legacy_feature_scaler(

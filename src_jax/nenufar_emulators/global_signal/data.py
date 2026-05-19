@@ -13,7 +13,10 @@ import numpy as np
 from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDataset
 from nenufar_emulators.core.hera_idr4 import load_hera_idr4_t21
 from nenufar_emulators.core.legacy import PreparedFeatures, prepare_feature_matrix
-from nenufar_emulators.core.legacy_workflow import LegacyPreparedSplit, prepare_legacy_training_split
+from nenufar_emulators.core.legacy_workflow import (
+    LegacyPreparedSplit,
+    prepare_fixed_grid_training_split,
+)
 from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
@@ -188,13 +191,19 @@ def prepare_hera_idr4_t21_training_split(
     dataset_root: str,
     *,
     random_state: int = 42,
-    interpolation_seed: int = 0,
+    shuffle_seed: int = 42,
 ) -> LegacyPreparedSplit:
-    """Prepare HERA IDR4 `T21` arrays using the old T21 training recipe."""
+    """Prepare HERA IDR4 `T21` arrays using a `globalemu`-like workflow.
+
+    Unlike the power-spectrum emulator, `T21` is not prepared through
+    per-simulation random interpolation. We split by simulation, resample all
+    signals onto one shared redshift grid declared by the emulator spec, and
+    then flatten those deterministic rows for training.
+    """
     product = load_hera_idr4_t21(dataset_root)
     prepared_parameters = prepare_hera_idr4_frad_parameters(product.parameters)
     spec = default_global_signal_spec()
-    return prepare_legacy_training_split(
+    return prepare_fixed_grid_training_split(
         axes=(product.axes.z,),
         axis_specs=spec.axes,
         parameters=prepared_parameters,
@@ -202,8 +211,10 @@ def prepare_hera_idr4_t21_training_split(
         scale_method={"tau": "normalize"},
         data_log=False,
         offset=None,
+        train_size=0.66,
+        test_size=0.34,
         random_state=random_state,
-        interpolation_seed=interpolation_seed,
+        shuffle_seed=shuffle_seed,
     )
 
 

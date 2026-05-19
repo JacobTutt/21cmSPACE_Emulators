@@ -99,6 +99,10 @@ def test_legacy_bundles_match_old_training_defaults() -> None:
     assert t21_frad_legacy_bundle().mlp.total_hidden_layers == 4
     assert t21_frad_legacy_bundle().mlp.hidden_dim == 20
     assert t21_frad_legacy_bundle().mlp.activation == "tanh"
+    assert t21_frad_legacy_bundle().training.batch_size == 769
+    assert t21_frad_legacy_bundle().training.epochs == 1000
+    assert t21_frad_legacy_bundle().training.early_stop is True
+    assert t21_frad_legacy_bundle().training.early_stopping_patience == 50
     assert t21_frad_legacy_bundle().training.save_after_epochs == 5
     assert ts_arad_legacy_bundle().training.save_after_epochs == 2
     assert tk_frad_legacy_bundle().mlp.input_dim == 9

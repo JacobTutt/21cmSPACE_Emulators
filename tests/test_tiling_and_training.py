@@ -51,6 +51,32 @@ def test_synthetic_training_smoke() -> None:
     assert float(mse) < 0.1
 
 
+def test_early_stopping_records_and_restores_best_epoch() -> None:
+    rng = np.random.default_rng(4)
+    train_features = rng.normal(size=(32, 2))
+    validation_features = np.zeros((8, 2))
+    train_targets = np.zeros(32)
+    validation_targets = np.ones(8)
+
+    _, history = train_mlp_regressor(
+        jnp.asarray(train_features),
+        jnp.asarray(train_targets),
+        jnp.asarray(validation_features),
+        jnp.asarray(validation_targets),
+        hidden_features=4,
+        hidden_layers=1,
+        epochs=12,
+        batch_size=8,
+        learning_rate=0.0,
+        weight_decay=0.0,
+        seed=3,
+        early_stopping_patience=2,
+    )
+    assert history.best_epoch == 0
+    assert history.best_validation_loss == history.validation_losses[0]
+    assert len(history.validation_losses) < 12
+
+
 def test_default_specs_have_expected_axis_counts() -> None:
     assert len(default_power_spectrum_spec().axes) == 2
     assert len(default_global_signal_spec().axes) == 1

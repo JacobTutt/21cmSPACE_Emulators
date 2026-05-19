@@ -138,10 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
     parser.add_argument(
-        "--interpolation-seed",
+        "--shuffle-seed",
         type=int,
-        default=0,
-        help="Seed used when sampling interpolation points for the old-style training rows.",
+        default=42,
+        help="Seed used when shuffling the fixed-grid T21 training rows after the split.",
     )
     return parser
 
@@ -170,7 +170,7 @@ def main() -> None:
     if args.dataset_root:
         prepared = prepare_hera_idr4_t21_training_split(
             args.dataset_root,
-            interpolation_seed=args.interpolation_seed,
+            shuffle_seed=args.shuffle_seed,
         )
         summary = {
             "feature_names": prepared.feature_names,
@@ -196,7 +196,11 @@ def main() -> None:
             weight_decay=bundle.optimizer.weight_decay,
             batch_size=bundle.training.batch_size if args.batch_size is None else args.batch_size,
             epochs=bundle.training.epochs if args.epochs is None else args.epochs,
-            seed=args.interpolation_seed,
+            seed=args.shuffle_seed,
+            early_stopping_patience=(
+                bundle.training.early_stopping_patience if bundle.training.early_stop else None
+            ),
+            early_stopping_min_delta=bundle.training.early_stopping_min_delta,
         )
         pprint(
             {

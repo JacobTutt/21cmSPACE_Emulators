@@ -65,10 +65,12 @@ def t21_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
         ),
         optimizer=LegacyOptimizerConfig(),
         training=LegacyTrainingConfig(
-            epochs=10000,
-            batch_size=20000,
+            epochs=1000,
+            batch_size=769,
             save_after_epochs=5,
             terminate_time_seconds=3600 * 2,
+            early_stop=True,
+            early_stopping_patience=50,
         ),
     )
 

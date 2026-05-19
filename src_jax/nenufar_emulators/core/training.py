@@ -33,6 +33,20 @@ class TrainingHistory:
 
     train_losses: list[float]
     validation_losses: list[float]
+    best_epoch: int | None = None
+    best_validation_loss: float | None = None
+
+
+def clone_model_state(model: DenseMLP) -> nnx.State:
+    """Copy the trainable state of a live NNX model for later restoration.
+
+    This is primarily used by early stopping. When validation loss improves we
+    snapshot the current model parameters, and if training later degrades we
+    can restore the best-known state rather than returning the final epoch.
+    """
+    return nnx.from_flat_state(
+        [(tuple(path), jnp.array(value)) for path, value in nnx.to_flat_state(nnx.state(model))]
+    )
 
 
 def train_mlp_regressor(
@@ -49,6 +63,8 @@ def train_mlp_regressor(
     batch_size: int = 256,
     epochs: int = 50,
     seed: int = 0,
+    early_stopping_patience: int | None = None,
+    early_stopping_min_delta: float = 0.0,
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared dense emulator network on prepared in-memory arrays.
 
@@ -78,6 +94,12 @@ def train_mlp_regressor(
         Number of full passes over the training set.
     seed:
         Random seed used for model initialization and batch shuffling.
+    early_stopping_patience:
+        If provided, stop training after this many epochs without a meaningful
+        validation-loss improvement and restore the best-seen weights.
+    early_stopping_min_delta:
+        Minimum decrease in validation loss required to count as an
+        improvement for early stopping.
 
     Returns
     -------
@@ -132,6 +154,10 @@ def train_mlp_regressor(
 
     train_losses: list[float] = []
     validation_losses: list[float] = []
+    best_validation_loss = float("inf")
+    best_epoch: int | None = None
+    best_state: nnx.State | None = None
+    epochs_without_improvement = 0
 
     for epoch in range(epochs):
         key, train_key = jax.random.split(key)
@@ -168,7 +194,29 @@ def train_mlp_regressor(
         train_losses.append(train_loss)
         validation_losses.append(validation_loss)
 
-    return model, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)
+        if validation_loss < best_validation_loss - early_stopping_min_delta:
+            best_validation_loss = validation_loss
+            best_epoch = epoch
+            best_state = clone_model_state(model)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if (
+            early_stopping_patience is not None
+            and epochs_without_improvement >= early_stopping_patience
+        ):
+            break
+
+    if best_state is not None:
+        nnx.update(model, best_state)
+
+    return model, TrainingHistory(
+        train_losses=train_losses,
+        validation_losses=validation_losses,
+        best_epoch=best_epoch,
+        best_validation_loss=None if best_epoch is None else best_validation_loss,
+    )
 
 
 def train_mlp_dataset(
@@ -183,6 +231,8 @@ def train_mlp_dataset(
     batch_size: int = 256,
     epochs: int = 50,
     seed: int = 0,
+    early_stopping_patience: int | None = None,
+    early_stopping_min_delta: float = 0.0,
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared MLP directly from dataset objects.
 
@@ -243,8 +293,12 @@ def train_mlp_dataset(
 
     train_losses: list[float] = []
     validation_losses: list[float] = []
+    best_validation_loss = float("inf")
+    best_epoch: int | None = None
+    best_state: nnx.State | None = None
+    epochs_without_improvement = 0
 
-    for _ in range(epochs):
+    for epoch in range(epochs):
         key, train_key = jax.random.split(key)
         train_loss = 0.0
         train_batches = 0
@@ -272,4 +326,26 @@ def train_mlp_dataset(
         train_losses.append(train_loss)
         validation_losses.append(validation_loss)
 
-    return model, TrainingHistory(train_losses=train_losses, validation_losses=validation_losses)
+        if validation_loss < best_validation_loss - early_stopping_min_delta:
+            best_validation_loss = validation_loss
+            best_epoch = epoch
+            best_state = clone_model_state(model)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if (
+            early_stopping_patience is not None
+            and epochs_without_improvement >= early_stopping_patience
+        ):
+            break
+
+    if best_state is not None:
+        nnx.update(model, best_state)
+
+    return model, TrainingHistory(
+        train_losses=train_losses,
+        validation_losses=validation_losses,
+        best_epoch=best_epoch,
+        best_validation_loss=None if best_epoch is None else best_validation_loss,
+    )

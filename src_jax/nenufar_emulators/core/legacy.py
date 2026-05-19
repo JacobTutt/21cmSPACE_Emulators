@@ -61,6 +61,9 @@ class LegacyTrainingConfig:
     save_after_epochs: int = 5
     terminate_time_seconds: int = 3600 * 2
     profiling: bool = False
+    early_stop: bool = False
+    early_stopping_patience: int | None = None
+    early_stopping_min_delta: float = 0.0
 
 
 @dataclass(frozen=True)
