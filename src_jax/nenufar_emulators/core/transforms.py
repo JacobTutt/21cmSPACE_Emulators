@@ -1,9 +1,9 @@
 """Small named transforms used by specs, preprocessing, and inference.
 
-The old emulator code frequently worked in transformed coordinates, for
-example ``log10(k)`` or ``log10(Delta21 + 1)``. These helpers keep those rules
-explicit so the transformation applied during training can later be inverted in
-inference or plotting code.
+The emulator workflows operate in transformed coordinates for several inputs
+and targets, for example ``log10(k)`` or ``log10(Delta21 + 1)``. These helpers
+keep those rules explicit so the same transforms can be applied during
+training and inverted later for inference or plotting.
 """
 
 from __future__ import annotations

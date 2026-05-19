@@ -1,9 +1,9 @@
 """Delta21 emulator data contracts and preparation helpers.
 
-This module owns the end of the workflow that turns raw HERA IDR4 arrays into
-the prepared scalar regression problem used to train the current Delta21
-emulator. The code is explicit about which steps are legacy-derived, because
-those steps define the scientific meaning of the training data.
+This module turns raw HERA IDR4 arrays into the scalar regression problem used
+to train the current Delta21 emulator. It defines the input contract, the
+parameter preparation rules, and the row-building workflow in one place so the
+full training setup is easy to inspect.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDatas
 from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.data.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
-from nenufar_emulators.data.preparation import LegacyPreparedSplit, prepare_legacy_training_split
-from nenufar_emulators.legacy import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.conventions import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.data.preparation import PreparedSplit, prepare_interpolated_training_split
 
 HERA_IDR4_COLUMNS = (
     "fstarII",
@@ -35,9 +35,9 @@ HERA_IDR4_COLUMNS = (
 def delta21_spec() -> EmulatorSpec:
     """Return the baseline HERA IDR4 Delta21 emulator contract.
 
-    This mirrors the old `Delta21` setup: two tiled axes (`z`, `k`) plus nine
+    This uses the established `Delta21` setup: two tiled axes (`z`, `k`) plus nine
     astrophysical parameters after dropping unused columns and applying the
-    legacy log transforms.
+    workflow transforms.
     """
     return EmulatorSpec(
         name="delta21",
@@ -69,10 +69,10 @@ def delta21_spec() -> EmulatorSpec:
         target_offset=1.0,
     )
 def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA IDR4 12-parameter arrays for the old `Delta21` emulator.
+    """Prepare HERA IDR4 12-parameter arrays for the `Delta21` emulator.
 
-    The raw table contains 12 columns, but the legacy emulator dropped `zeta`,
-    `feed`, and `delay` before training. It also logged the star-formation and
+    The raw table contains 12 columns, but the workflow uses only nine of
+    them. It drops `zeta`, `feed`, and `delay`, and logs the star-formation and
     radio-efficiency style parameters, while keeping `alpha`, `nu_0`, and
     `pop` available as explicitly discrete metadata.
     """
@@ -90,18 +90,18 @@ def prepare_hera_idr4_delta21_training_split(
     *,
     random_state: int = 42,
     interpolation_seed: int = 0,
-) -> LegacyPreparedSplit:
-    """Prepare HERA IDR4 `Delta21` arrays using the old training recipe.
+) -> PreparedSplit:
+    """Prepare HERA IDR4 `Delta21` arrays for model fitting.
 
-    This reproduces the scientifically important steps from the PyTorch
-    pipeline while intentionally swapping back to the HERA IDR4 `k` axis rather
-    than the mixed cosmic-string axis line that was uncommented in one legacy
-    script revision.
+    The resulting rows follow the interpolated sampling workflow used for the
+    current Delta21 emulator: split simulations first, draw training samples in
+    transformed axis space, and keep validation on a deterministic cropped
+    grid.
     """
     product = load_hera_idr4_delta21(dataset_root)
     prepared_parameters = prepare_hera_idr4_delta21_parameters(product.parameters)
     spec = delta21_spec()
-    return prepare_legacy_training_split(
+    return prepare_interpolated_training_split(
         axes=(product.axes.z, product.axes.k),
         axis_specs=spec.axes,
         parameters=prepared_parameters,
@@ -122,7 +122,7 @@ def build_delta21_dataset(
     forward_pipeline: NormalisationPipeline | list[NormalisationPipeline] | None = None,
     tiling: bool = True,
 ) -> SpectrumDataset:
-    """Build a power-spectrum dataset using old-code transform conventions.
+    """Build a power-spectrum dataset using the declared workflow contract.
 
     The dataset always includes a :class:`SpecTransformPipeline` so axis and
     target transforms follow the declared emulator spec. Parameter transforms

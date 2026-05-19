@@ -1,8 +1,9 @@
-"""Legacy-compatible configuration and preprocessing helpers.
+"""Shared workflow conventions for model setup and feature preparation.
 
-This module exists to make the migration explicit. Rather than scattering
-knowledge of the old repository through ad hoc comments, we encode the legacy
-assumptions in small data structures and preparation helpers.
+This module collects the small pieces of configuration and parameter-table
+handling that define how the current emulator workflows are built. Keeping
+these conventions in one place makes the training setup easy to read and keeps
+the rest of the package focused on data flow rather than bookkeeping.
 """
 
 from __future__ import annotations
@@ -13,12 +14,12 @@ import numpy as np
 
 
 @dataclass(frozen=True)
-class LegacyMLPConfig:
-    """Configuration matching the old PyTorch MLP semantics.
+class MLPConfig:
+    """Configuration for the shared dense emulator network.
 
-    The important subtlety is that the old model defined one input-to-hidden
-    layer plus ``n_hidden`` additional hidden blocks. The JAX helper in this
-    repository counts hidden layers directly, so we expose both views.
+    The hidden-layer count is stored in the same split form used by the
+    workflow configs: one input-to-hidden layer plus ``n_hidden_blocks``
+    repeated hidden layers of the same width.
     """
 
     input_dim: int
@@ -34,13 +35,8 @@ class LegacyMLPConfig:
 
 
 @dataclass(frozen=True)
-class LegacyOptimizerConfig:
-    """Optimizer defaults mirrored from the old training scripts.
-
-    These values are stored separately from the model config because the old
-    repository often reused the same MLP shape with slightly different trainer
-    settings depending on the emulator family.
-    """
+class OptimizerConfig:
+    """Optimizer settings for a workflow configuration."""
 
     optimizer_name: str = "Adam"
     learning_rate: float = 1e-3
@@ -48,12 +44,8 @@ class LegacyOptimizerConfig:
 
 
 @dataclass(frozen=True)
-class LegacyTrainingConfig:
-    """Training defaults mirrored from the old training scripts.
-
-    These are intentionally the *script* defaults, not the synthetic-test
-    defaults used for fast verification in this repository.
-    """
+class TrainingConfig:
+    """Training-loop settings for a workflow configuration."""
 
     epochs: int
     batch_size: int
@@ -88,9 +80,9 @@ def prepare_feature_matrix(
     discard_params: tuple[str, ...],
     discrete_params: tuple[str, ...],
 ) -> PreparedFeatures:
-    """Prepare feature arrays using the same rules as the old code.
+    """Prepare a feature matrix from a raw parameter table.
 
-    The old training scripts all followed the same broad recipe:
+    The preparation recipe used throughout this repository is:
 
     1. start from a raw parameter table with science-facing column names
     2. drop parameters not used by a given emulator
@@ -102,19 +94,19 @@ def prepare_feature_matrix(
     Parameters
     ----------
     raw:
-        Two-dimensional raw parameter table read from a legacy file.
+        Two-dimensional raw parameter table read from disk.
     column_names:
         Names attached to the columns in ``raw``. These define the only valid
         lookup order for the table.
     transform_params:
         Parameters that should be mapped into ``log10`` feature space before
-        training, mirroring the old scripts.
+        training.
     discard_params:
         Parameters present in the raw table but intentionally excluded from the
         emulator input for this particular model.
     discrete_params:
         Parameters whose allowed values should be tracked explicitly because
-        they were treated as discrete choices in the old pipeline.
+        the workflows treat them as discrete choices.
     """
     array = np.asarray(raw, dtype=float)
     if array.ndim != 2:
@@ -123,8 +115,8 @@ def prepare_feature_matrix(
         raise ValueError("column_names length does not match raw parameter width.")
 
     name_to_index = {name: idx for idx, name in enumerate(column_names)}
-    # Preserve the original column order after dropping unused parameters, so
-    # the feature matrix remains aligned with the legacy scripts.
+    # Preserve the declared column order after dropping unused parameters so
+    # the resulting matrix has a stable, explicit feature order.
     keep_names = [name for name in column_names if name not in discard_params]
 
     discrete_values: dict[str, tuple[float, ...]] = {}
@@ -140,8 +132,8 @@ def prepare_feature_matrix(
     for name in keep_names:
         values = array[:, name_to_index[name]].copy()
         if name in transform_params:
-            # Legacy code generally transformed by renaming the feature to the
-            # ``log10...`` form rather than storing a separate transform map.
+            # Renaming transformed columns to their ``log10...`` form keeps the
+            # feature matrix self-describing once it leaves this helper.
             prepared_columns.append(np.log10(values))
             prepared_names.append(f"log10{name}")
         else:

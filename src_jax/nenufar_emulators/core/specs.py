@@ -8,7 +8,7 @@ design intent for the repository:
 - they define the canonical feature order expected by model code
 
 Keeping this logic in one place makes later data-loader and checkpoint code
-easier to reason about and avoids repeating legacy naming conventions in
+easier to reason about and avoids repeating naming conventions in
 multiple modules.
 """
 
@@ -40,10 +40,9 @@ class AxisSpec:
         """Return the model-facing name for this axis.
 
         In practice this is the column name that will appear in prepared
-        feature matrices and checkpoint metadata. The old code frequently used
-        names such as ``log10k`` or ``log10fradio`` for transformed variables,
-        and we preserve that convention so legacy feature ordering stays
-        recognizable.
+        feature matrices and checkpoint metadata. Names such as ``log10k`` or
+        ``log10fradio`` keep transformed variables explicit in the model input
+        contract.
         """
         return self.name if self.transform == "identity" else f"{self.transform}{self.name}"
 
@@ -61,8 +60,8 @@ class AxisSpec:
 class ParameterSpec:
     """Specification for a model parameter.
 
-    `discrete_values` is used for parameters that were treated as discrete in
-    the legacy training scripts, such as `alpha`, `nu_0`, and `pop`.
+    `discrete_values` is used for parameters that the workflows treat as
+    discrete, such as `alpha`, `nu_0`, and `pop`.
     """
 
     name: str
@@ -145,8 +144,8 @@ class EmulatorSpec:
         """Return transformed input feature names in model-input order.
 
         The order is always ``axes`` first and then ``parameters``. This is the
-        same ordering assumed by the tiling code and is meant to mirror the old
-        scalar-regression emulator formulation.
+        same ordering assumed by the tiling code and by the training rows built
+        throughout the repository.
         """
         names = [axis.feature_name() for axis in self.axes]
         names.extend(parameter.feature_name() for parameter in self.parameters)

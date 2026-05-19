@@ -1,13 +1,12 @@
 """Preprocessing pipelines for spectral datasets.
 
 This module provides the dataset-level transform objects that sit between raw
-science arrays and the tiled neural-network inputs. The design is influenced by
-``astroemu``'s forward/backward pipelines, but the conventions here are tuned
-to the older NenuFAR emulator code:
+science arrays and the tiled neural-network inputs. The conventions here are
+tuned to this package's Delta21 and T21 workflows:
 
 - axis transforms follow the declared :class:`~nenufar_emulators.core.specs.AxisSpec`
 - parameter transforms follow the declared :class:`~nenufar_emulators.core.specs.ParameterSpec`
-- target transforms follow the emulator spec, including any legacy offset
+- target transforms follow the emulator spec, including any configured offset
 """
 
 from __future__ import annotations
@@ -30,8 +29,7 @@ def _safe_std(values: np.ndarray, axis: int = 0) -> np.ndarray:
 class SpecTransformPipeline(NormalisationPipeline):
     """Apply the transforms declared by an :class:`EmulatorSpec`.
 
-    This pipeline is the dataset-level equivalent of the handwritten transform
-    logic in the old scripts. It converts raw physical axes, parameters, and
+    This pipeline converts raw physical axes, parameters, and
     targets into the representation actually seen by the neural network.
     """
 
@@ -161,8 +159,8 @@ class DatasetStatistics:
 class StandardizationPipeline(NormalisationPipeline):
     """Standardise spectra, axes, and parameters using stored dataset statistics.
 
-    This is the dataset-level version of what the old code and ``astroemu`` do
-    before training: shift and scale selected quantities so the network sees a
+    This is the dataset-level version of the usual preprocessing step before
+    training: shift and scale selected quantities so the network sees a
     numerically friendlier problem, while still allowing the transform to be
     inverted later.
     """

@@ -10,7 +10,7 @@ Each training row contains:
 
 - redshift `z`
 - wave number `log10(k)`
-- nine astrophysical parameters after legacy preprocessing
+- nine astrophysical parameters after workflow preprocessing
 
 The resulting network input width is `11`.
 
@@ -22,15 +22,15 @@ Each row predicts one scalar power-spectrum value in transformed space:
 
 ### Preparation Logic
 
-The current workflow intentionally follows the legacy `poweremu` style:
+The current workflow uses the established scalar power-spectrum setup:
 
 1. load HERA IDR4 `Delta21`, `z`, `k`, and parameter arrays
-2. drop unused parameters and apply the legacy log transforms
+2. drop unused parameters and apply the workflow log transforms
 3. split by simulation
 4. draw random interpolation points over the allowed `z` and `k` ranges
 5. flatten those interpolated values into scalar training rows
 6. build a fixed-grid validation set
-7. apply the old scaling semantics
+7. scale each feature with the configured workflow rules
 
 ### Model
 
@@ -48,7 +48,7 @@ The current `Delta21` network is:
 Each training row contains:
 
 - redshift `z`
-- nine astrophysical parameters after legacy preprocessing
+- nine astrophysical parameters after workflow preprocessing
 
 The resulting network input width is `10`.
 
@@ -62,14 +62,14 @@ Each row predicts one scalar global-signal value in physical space:
 
 The current workflow is intentionally different from `Delta21`.
 
-It follows a more `globalemu`-like fixed-grid approach:
+It uses a fixed-grid global-signal approach:
 
 1. load HERA IDR4 `T21`, `z`, and parameter arrays
-2. drop unused parameters and apply the legacy log transforms
+2. drop unused parameters and apply the workflow log transforms
 3. split by simulation
 4. resample every signal onto one shared redshift grid
 5. flatten that shared grid into scalar training rows
-6. apply the old scaling semantics
+6. scale each feature with the configured workflow rules
 
 ### Model
 
@@ -80,5 +80,6 @@ The current `T21` network is:
 
 ### Training Defaults
 
-The current `T21` workflow uses narrower, more `globalemu`-like training
-settings than `Delta21`, including early stopping.
+The current `T21` workflow uses a narrower network and early stopping because
+the global-signal task is one-dimensional and does not need the same model
+capacity as `Delta21`.

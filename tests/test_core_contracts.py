@@ -6,7 +6,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from nenufar_emulators.archive import CheckpointMetadata, load, save
+from nenufar_emulators.serialization import CheckpointMetadata, load, save
 from nenufar_emulators.core.normalisation import StandardizationPipeline
 from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
@@ -71,7 +71,7 @@ def test_checkpoint_metadata_to_dict() -> None:
     assert len(serialized["input_scaling"]) == 2
 
 
-def test_checkpoint_archive_round_trip(tmp_path) -> None:
+def test_checkpoint_package_round_trip(tmp_path) -> None:
     spec = t21_spec()
     parameters = np.column_stack(
         [
@@ -137,7 +137,7 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
         dtype=jnp.float32,
     )
     expected = forward_mlp(model, features)
-    archive_path = save(
+    package_path = save(
         tmp_path / "demo_model",
         model,
         train_losses=[1.0, 0.5],
@@ -151,10 +151,10 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
         learning_rate=1e-3,
         weight_decay=1e-4,
     )
-    loaded = load(archive_path)
+    loaded = load(package_path)
     recovered = forward_mlp(loaded["model"], features)
 
-    assert archive_path.name.endswith(".nenemu")
+    assert package_path.name.endswith(".nenemu")
     assert np.allclose(np.asarray(recovered), np.asarray(expected))
     assert loaded["metadata"].model_name == "t21-test"
     assert loaded["hyperparams"]["hidden_features"] == 8

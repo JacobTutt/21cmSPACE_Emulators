@@ -1,12 +1,12 @@
 """Shared JAX training utilities for emulator fitting.
 
-The repository has two real training entrypoints:
+The repository supports two equivalent entry styles:
 
-- prepared legacy arrays for HERA-style migration workflows
-- dataset objects for the newer spec/pipeline-driven path
+- prepared feature/target arrays
+- dataset objects that yield tiled batches
 
-Both are implemented here so batching and optimization logic stay in one
-place, rather than being scattered across helper modules.
+Both routes are implemented here so batching and optimization logic stay in
+one place.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def _iter_array_batches(
     """Yield mini-batches from already-prepared in-memory arrays.
 
     This helper stays private because array batching is only an implementation
-    detail of the legacy-array trainer. The public batching contract for the
+    detail of the array-based trainer. The public batching contract for the
     broader codebase lives on :class:`SpectrumDataset`.
     """
     if len(features) != len(targets):
@@ -97,13 +97,13 @@ def train_mlp_regressor(
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared dense emulator network on prepared in-memory arrays.
 
-    This trainer is intentionally array-based because the migrated HERA
-    workflows still prepare explicit feature/target matrices before fitting.
+    This trainer is intentionally array-based because the workflow preparation
+    step often produces explicit feature/target matrices before fitting.
     It is also useful for:
 
     - synthetic smoke testing
     - validating model and tiling contracts
-    - fitting legacy-prepared HERA training rows directly
+    - fitting prepared HERA training rows directly
 
     Parameters
     ----------

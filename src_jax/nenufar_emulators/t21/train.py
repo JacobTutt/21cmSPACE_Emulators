@@ -1,9 +1,4 @@
-"""T21 training helpers and CLI entrypoint.
-
-Like the power-spectrum CLI, this module is currently focused on verification
-and transparency rather than on pretending the production training workflow is
-already complete.
-"""
+"""T21 training helpers and CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -116,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="T21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
-        "--print-legacy-config",
+        "--print-config",
         action="store_true",
         help="Print the current T21 model and training defaults.",
     )
@@ -147,18 +142,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run the current T21 CLI.
-
-    At this stage the command is mainly for visibility and verification: it can
-    print contracts, print legacy defaults, and run a smoke test, but it does
-    not yet train on the real science datasets.
-    """
+    """Run the T21 command-line workflow."""
     args = build_parser().parse_args()
 
     if args.print_spec:
         pprint(t21_spec())
         return
-    if args.print_legacy_config:
+    if args.print_config:
         pprint(t21_config())
         return
     if args.synthetic_smoke:

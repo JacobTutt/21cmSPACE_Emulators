@@ -9,7 +9,7 @@ The repository currently provides:
 - a shared Flax NNX MLP
 - a shared Optax training loop
 - HERA IDR4 data preparation for `Delta21` and `T21`
-- archive save/load support
+- checkpoint package save/load support
 - synthetic smoke-run CLIs
 
 It does not yet provide:
@@ -47,11 +47,11 @@ Print the baseline emulator specs:
 .venv/bin/nenufar-t21-train --print-spec
 ```
 
-Print the workflow defaults derived from the legacy code:
+Print the workflow defaults:
 
 ```bash
-.venv/bin/nenufar-delta21-train --print-legacy-config
-.venv/bin/nenufar-t21-train --print-legacy-config
+.venv/bin/nenufar-delta21-train --print-config
+.venv/bin/nenufar-t21-train --print-config
 ```
 
 ## What These Smoke Runs Verify
@@ -63,6 +63,5 @@ Print the workflow defaults derived from the legacy code:
 
 ## What Comes Next
 
-The next implementation stage is to deepen the workflow-specific code paths,
-improve inference surfaces, and continue replacing migration-era abstractions
-with simpler modules centered on the real `Delta21` and `T21` workflows.
+The next implementation stage is to deepen the workflow-specific code paths
+and improve inference surfaces around the real `Delta21` and `T21` workflows.

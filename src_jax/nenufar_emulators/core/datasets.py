@@ -1,14 +1,12 @@
 """Dataset abstractions for tiled spectral emulators.
 
-This module brings the repository closer to the ``astroemu`` data-flow style:
-datasets own batching, preprocessing happens through explicit pipelines, and
+Datasets own batching, preprocessing happens through explicit pipelines, and
 tiling is treated as part of the dataset contract rather than as ad hoc logic
 inside training scripts.
 
-The main difference is that this implementation is anchored to the old
-NenuFAR/HERA conventions. Axis names, parameter names, transforms, and target
-semantics are all carried alongside the arrays so later migration work can stay
-scientifically explicit.
+Axis names, parameter names, transforms, and target semantics are all carried
+alongside the arrays so the workflow remains scientifically explicit from data
+loading through model fitting.
 """
 
 from __future__ import annotations
@@ -103,9 +101,9 @@ class SpectrumDataset:
     - yielding either untiled or tiled batches
     - preserving the names attached to axes and parameter columns
 
-    This is intentionally close to ``astroemu``'s ``SpectrumDataset`` idea,
-    but generalized to multiple axes and adapted to the older code's naming and
-    transform conventions.
+    The class is intentionally general enough to serve both one-dimensional and
+    two-dimensional spectral workflows while still carrying the names and
+    transforms that define the model contract.
     """
 
     def __init__(
@@ -232,9 +230,9 @@ class SpectrumDataset:
 class NormalisationPipeline:
     """Base class for preprocessing pipelines applied to :class:`SpectrumBatch`.
 
-    The name follows ``astroemu`` on purpose. These objects are used for more
-    than just statistical normalisation: they are the place where transform and
-    scaling logic becomes explicit, reversible, and testable.
+    These objects are used for more than just statistical normalisation: they
+    are where transform and scaling logic becomes explicit, reversible, and
+    testable.
     """
 
     def forward(self, batch: SpectrumBatch) -> SpectrumBatch:

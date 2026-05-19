@@ -1,4 +1,4 @@
-"""Tests for HERA IDR4 legacy-migration preparation paths."""
+"""Tests for HERA IDR4 preparation paths."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from nenufar_emulators.delta21.data import prepare_hera_idr4_delta21_training_sp
 from nenufar_emulators.t21.data import prepare_hera_idr4_t21_training_split
 
 
-def test_prepare_hera_idr4_delta21_split_matches_old_shape_rules(tmp_path: Path) -> None:
+def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
     dataset_root = write_mock_hera_idr4_dataset(tmp_path)
     prepared = prepare_hera_idr4_delta21_training_split(dataset_root, interpolation_seed=7)
 
@@ -40,7 +40,7 @@ def test_prepare_hera_idr4_delta21_split_matches_old_shape_rules(tmp_path: Path)
     assert scaling_by_name["log10k"] == "minmax_minus_one_to_one"
 
 
-def test_prepare_hera_idr4_t21_split_matches_old_shape_rules(tmp_path: Path) -> None:
+def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
     dataset_root = write_mock_hera_idr4_dataset(tmp_path)
     prepared = prepare_hera_idr4_t21_training_split(dataset_root, shuffle_seed=11)
 
@@ -66,7 +66,7 @@ def test_prepare_hera_idr4_t21_split_matches_old_shape_rules(tmp_path: Path) -> 
 
 
 def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:
-    """Write a small HERA-like dataset for migration tests."""
+    """Write a small HERA-like dataset for workflow tests."""
     root = tmp_path / "HERA_IDR4_Emulator_Data"
     root.mkdir()
 

@@ -1,8 +1,8 @@
 """Generic primitives shared across emulator workflows.
 
 `core` is intentionally small. It is the place for reusable data structures
-and numerical helpers that do not belong specifically to HERA loading, legacy
-convention mapping, model definition, or emulator-specific workflows.
+and numerical helpers that do not belong specifically to HERA loading,
+workflow conventions, model definition, or emulator-specific workflows.
 """
 
 from nenufar_emulators.core.datasets import (

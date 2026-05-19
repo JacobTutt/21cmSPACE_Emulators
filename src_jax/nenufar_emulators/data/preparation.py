@@ -1,24 +1,20 @@
-"""Legacy training-data preparation workflows.
+"""Training-data preparation workflows for the supported emulators.
 
-The old PyTorch scripts did more than "load data and train a network". They
-performed a specific sequence of steps that materially defined the emulator:
+This module turns simulation outputs into the scalar regression rows used by
+the neural networks. It provides two preparation styles because the supported
+emulators genuinely need two different sampling strategies:
+
+- an interpolated row builder for `Delta21`
+- a shared-grid row builder for `T21`
+
+Both follow the same overall sequence:
 
 1. remove failed simulations
-2. apply target transforms such as `log10(target + 1)`
+2. apply the configured target transform
 3. split by simulation
-4. generate random interpolation samples for training
-5. flatten a fixed validation grid
-6. scale features with the old min-max / z-score rules
-7. shuffle rows before handing arrays to the trainer
-
-This module reproduces that sequence in a reusable, testable form so the new
-JAX code can prepare the same learning problem without dragging the old
-PyTorch implementation along with it.
-
-For one-dimensional global-signal emulators we also support a second workflow:
-split by simulation, resample every signal onto one shared redshift grid, then
-flatten that fixed grid into scalar rows. That is closer in spirit to the old
-``globalemu`` pipeline than the random-interpolation ``poweremu`` workflow.
+4. build scalar regression rows
+5. scale the input features
+6. shuffle the rows before training
 """
 
 from __future__ import annotations
@@ -28,15 +24,15 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from nenufar_emulators.legacy import PreparedFeatures
+from nenufar_emulators.conventions import PreparedFeatures
 from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling
 from nenufar_emulators.core.specs import AxisSpec
 from nenufar_emulators.core.transforms import apply_transform
 
 
 @dataclass(frozen=True)
-class LegacyPreparedSplit:
-    """Prepared train/validation arrays following the old script contract."""
+class PreparedSplit:
+    """Prepared train/validation arrays ready for model fitting."""
 
     feature_names: tuple[str, ...]
     train_features: np.ndarray
@@ -46,7 +42,7 @@ class LegacyPreparedSplit:
     feature_scaling: tuple[FeatureScaling, ...]
 
 
-def prepare_legacy_training_split(
+def prepare_interpolated_training_split(
     *,
     axes: tuple[np.ndarray, ...],
     axis_specs: tuple[AxisSpec, ...],
@@ -60,15 +56,15 @@ def prepare_legacy_training_split(
     random_state: int = 42,
     interpolation_seed: int = 0,
     shuffle_seed: int = 42,
-) -> LegacyPreparedSplit:
-    """Prepare arrays exactly in the old script order of operations.
+) -> PreparedSplit:
+    """Prepare a train/validation split using interpolated training rows.
 
-    Parameters are expected to have already gone through the old-style column
-    dropping and log-transforms. Targets are expected to still be in physical
-    space so this function can reproduce the old `data_log` and `offset`
-    handling before the train/validation split.
+    Parameters are expected to have already been converted into their final
+    model-input representation. Targets are expected to still be in physical
+    space so this function can apply the configured target transform before the
+    train/validation split.
     """
-    transformed_target = apply_legacy_target_transform(
+    transformed_target = transform_target(
         target,
         data_log=data_log,
         offset=offset,
@@ -99,7 +95,7 @@ def prepare_legacy_training_split(
         axis_specs=axis_specs,
     )
 
-    scaler = build_legacy_feature_scaler(
+    scaler = build_feature_scaler(
         train_features,
         feature_names=feature_names,
         method_overrides=scale_method,
@@ -116,7 +112,7 @@ def prepare_legacy_training_split(
         seed=shuffle_seed,
     )
 
-    return LegacyPreparedSplit(
+    return PreparedSplit(
         feature_names=feature_names,
         train_features=scaled_train,
         train_targets=train_targets,
@@ -126,7 +122,7 @@ def prepare_legacy_training_split(
     )
 
 
-def prepare_fixed_grid_training_split(
+def prepare_shared_grid_training_split(
     *,
     axes: tuple[np.ndarray, ...],
     axis_specs: tuple[AxisSpec, ...],
@@ -139,20 +135,16 @@ def prepare_fixed_grid_training_split(
     test_size: float = 0.34,
     random_state: int = 42,
     shuffle_seed: int = 42,
-) -> LegacyPreparedSplit:
-    """Prepare a shared-grid training split for global-signal-style emulators.
+) -> PreparedSplit:
+    """Prepare a train/validation split on one shared axis grid.
 
-    This workflow differs from :func:`prepare_legacy_training_split` in one
+    This workflow differs from :func:`prepare_interpolated_training_split` in one
     important way: it does not draw random interpolation points independently
     for each simulation. Instead it constructs one fixed axis grid from the
     declared emulator spec, resamples every training and validation signal onto
     that grid, and then flattens the result into scalar rows.
-
-    That mirrors the operational shape of the old ``globalemu`` preprocessing:
-    one common redshift grid for all simulations, deterministic labels on that
-    grid, and only the simulation split remaining stochastic.
     """
-    transformed_target = apply_legacy_target_transform(
+    transformed_target = transform_target(
         target,
         data_log=data_log,
         offset=offset,
@@ -182,7 +174,7 @@ def prepare_fixed_grid_training_split(
         axis_specs=axis_specs,
     )
 
-    scaler = build_legacy_feature_scaler(
+    scaler = build_feature_scaler(
         train_features,
         feature_names=feature_names,
         method_overrides=scale_method,
@@ -199,7 +191,7 @@ def prepare_fixed_grid_training_split(
         seed=shuffle_seed,
     )
 
-    return LegacyPreparedSplit(
+    return PreparedSplit(
         feature_names=feature_names,
         train_features=scaled_train,
         train_targets=train_targets,
@@ -209,14 +201,14 @@ def prepare_fixed_grid_training_split(
     )
 
 
-def apply_legacy_target_transform(
+def transform_target(
     target: np.ndarray,
     *,
     data_log: bool,
     offset: float | None,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Apply the old target preprocessing rules before train/test splitting."""
+    """Apply the configured target transform before train/test splitting."""
     arr = np.asarray(target, dtype=float).copy()
     if not data_log:
         return arr
@@ -225,7 +217,7 @@ def apply_legacy_target_transform(
 
     non_zero = arr[arr != 0]
     if non_zero.size == 0:
-        raise ValueError("Cannot apply legacy zero-truncation to an all-zero target array.")
+        raise ValueError("Cannot apply zero-truncation to an all-zero target array.")
     minimum = float(non_zero.min())
     zero_mask = arr == 0
     if np.any(zero_mask):
@@ -241,13 +233,7 @@ def split_simulations(
     test_size: float,
     random_state: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Split simulations using the same shuffle order as `train_test_split`.
-
-    The old script delegated to `sklearn.model_selection.train_test_split`.
-    Re-implementing the small shuffle-split logic here keeps the new repo free
-    of a heavyweight dependency while preserving the same train/validation
-    semantics.
-    """
+    """Split simulations using the same shuffle-split contract each run."""
     n_samples = len(parameters)
     if len(target) != n_samples:
         raise ValueError("parameters and target must have the same sample count.")
@@ -273,11 +259,11 @@ def generate_training_rows(
     axis_specs: tuple[AxisSpec, ...],
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate the old random-interpolation training rows.
+    """Generate interpolated training rows.
 
     Each simulation contributes `prod(axis.nsample)` scalar training examples.
-    Axis sampling happens in feature space, not in raw physical space, exactly
-    as the old `gen_training_data()` helper did.
+    Axis sampling happens in feature space rather than in raw physical space,
+    which keeps the training rows aligned with the declared axis transforms.
     """
     transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
     rng = np.random.default_rng(seed)
@@ -307,7 +293,7 @@ def generate_validation_rows(
     axes: tuple[np.ndarray, ...],
     axis_specs: tuple[AxisSpec, ...],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate the old fixed-grid validation rows."""
+    """Generate validation rows on the cropped physical grid."""
     transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
     masks = [
         np.logical_and(axis_values >= low, axis_values <= high)
@@ -337,14 +323,7 @@ def generate_resampled_rows(
     axes: tuple[np.ndarray, ...],
     axis_specs: tuple[AxisSpec, ...],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Resample every simulation onto one shared axis grid, then flatten rows.
-
-    The shared-grid strategy is a better match for the old global-signal
-    workflow than the per-simulation random interpolation used for power
-    spectra. All simulations see the same axis coordinates, so differences in
-    the resulting training rows come only from the physical parameters and the
-    underlying signal values.
-    """
+    """Resample every simulation onto one shared axis grid, then flatten rows."""
     transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
     sampled_axes = build_fixed_axis_grid(
         transformed_axes,
@@ -409,15 +388,15 @@ def build_fixed_axis_grid(
     return tuple(sampled_axes)
 
 
-def build_legacy_feature_scaler(
+def build_feature_scaler(
     feature_matrix: np.ndarray,
     *,
     feature_names: tuple[str, ...],
     method_overrides: dict[str, str],
 ) -> FeatureScaler:
-    """Build the old per-feature scaler metadata from the training features.
+    """Build per-feature scaler metadata from the training features.
 
-    Old naming:
+    The workflow uses the following naming convention:
     - `standardize` meant min-max scaling to `[-1, 1]`
     - `normalize` meant z-score scaling
     """
@@ -426,24 +405,24 @@ def build_legacy_feature_scaler(
 
     scaling: list[FeatureScaling] = []
     for idx, name in enumerate(feature_names):
-        legacy_method = method_overrides.get(name, "standardize")
-        scaling_method = _legacy_scaling_name(legacy_method)
+        method_name = method_overrides.get(name, "standardize")
+        scaling_method = _resolve_scaling_method(method_name)
         scaling.append(FeatureScaling.from_values(name, feature_matrix[:, idx], scaling_method))
     return FeatureScaler(tuple(scaling))
 
 
 def shuffle_rows(features: np.ndarray, targets: np.ndarray, *, seed: int) -> tuple[np.ndarray, np.ndarray]:
-    """Shuffle rows using the same fixed-seed behavior as the old helper."""
+    """Shuffle rows with a fixed seed for deterministic repeatability."""
     indices = np.random.RandomState(seed).permutation(len(targets))
     return features[indices], targets[indices]
 
 
-def _legacy_scaling_name(method: str) -> str:
-    """Translate old scaling labels into the new explicit scaler names."""
+def _resolve_scaling_method(method: str) -> str:
+    """Translate workflow scaling labels into explicit scaler names."""
     if method == "standardize":
         return "minmax_minus_one_to_one"
     if method == "normalize":
         return "zscore"
     if method == "identity":
         return "identity"
-    raise ValueError(f"Unsupported legacy scaling method {method!r}.")
+    raise ValueError(f"Unsupported scaling method {method!r}.")

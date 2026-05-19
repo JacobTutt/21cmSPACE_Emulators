@@ -1,4 +1,4 @@
-"""Tests for the astroemu-style dataset and preprocessing architecture."""
+"""Tests for the dataset and preprocessing architecture."""
 
 from __future__ import annotations
 

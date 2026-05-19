@@ -1,9 +1,8 @@
 """Feature scaling metadata and application helpers.
 
-The old PyTorch code stored enough scaling information to rebuild priors and
-perform inference later. This module is the beginning of the same idea in the
-new codebase: scaling is treated as explicit metadata, not an accidental side
-effect of training.
+Scaling is treated as explicit metadata rather than as an accidental side
+effect of training. That makes saved models easier to inspect and ensures the
+same input transformations can be reused later during inference.
 """
 
 from __future__ import annotations

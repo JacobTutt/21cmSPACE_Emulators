@@ -1,4 +1,4 @@
-"""Data loading and legacy-derived preparation for supported emulators."""
+"""Data loading and row preparation for supported emulators."""
 
 from nenufar_emulators.data.hera_idr4 import (
     HERA_IDR4_COLUMNS,
@@ -11,17 +11,17 @@ from nenufar_emulators.data.hera_idr4 import (
     nan_simulation_indices,
 )
 from nenufar_emulators.data.preparation import (
-    LegacyPreparedSplit,
-    apply_legacy_target_transform,
+    PreparedSplit,
+    build_feature_scaler,
     build_fixed_axis_grid,
-    build_legacy_feature_scaler,
     generate_resampled_rows,
     generate_training_rows,
     generate_validation_rows,
-    prepare_fixed_grid_training_split,
-    prepare_legacy_training_split,
+    prepare_interpolated_training_split,
+    prepare_shared_grid_training_split,
     shuffle_rows,
     split_simulations,
+    transform_target,
     transformed_axis_configuration,
 )
 
@@ -30,10 +30,9 @@ __all__ = [
     "HERA_LITTLE_H",
     "HeraIdr4Axes",
     "HeraIdr4Product",
-    "LegacyPreparedSplit",
-    "apply_legacy_target_transform",
+    "PreparedSplit",
+    "build_feature_scaler",
     "build_fixed_axis_grid",
-    "build_legacy_feature_scaler",
     "generate_resampled_rows",
     "generate_training_rows",
     "generate_validation_rows",
@@ -41,9 +40,10 @@ __all__ = [
     "load_hera_idr4_delta21",
     "load_hera_idr4_t21",
     "nan_simulation_indices",
-    "prepare_fixed_grid_training_split",
-    "prepare_legacy_training_split",
+    "prepare_interpolated_training_split",
+    "prepare_shared_grid_training_split",
     "shuffle_rows",
     "split_simulations",
+    "transform_target",
     "transformed_axis_configuration",
 ]

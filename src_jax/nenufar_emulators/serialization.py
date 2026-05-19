@@ -1,16 +1,9 @@
-"""Checkpoint and archive utilities for trained emulators.
+"""Serialization helpers for trained emulator packages.
 
-The save/load flow in this module follows the same broad pattern as
-``astroemu``:
-
-- store a JSON config with training history and hyperparameters
-- store network parameters as an ``.npz`` bundle
-- store preprocessing pipelines separately via pickle
-
-The one deliberate difference is dataset reconstruction. ``astroemu`` stores
-file paths and tries to rebuild datasets from those paths later. That does not
-fit this repository yet because the current datasets are array-backed rather
-than file-backed, so this archive format stores the dataset arrays themselves.
+This module turns a trained model and its supporting metadata into one
+reusable ``.nenemu`` file. A saved package includes the network parameters,
+training history, preprocessing pipelines, and optional dataset snapshots that
+make the model reproducible on another machine.
 """
 
 from __future__ import annotations
@@ -244,9 +237,7 @@ def save(
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
 ) -> Path:
-    """Save a trained emulator to a ``.nenemu`` archive.
-
-    The archive format intentionally mirrors the ``astroemu`` layout:
+    """Save a trained emulator to a ``.nenemu`` package.
 
     - ``config.json`` for hyperparameters, history, and dataset configs
     - ``params.npz`` for neural-network parameters
@@ -255,9 +246,9 @@ def save(
     In addition, this repository stores ``datasets.npz`` when dataset objects
     are provided, because our current datasets are array-backed.
     """
-    archive_path = Path(path)
-    if archive_path.suffix != ".nenemu":
-        archive_path = archive_path.with_suffix(".nenemu")
+    package_path = Path(path)
+    if package_path.suffix != ".nenemu":
+        package_path = package_path.with_suffix(".nenemu")
 
     config: dict[str, Any] = {
         "version": _package_version(),
@@ -300,7 +291,7 @@ def save(
         if dataset is not None:
             _write_dataset_arrays(dataset_arrays, split, dataset)
 
-    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("config.json", json.dumps(config, indent=2))
 
         params_buffer = io.BytesIO()
@@ -314,18 +305,17 @@ def save(
             np.savez(dataset_buffer, **dataset_arrays)
             zf.writestr("datasets.npz", dataset_buffer.getvalue())
 
-    return archive_path
+    return package_path
 
 
 def load(path: str | Path) -> dict[str, Any]:
-    """Load a trained emulator from a ``.nenemu`` archive.
+    """Load a trained emulator from a ``.nenemu`` package.
 
-    The returned dictionary mirrors the spirit of ``astroemu``'s loader, but it
-    additionally reconstructs a live NNX model object because that is more
-    useful for this repository's current design.
+    The returned dictionary includes a live NNX model object together with the
+    stored metadata, preprocessing pipeline, and any packaged dataset splits.
     """
-    archive_path = Path(path)
-    with zipfile.ZipFile(archive_path, "r") as zf:
+    package_path = Path(path)
+    with zipfile.ZipFile(package_path, "r") as zf:
         config = json.loads(zf.read("config.json"))
 
         params_buffer = io.BytesIO(zf.read("params.npz"))

@@ -1,4 +1,4 @@
-"""Tests for Delta21 and T21 legacy-derived workflow contracts."""
+"""Tests for Delta21 and T21 workflow contracts."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def test_t21_spec_matches_expected_feature_contract() -> None:
     assert spec.target_offset == 0.0
 
 
-def test_prepare_hera_idr4_delta21_parameters_matches_old_transform_names() -> None:
+def test_prepare_hera_idr4_delta21_parameters_matches_expected_transform_names() -> None:
     raw = np.array(
         [
             [1e-2, 1e-3, 10.0, 100.0, 1.0, 100.0, 30.0, 0.05, 1e2, 231.0, 0.0, 0.0],
@@ -56,7 +56,7 @@ def test_prepare_hera_idr4_delta21_parameters_matches_old_transform_names() -> N
     assert "pop" in prepared.discrete_values
 
 
-def test_prepare_hera_idr4_t21_parameters_matches_old_transform_names() -> None:
+def test_prepare_hera_idr4_t21_parameters_matches_expected_transform_names() -> None:
     raw = np.array(
         [
             [1e-2, 1e-3, 10.0, 100.0, 1.0, 100.0, 30.0, 0.05, 1e2, 231.0, 0.0, 0.0],

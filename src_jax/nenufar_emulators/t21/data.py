@@ -13,11 +13,11 @@ from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDatas
 from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.data.hera_idr4 import load_hera_idr4_t21
+from nenufar_emulators.conventions import PreparedFeatures, prepare_feature_matrix
 from nenufar_emulators.data.preparation import (
-    LegacyPreparedSplit,
-    prepare_fixed_grid_training_split,
+    PreparedSplit,
+    prepare_shared_grid_training_split,
 )
-from nenufar_emulators.legacy import PreparedFeatures, prepare_feature_matrix
 
 HERA_IDR4_COLUMNS = (
     "fstarII",
@@ -37,9 +37,8 @@ HERA_IDR4_COLUMNS = (
 def t21_spec() -> EmulatorSpec:
     """Return the baseline HERA IDR4 T21 contract using ``fradio``.
 
-    This is the closest equivalent to the standard modern global-signal setup
-    in the old repository: one redshift axis plus the transformed astrophysical
-    parameters used for ``T21``-like emulators.
+    The network sees one redshift axis plus the transformed astrophysical
+    parameters that control the global signal.
     """
     return EmulatorSpec(
         name="t21",
@@ -67,8 +66,8 @@ def t21_spec() -> EmulatorSpec:
 def prepare_hera_idr4_t21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
     """Prepare HERA IDR4 parameter tables for the current T21 emulator.
 
-    The helper keeps the legacy column dropping and log transforms explicit so
-    the resulting feature matrix matches the historical T21 learning problem.
+    The helper applies the parameter filtering and log transforms used by the
+    current T21 workflow so the resulting feature matrix is ready for training.
     """
     return prepare_feature_matrix(
         raw_parameters,
@@ -84,8 +83,8 @@ def prepare_hera_idr4_t21_training_split(
     *,
     random_state: int = 42,
     shuffle_seed: int = 42,
-) -> LegacyPreparedSplit:
-    """Prepare HERA IDR4 `T21` arrays using a `globalemu`-like workflow.
+) -> PreparedSplit:
+    """Prepare HERA IDR4 `T21` arrays using the fixed-grid T21 workflow.
 
     Unlike the power-spectrum emulator, `T21` is not prepared through
     per-simulation random interpolation. We split by simulation, resample all
@@ -95,7 +94,7 @@ def prepare_hera_idr4_t21_training_split(
     product = load_hera_idr4_t21(dataset_root)
     prepared_parameters = prepare_hera_idr4_t21_parameters(product.parameters)
     spec = t21_spec()
-    return prepare_fixed_grid_training_split(
+    return prepare_shared_grid_training_split(
         axes=(product.axes.z,),
         axis_specs=spec.axes,
         parameters=prepared_parameters,
@@ -122,7 +121,7 @@ def build_t21_dataset(
 
     As with the power-spectrum helper, the spec-driven transform pipeline is
     attached by default so axis, parameter, and target conventions stay aligned
-    with the old emulator definitions.
+    with the workflow definition used throughout this repository.
     """
     emulator_spec = t21_spec() if spec is None else spec
     if isinstance(parameters, PreparedFeatures):

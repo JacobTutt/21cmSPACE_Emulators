@@ -1,13 +1,12 @@
 """Utilities for tiling spectral data into scalar regression samples.
 
-This tiling step is one of the defining ideas behind the old emulator
-implementation and the new JAX rewrite. Instead of predicting an entire
-spectrum at once, the network learns a scalar map:
+These workflows predict one scalar value at a time rather than an entire
+spectrum at once. The network therefore learns a map of the form:
 
 ``[axis values, astrophysical parameters] -> one target value``
 
-That makes it easy to share the same dense MLP machinery across both
-power-spectrum and global-signal emulators.
+This lets the same dense MLP machinery serve both power-spectrum and
+global-signal emulators.
 """
 
 from __future__ import annotations
@@ -22,8 +21,8 @@ def tile_spectra(
 ) -> tuple[np.ndarray, np.ndarray, tuple[int, ...]]:
     """Flatten spectra into scalar-regression training examples.
 
-    This is the practical heart of the emulator formulation used in both the
-    old code and this rewrite. A full spectrum is converted into many rows of
+    This is the practical heart of the emulator formulation used in both
+    supported workflows. A full spectrum is converted into many rows of
     the form ``[axis coordinates, astrophysical parameters] -> scalar target``.
     That lets one dense MLP architecture serve both power-spectrum and
     global-signal emulators.

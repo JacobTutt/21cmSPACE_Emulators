@@ -4,37 +4,34 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nenufar_emulators.legacy import (
-    LegacyMLPConfig,
-    LegacyOptimizerConfig,
-    LegacyTrainingConfig,
-)
+from nenufar_emulators.conventions import MLPConfig, OptimizerConfig, TrainingConfig
+
 
 @dataclass(frozen=True)
 class T21Config:
     """Model, optimizer, and trainer defaults for the current T21 workflow."""
 
-    mlp: LegacyMLPConfig
-    optimizer: LegacyOptimizerConfig
-    training: LegacyTrainingConfig
+    mlp: MLPConfig
+    optimizer: OptimizerConfig
+    training: TrainingConfig
 
 
 def t21_config() -> T21Config:
-    """Return the HERA IDR4 `T21` defaults with a `globalemu`-like network.
+    """Return the default configuration for the current T21 workflow.
 
-    For the HERA IDR4 migration we prefer the narrower `tanh` architecture
-    recorded in the old `globalemu` run metadata over the later deep-ReLU
-    unified PyTorch path.
+    The T21 workflow uses a smaller tanh network because the task is
+    one-dimensional in redshift and does not need the same capacity as the
+    Delta21 power-spectrum model.
     """
     return T21Config(
-        mlp=LegacyMLPConfig(
+        mlp=MLPConfig(
             input_dim=10,
             hidden_dim=20,
             n_hidden_blocks=3,
             activation="tanh",
         ),
-        optimizer=LegacyOptimizerConfig(),
-        training=LegacyTrainingConfig(
+        optimizer=OptimizerConfig(),
+        training=TrainingConfig(
             epochs=1000,
             batch_size=769,
             save_after_epochs=5,

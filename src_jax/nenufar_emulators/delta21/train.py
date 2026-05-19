@@ -1,9 +1,4 @@
-"""Delta21 training helpers and CLI entrypoint.
-
-At the moment these entrypoints are intentionally modest: they expose the
-specifications and synthetic smoke runs needed to verify the repository before
-real datasets are wired in.
-"""
+"""Delta21 training helpers and CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -31,8 +26,8 @@ def run_synthetic_smoke(
     """Run a small synthetic end-to-end smoke training exercise.
 
     This does not attempt to mimic the real science signal faithfully. Its job
-    is to verify that the power-spectrum spec, tiling logic, and legacy-aligned
-    architecture bundle are internally consistent.
+    is to verify that the Delta21 spec, tiling logic, and workflow config are
+    internally consistent.
     """
     spec = delta21_spec()
     config = delta21_config()
@@ -55,7 +50,7 @@ def run_synthetic_smoke(
     )
 
     # Build a positive target in physical space. The spec pipeline attached by
-    # the dataset will later apply the legacy log10(target + 1) transform.
+    # the dataset will later apply the configured log10(target + 1) transform.
     zz, kk = np.meshgrid(z, k, indexing="ij")
     base_signal = (zz + 1.0) * (kk + 0.5)
     targets = np.empty((nsamples, len(z), len(k)), dtype=float)
@@ -113,13 +108,12 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface for Delta21 development tasks.
 
     The CLI is intentionally narrow for now. It exists to expose inspection and
-    verification tasks while the real dataset-driven training path is still
-    being migrated.
+    verification tasks while the training path continues to be refined.
     """
     parser = argparse.ArgumentParser(description="Delta21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
-        "--print-legacy-config",
+        "--print-config",
         action="store_true",
         help="Print the current Delta21 model and training defaults.",
     )
@@ -144,24 +138,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--interpolation-seed",
         type=int,
         default=0,
-        help="Seed used when sampling interpolation points for the old-style training rows.",
+        help="Seed used when sampling interpolation points for the Delta21 training rows.",
     )
     return parser
 
 
 def main() -> None:
-    """CLI entrypoint.
-
-    The hard failure on the default path is deliberate. Until real dataset
-    loading exists, the command should say plainly what it can do today rather
-    than pretending to support a production workflow.
-    """
+    """Run the Delta21 command-line workflow."""
     args = build_parser().parse_args()
 
     if args.print_spec:
         pprint(delta21_spec())
         return
-    if args.print_legacy_config:
+    if args.print_config:
         pprint(delta21_config())
         return
     if args.synthetic_smoke:

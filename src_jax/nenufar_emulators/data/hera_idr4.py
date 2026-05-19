@@ -1,10 +1,8 @@
 """HERA IDR4 raw-data loaders.
 
 This module centralizes the file names, MATLAB keys, and shared loading logic
-for the HERA IDR4 emulator dataset. The old repository repeated these details
-inside training scripts; the migration keeps them in one place so the new code
-can load the same data without hard-coded path fragments scattered throughout
-the codebase.
+for the HERA IDR4 emulator dataset so the rest of the package can work with
+clean, typed data objects instead of repeating path fragments and MATLAB keys.
 """
 
 from __future__ import annotations
@@ -56,9 +54,9 @@ class HeraIdr4Product:
 def load_hera_idr4_axes(dataset_root: str | Path, *, little_h: float = HERA_LITTLE_H) -> HeraIdr4Axes:
     """Load the shared HERA IDR4 axis arrays.
 
-    The old `Delta21` trainer divided the stored `k` values by `h` before
-    training. We keep that behavior here so callers receive the same physical
-    axis convention the old emulator code actually used.
+    The Delta21 workflow trains on ``k / h`` rather than on the stored raw
+    ``k`` values, so the conversion is applied here once and then reused by
+    the rest of the package.
     """
     root = Path(dataset_root)
     return HeraIdr4Axes(

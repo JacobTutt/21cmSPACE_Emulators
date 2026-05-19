@@ -1,10 +1,9 @@
 """Generic Flax NNX MLP building blocks.
 
-This module holds the shared dense network used across the migration work.
-The architecture is intentionally simple and close to the old PyTorch
-emulators: a stack of linear layers, a configurable hidden activation, and a
-final linear readout. Using ``flax.nnx`` keeps the code more object-oriented
-than raw JAX while still fitting cleanly into JAX/Optax training loops.
+This module holds the shared dense network used across the emulator package: a
+stack of linear layers, a configurable hidden activation, and a final scalar
+readout. Using ``flax.nnx`` keeps the code object-oriented while still fitting
+cleanly into JAX and Optax training loops.
 """
 
 from __future__ import annotations
@@ -32,10 +31,10 @@ def _activation_fn(name: ActivationName):
 class DenseMLP(nnx.Module):
     """Simple dense MLP implemented with Flax NNX.
 
-    NNX is a better fit than Linen for this repository because it keeps the
-    model object alive through training in a way that feels closer to PyTorch.
-    That makes the code easier to read during migration, while still using
-    JAX-compatible parameter containers and Optax optimizers.
+    NNX keeps the model object alive through training while still using
+    JAX-compatible parameter containers and Optax optimizers. That makes the
+    training code straightforward to read without sacrificing JAX-native
+    behavior.
     """
 
     def __init__(
@@ -80,9 +79,9 @@ class DenseMLP(nnx.Module):
         kernel_init = jax.nn.initializers.normal(stddev=init_scale)
         self.hidden = nnx.List()
 
-        # The first layer lifts the tiled emulator features into hidden space.
-        # Remaining hidden layers keep the width fixed, matching the legacy MLP
-        # shape used in the PyTorch implementation.
+        # The first layer lifts tiled inputs into hidden space. Remaining
+        # layers keep the width fixed so workflow configs can describe the
+        # network compactly in terms of one repeated hidden width.
         if hidden_layers > 0:
             self.hidden.append(
                 nnx.Linear(
@@ -154,9 +153,9 @@ def forward_mlp(
 ) -> jnp.ndarray:
     """Run a dense MLP forward pass using the provided NNX model.
 
-    The extra ``activation`` argument is only a compatibility guard for older
-    call sites that still think in terms of a functional API. The model object
-    itself is the real source of truth for the network configuration.
+    The extra ``activation`` argument is only a guard for call sites that still
+    think in terms of a functional API. The model object itself is the real
+    source of truth for the network configuration.
     """
     if activation is not None and activation != model.activation:
         raise ValueError(
