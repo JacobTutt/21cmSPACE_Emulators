@@ -14,7 +14,9 @@ from __future__ import annotations
 import numpy as np
 
 from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDataset
+from nenufar_emulators.core.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
 from nenufar_emulators.core.legacy import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.core.legacy_workflow import LegacyPreparedSplit, prepare_legacy_training_split
 from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
@@ -48,7 +50,12 @@ def default_power_spectrum_spec() -> EmulatorSpec:
         family="power_spectrum",
         axes=(
             AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=20),
-            AxisSpec(name="k", transform="log10", limits=(3e-2, 0.99), nsample=20),
+            AxisSpec(
+                name="k",
+                transform="log10",
+                limits=(3e-2 / HERA_LITTLE_H, 0.99 / HERA_LITTLE_H),
+                nsample=20,
+            ),
         ),
         parameters=(
             ParameterSpec(name="fstarII", transform="log10"),
@@ -56,10 +63,13 @@ def default_power_spectrum_spec() -> EmulatorSpec:
             ParameterSpec(name="Vc", transform="log10"),
             ParameterSpec(name="fX", transform="log10"),
             ParameterSpec(name="alpha", discrete_values=(1.0, 1.3, 1.5)),
-            ParameterSpec(name="nu_0", discrete_values=tuple(float(v) for v in np.arange(0.1, 1.6, 0.1))),
+            ParameterSpec(
+                name="nu_0",
+                discrete_values=tuple(float(v) for v in [*range(100, 1600, 100), 2000, 3000]),
+            ),
             ParameterSpec(name="tau"),
             ParameterSpec(name="fradio", transform="log10"),
-            ParameterSpec(name="pop", discrete_values=(2.0, 3.0)),
+            ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
         target_transform="log10",
         target_offset=1.0,
@@ -104,6 +114,35 @@ def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> Prepared
         transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
         discard_params=("zeta", "feed", "delay"),
         discrete_params=("alpha", "nu_0", "pop"),
+    )
+
+
+def prepare_hera_idr4_delta21_training_split(
+    dataset_root: str,
+    *,
+    random_state: int = 42,
+    interpolation_seed: int = 0,
+) -> LegacyPreparedSplit:
+    """Prepare HERA IDR4 `Delta21` arrays using the old training recipe.
+
+    This reproduces the scientifically important steps from the PyTorch
+    pipeline while intentionally swapping back to the HERA IDR4 `k` axis rather
+    than the mixed cosmic-string axis line that was uncommented in one legacy
+    script revision.
+    """
+    product = load_hera_idr4_delta21(dataset_root)
+    prepared_parameters = prepare_hera_idr4_delta21_parameters(product.parameters)
+    spec = default_power_spectrum_spec()
+    return prepare_legacy_training_split(
+        axes=(product.axes.z, product.axes.k),
+        axis_specs=spec.axes,
+        parameters=prepared_parameters,
+        target=product.target,
+        scale_method={"tau": "normalize"},
+        data_log=True,
+        offset=1.0,
+        random_state=random_state,
+        interpolation_seed=interpolation_seed,
     )
 
 

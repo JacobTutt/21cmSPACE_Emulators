@@ -10,12 +10,17 @@ from __future__ import annotations
 import argparse
 from pprint import pprint
 
+import jax.numpy as jnp
 import numpy as np
 
 from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.core.training import train_mlp_dataset
-from nenufar_emulators.global_signal.data import build_global_signal_dataset, default_global_signal_spec
-from nenufar_emulators.global_signal.model import t21_arad_legacy_bundle
+from nenufar_emulators.core.training import train_mlp_dataset, train_mlp_regressor
+from nenufar_emulators.global_signal.data import (
+    build_global_signal_dataset,
+    default_global_signal_spec,
+    prepare_hera_idr4_t21_training_split,
+)
+from nenufar_emulators.global_signal.model import t21_frad_legacy_bundle
 
 
 def run_synthetic_smoke(
@@ -30,7 +35,7 @@ def run_synthetic_smoke(
     path that a real global-signal emulator will use.
     """
     spec = default_global_signal_spec()
-    bundle = t21_arad_legacy_bundle()
+    bundle = t21_frad_legacy_bundle()
     rng = np.random.default_rng(1)
     nsamples = 24
     z = np.linspace(6.0, 20.0, 20)
@@ -41,10 +46,10 @@ def run_synthetic_smoke(
             rng.uniform(4.0, 50.0, size=nsamples),  # Vc
             10 ** rng.uniform(1.0, 3.0, size=nsamples),  # fX
             rng.choice(np.array([1.0, 1.3, 1.5]), size=nsamples),  # alpha
-            rng.choice(np.round(np.arange(0.1, 1.6, 0.1), 1), size=nsamples),  # nu_0
+            rng.choice(np.array([*range(100, 1600, 100), 2000, 3000], dtype=float), size=nsamples),  # nu_0
             rng.uniform(0.03, 0.09, size=nsamples),  # tau
             10 ** rng.uniform(1.0, 4.0, size=nsamples),  # fradio
-            rng.choice(np.array([2.0, 3.0]), size=nsamples),  # pop
+            rng.choice(np.array([231.0, 232.0, 233.0]), size=nsamples),  # pop
         ]
     )
 
@@ -119,8 +124,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run a synthetic smoke training job using generated data.",
     )
-    parser.add_argument("--epochs", type=int, default=20, help="Epochs for synthetic smoke.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size for synthetic smoke.")
+    parser.add_argument(
+        "--dataset-root",
+        type=str,
+        help="Path to the HERA IDR4 dataset root for real T21 preparation/training.",
+    )
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Prepare real HERA IDR4 arrays and print a summary without training.",
+    )
+    parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
+    parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
+    parser.add_argument(
+        "--interpolation-seed",
+        type=int,
+        default=0,
+        help="Seed used when sampling interpolation points for the old-style training rows.",
+    )
     return parser
 
 
@@ -132,20 +153,60 @@ def main() -> None:
     not yet train on the real science datasets.
     """
     args = build_parser().parse_args()
-    spec = default_global_signal_spec()
 
     if args.print_spec:
-        pprint(spec)
+        pprint(default_global_signal_spec())
         return
     if args.print_legacy_config:
-        pprint(t21_arad_legacy_bundle())
+        pprint(t21_frad_legacy_bundle())
         return
     if args.synthetic_smoke:
-        result = run_synthetic_smoke(epochs=args.epochs, batch_size=args.batch_size)
+        epochs = 20 if args.epochs is None else args.epochs
+        batch_size = 64 if args.batch_size is None else args.batch_size
+        result = run_synthetic_smoke(epochs=epochs, batch_size=batch_size)
         pprint(result)
+        return
+    if args.dataset_root:
+        prepared = prepare_hera_idr4_t21_training_split(
+            args.dataset_root,
+            interpolation_seed=args.interpolation_seed,
+        )
+        summary = {
+            "feature_names": prepared.feature_names,
+            "train_features_shape": prepared.train_features.shape,
+            "train_targets_shape": prepared.train_targets.shape,
+            "validation_features_shape": prepared.validation_features.shape,
+            "validation_targets_shape": prepared.validation_targets.shape,
+        }
+        if args.prepare_only:
+            pprint(summary)
+            return
+
+        bundle = t21_frad_legacy_bundle()
+        model, history = train_mlp_regressor(
+            jnp.asarray(prepared.train_features),
+            jnp.asarray(prepared.train_targets),
+            jnp.asarray(prepared.validation_features),
+            jnp.asarray(prepared.validation_targets),
+            hidden_features=bundle.mlp.hidden_dim,
+            hidden_layers=bundle.mlp.total_hidden_layers,
+            learning_rate=bundle.optimizer.learning_rate,
+            weight_decay=bundle.optimizer.weight_decay,
+            batch_size=bundle.training.batch_size if args.batch_size is None else args.batch_size,
+            epochs=bundle.training.epochs if args.epochs is None else args.epochs,
+            seed=args.interpolation_seed,
+        )
+        pprint(
+            {
+                **summary,
+                "final_train_loss": history.train_losses[-1],
+                "final_validation_loss": history.validation_losses[-1],
+                "trained_model_type": type(model).__name__,
+            }
+        )
         return
 
     raise SystemExit(
-        "Real global-signal dataset loading is not implemented yet. "
-        "Use --print-spec or --synthetic-smoke for now."
+        "Real global-signal dataset loading is available through --dataset-root. "
+        "Use --prepare-only to inspect prepared arrays, or --synthetic-smoke for the mock path."
     )

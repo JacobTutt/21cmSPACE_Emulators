@@ -14,6 +14,7 @@ from nenufar_emulators.global_signal.data import (
 )
 from nenufar_emulators.global_signal.model import (
     t21_arad_legacy_bundle,
+    t21_frad_legacy_bundle,
     t_today_frad_legacy_bundle,
     tk_frad_legacy_bundle,
     trad_frad_legacy_bundle,
@@ -36,6 +37,8 @@ def test_delta21_spec_matches_old_feature_count_and_discrete_params() -> None:
     assert spec.parameters[4].name == "alpha"
     assert spec.parameters[5].name == "nu_0"
     assert spec.parameters[8].name == "pop"
+    assert spec.parameters[5].discrete_values[-2:] == (2000.0, 3000.0)
+    assert spec.parameters[8].discrete_values == (231.0, 232.0, 233.0)
     assert spec.target_transform == "log10"
     assert spec.target_offset == 1.0
 
@@ -89,6 +92,7 @@ def test_legacy_bundles_match_old_training_defaults() -> None:
     assert delta21_frad_legacy_bundle().training.batch_size == 20000
     assert sdc3b_pk_legacy_bundle().mlp.input_dim == 7
     assert t21_arad_legacy_bundle().training.save_after_epochs == 5
+    assert t21_frad_legacy_bundle().training.save_after_epochs == 5
     assert ts_arad_legacy_bundle().training.save_after_epochs == 2
     assert tk_frad_legacy_bundle().mlp.input_dim == 9
     assert trad_frad_legacy_bundle().training.save_after_epochs == 5

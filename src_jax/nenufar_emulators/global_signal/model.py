@@ -48,6 +48,26 @@ def t21_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
     )
 
 
+def t21_frad_legacy_bundle() -> LegacyGlobalSignalBundle:
+    """Return the HERA IDR4 `T21` defaults with the old training settings.
+
+    The architecture and trainer settings match the old `T21` branch. The
+    practical difference from the older Arad variant is the scientific meaning
+    of the radio-efficiency parameter, not the MLP shape.
+    """
+    return LegacyGlobalSignalBundle(
+        name="T21",
+        mlp=LegacyMLPConfig(input_dim=10, hidden_dim=100, n_hidden_blocks=6),
+        optimizer=LegacyOptimizerConfig(),
+        training=LegacyTrainingConfig(
+            epochs=10000,
+            batch_size=20000,
+            save_after_epochs=5,
+            terminate_time_seconds=3600 * 2,
+        ),
+    )
+
+
 def ts_arad_legacy_bundle() -> LegacyGlobalSignalBundle:
     """Return the legacy defaults for the old `Ts` training script."""
     return LegacyGlobalSignalBundle(

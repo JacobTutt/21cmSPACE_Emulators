@@ -11,7 +11,9 @@ from __future__ import annotations
 import numpy as np
 
 from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDataset
+from nenufar_emulators.core.hera_idr4 import load_hera_idr4_t21
 from nenufar_emulators.core.legacy import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.core.legacy_workflow import LegacyPreparedSplit, prepare_legacy_training_split
 from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
@@ -77,10 +79,13 @@ def default_global_signal_spec() -> EmulatorSpec:
             ParameterSpec(name="Vc", transform="log10"),
             ParameterSpec(name="fX", transform="log10"),
             ParameterSpec(name="alpha", discrete_values=(1.0, 1.3, 1.5)),
-            ParameterSpec(name="nu_0", discrete_values=tuple(float(v) for v in np.arange(0.1, 1.6, 0.1))),
+            ParameterSpec(
+                name="nu_0",
+                discrete_values=tuple(float(v) for v in [*range(100, 1600, 100), 2000, 3000]),
+            ),
             ParameterSpec(name="tau"),
             ParameterSpec(name="fradio", transform="log10"),
-            ParameterSpec(name="pop", discrete_values=(2.0, 3.0)),
+            ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
         target_transform="identity",
         target_offset=0.0,
@@ -176,6 +181,29 @@ def prepare_hera_idr4_frad_parameters(raw_parameters: np.ndarray) -> PreparedFea
         transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
         discard_params=("zeta", "feed", "delay"),
         discrete_params=("alpha", "nu_0", "pop"),
+    )
+
+
+def prepare_hera_idr4_t21_training_split(
+    dataset_root: str,
+    *,
+    random_state: int = 42,
+    interpolation_seed: int = 0,
+) -> LegacyPreparedSplit:
+    """Prepare HERA IDR4 `T21` arrays using the old T21 training recipe."""
+    product = load_hera_idr4_t21(dataset_root)
+    prepared_parameters = prepare_hera_idr4_frad_parameters(product.parameters)
+    spec = default_global_signal_spec()
+    return prepare_legacy_training_split(
+        axes=(product.axes.z,),
+        axis_specs=spec.axes,
+        parameters=prepared_parameters,
+        target=product.target,
+        scale_method={"tau": "normalize"},
+        data_log=False,
+        offset=None,
+        random_state=random_state,
+        interpolation_seed=interpolation_seed,
     )
 
 
