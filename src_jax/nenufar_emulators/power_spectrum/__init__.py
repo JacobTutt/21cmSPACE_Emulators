@@ -1,2 +1,0 @@
-"""Power-spectrum emulator package."""
-

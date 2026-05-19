@@ -22,10 +22,10 @@ dev = [
 ]
 
 [project.scripts]
-nenufar-power-train = "nenufar_emulators.power_spectrum.train:main"
-nenufar-power-infer = "nenufar_emulators.power_spectrum.infer:main"
-nenufar-global-train = "nenufar_emulators.global_signal.train:main"
-nenufar-global-infer = "nenufar_emulators.global_signal.infer:main"
+nenufar-delta21-train = "nenufar_emulators.delta21.train:main"
+nenufar-delta21-infer = "nenufar_emulators.delta21.infer:main"
+nenufar-t21-train = "nenufar_emulators.t21.train:main"
+nenufar-t21-infer = "nenufar_emulators.t21.infer:main"
 
 [tool.setuptools]
 package-dir = {"" = "src_jax"}

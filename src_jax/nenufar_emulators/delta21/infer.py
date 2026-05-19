@@ -1,4 +1,4 @@
-"""Power-spectrum inference entrypoints.
+"""Delta21 inference entrypoints.
 
 Inference support is intentionally not over-promised yet. This placeholder CLI
 exists so the repository already has a visible place where real checkpoint
@@ -11,8 +11,8 @@ import argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the placeholder inference CLI for the power-spectrum family."""
-    parser = argparse.ArgumentParser(description="Power-spectrum inference entrypoint.")
+    """Build the placeholder inference CLI for Delta21."""
+    parser = argparse.ArgumentParser(description="Delta21 inference entrypoint.")
     parser.add_argument(
         "--describe",
         action="store_true",

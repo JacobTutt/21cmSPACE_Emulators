@@ -4,18 +4,19 @@
 
 The repository currently provides:
 
-- emulator specifications for power-spectrum and global-signal families
+- explicit `Delta21` and `T21` workflow modules
 - shared tiling utilities
-- a generic JAX MLP
-- a minimal Optax training loop
+- a shared Flax NNX MLP
+- a shared Optax training loop
+- HERA IDR4 data preparation for `Delta21` and `T21`
+- archive save/load support
 - synthetic smoke-run CLIs
 
 It does not yet provide:
 
-- production dataset loaders
-- real training configs bound to local data files
-- checkpoint save/load for learned weights
-- inference against physical datasets
+- production inference against physical datasets
+- a finished checkpoint-driven prediction API
+- broader emulator coverage beyond `Delta21` and `T21`
 
 ## Verification Commands
 
@@ -35,22 +36,22 @@ Run the test suite:
 Run the synthetic smoke trainers:
 
 ```bash
-.venv/bin/nenufar-power-train --synthetic-smoke
-.venv/bin/nenufar-global-train --synthetic-smoke
+.venv/bin/nenufar-delta21-train --synthetic-smoke
+.venv/bin/nenufar-t21-train --synthetic-smoke
 ```
 
 Print the baseline emulator specs:
 
 ```bash
-.venv/bin/nenufar-power-train --print-spec
-.venv/bin/nenufar-global-train --print-spec
+.venv/bin/nenufar-delta21-train --print-spec
+.venv/bin/nenufar-t21-train --print-spec
 ```
 
-Print the legacy-aligned defaults migrated from the old PyTorch scripts:
+Print the workflow defaults derived from the legacy code:
 
 ```bash
-.venv/bin/nenufar-power-train --print-legacy-config
-.venv/bin/nenufar-global-train --print-legacy-config
+.venv/bin/nenufar-delta21-train --print-legacy-config
+.venv/bin/nenufar-t21-train --print-legacy-config
 ```
 
 ## What These Smoke Runs Verify
@@ -58,10 +59,10 @@ Print the legacy-aligned defaults migrated from the old PyTorch scripts:
 - model input dimensionality is consistent with the emulator spec
 - tiling from spectral targets to scalar regression samples works
 - the shared JAX trainer can reduce loss on a controlled synthetic problem
-- the repository entrypoints resolve correctly after installation
+- the workflow-specific package layout resolves correctly after installation
 
 ## What Comes Next
 
-The next implementation stage is to connect real old-code parameter mappings and
-real data loaders to these shared interfaces, then add checkpoint persistence
-and parity checks against the legacy emulator outputs.
+The next implementation stage is to deepen the workflow-specific code paths,
+improve inference surfaces, and continue replacing migration-era abstractions
+with simpler modules centered on the real `Delta21` and `T21` workflows.

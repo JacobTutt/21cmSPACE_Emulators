@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import jax.numpy as jnp
 
-from nenufar_emulators.core.network import forward_mlp
+from nenufar_emulators.models import forward_mlp
 from nenufar_emulators.core.tiling import reconstruct_spectra, tile_spectra
-from nenufar_emulators.core.training import train_mlp_regressor
-from nenufar_emulators.global_signal.data import default_global_signal_spec
-from nenufar_emulators.power_spectrum.data import default_power_spectrum_spec
+from nenufar_emulators.delta21.data import delta21_spec
+from nenufar_emulators.t21.data import t21_spec
+from nenufar_emulators.trainer import train_mlp_regressor
 
 
 def test_tile_and_reconstruct_shapes() -> None:
@@ -78,5 +78,5 @@ def test_early_stopping_records_and_restores_best_epoch() -> None:
 
 
 def test_default_specs_have_expected_axis_counts() -> None:
-    assert len(default_power_spectrum_spec().axes) == 2
-    assert len(default_global_signal_spec().axes) == 1
+    assert len(delta21_spec().axes) == 2
+    assert len(t21_spec().axes) == 1

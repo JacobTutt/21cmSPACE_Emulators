@@ -21,7 +21,7 @@ from flax import nnx
 
 from nenufar_emulators.core.datasets import SpectrumDataset, TiledBatch
 from nenufar_emulators.core.metrics import mse
-from nenufar_emulators.core.network import ActivationName, DenseMLP, init_mlp
+from nenufar_emulators.models import ActivationName, DenseMLP, init_mlp
 
 
 @dataclass(frozen=True)

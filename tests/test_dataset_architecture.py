@@ -7,8 +7,8 @@ import numpy as np
 from nenufar_emulators.core.datasets import SpectrumDataset, TiledBatch
 from nenufar_emulators.core.normalisation import SpecTransformPipeline, StandardizationPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.global_signal.data import build_global_signal_dataset
-from nenufar_emulators.power_spectrum.data import build_power_spectrum_dataset, default_power_spectrum_spec
+from nenufar_emulators.delta21.data import build_delta21_dataset, delta21_spec
+from nenufar_emulators.t21.data import build_t21_dataset
 
 
 def test_spec_transform_pipeline_applies_axis_parameter_and_target_rules() -> None:
@@ -64,8 +64,8 @@ def test_standardization_pipeline_round_trips_batch_values() -> None:
 
 
 def test_power_dataset_builder_tiles_with_transformed_feature_names() -> None:
-    spec = default_power_spectrum_spec()
-    dataset = build_power_spectrum_dataset(
+    spec = delta21_spec()
+    dataset = build_delta21_dataset(
         spectra=np.ones((2, 3, 4)),
         axes=(np.array([6.0, 8.0, 10.0]), np.array([0.1, 0.2, 0.5, 1.0])),
         parameters=np.column_stack(
@@ -75,10 +75,10 @@ def test_power_dataset_builder_tiles_with_transformed_feature_names() -> None:
                 np.array([10.0, 20.0]),
                 np.array([100.0, 1000.0]),
                 np.array([1.0, 1.3]),
-                np.array([0.1, 0.2]),
+                np.array([100.0, 200.0]),
                 np.array([0.05, 0.06]),
                 np.array([1e2, 1e3]),
-                np.array([2.0, 3.0]),
+                np.array([231.0, 233.0]),
             ]
         ),
         spec=spec,
@@ -91,7 +91,7 @@ def test_power_dataset_builder_tiles_with_transformed_feature_names() -> None:
 
 
 def test_global_dataset_builder_supports_non_tiled_statistics_flow() -> None:
-    dataset = build_global_signal_dataset(
+    dataset = build_t21_dataset(
         spectra=np.array(
             [
                 np.linspace(-1.0, 1.0, 5),
@@ -106,10 +106,10 @@ def test_global_dataset_builder_supports_non_tiled_statistics_flow() -> None:
                 np.array([10.0, 20.0]),
                 np.array([100.0, 1000.0]),
                 np.array([1.0, 1.3]),
-                np.array([0.1, 0.2]),
+                np.array([100.0, 200.0]),
                 np.array([0.05, 0.06]),
                 np.array([1e2, 1e3]),
-                np.array([2.0, 3.0]),
+                np.array([231.0, 233.0]),
             ]
         ),
         tiling=False,

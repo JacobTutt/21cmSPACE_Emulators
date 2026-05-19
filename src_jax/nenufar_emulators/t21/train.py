@@ -1,4 +1,4 @@
-"""Global-signal training entrypoints.
+"""T21 training helpers and CLI entrypoint.
 
 Like the power-spectrum CLI, this module is currently focused on verification
 and transparency rather than on pretending the production training workflow is
@@ -14,13 +14,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.core.training import train_mlp_dataset, train_mlp_regressor
-from nenufar_emulators.global_signal.data import (
-    build_global_signal_dataset,
-    default_global_signal_spec,
+from nenufar_emulators.t21.data import (
+    build_t21_dataset,
     prepare_hera_idr4_t21_training_split,
+    t21_spec,
 )
-from nenufar_emulators.global_signal.model import t21_frad_legacy_bundle
+from nenufar_emulators.t21.model import t21_config
+from nenufar_emulators.trainer import train_mlp_dataset, train_mlp_regressor
 
 
 def run_synthetic_smoke(
@@ -34,8 +34,8 @@ def run_synthetic_smoke(
     redshift axis and the parameter vector so it exercises the same tiled-input
     path that a real global-signal emulator will use.
     """
-    spec = default_global_signal_spec()
-    bundle = t21_frad_legacy_bundle()
+    spec = t21_spec()
+    config = t21_config()
     rng = np.random.default_rng(1)
     nsamples = 24
     z = np.linspace(6.0, 20.0, 20)
@@ -65,7 +65,7 @@ def run_synthetic_smoke(
         )
 
     split = int(0.8 * nsamples)
-    base_train_dataset = build_global_signal_dataset(
+    base_train_dataset = build_t21_dataset(
         targets[:split],
         (z,),
         parameters[:split],
@@ -77,7 +77,7 @@ def run_synthetic_smoke(
         standardize_axes=True,
         standardize_parameters=True,
     )
-    train_dataset = build_global_signal_dataset(
+    train_dataset = build_t21_dataset(
         targets[:split],
         (z,),
         parameters[:split],
@@ -85,7 +85,7 @@ def run_synthetic_smoke(
         forward_pipeline=[standardization],
         tiling=True,
     )
-    validation_dataset = build_global_signal_dataset(
+    validation_dataset = build_t21_dataset(
         targets[split:],
         (z,),
         parameters[split:],
@@ -96,13 +96,13 @@ def run_synthetic_smoke(
     _, history = train_mlp_dataset(
         train_dataset,
         validation_dataset,
-        hidden_features=bundle.mlp.hidden_dim,
-        hidden_layers=bundle.mlp.total_hidden_layers,
-        activation=bundle.mlp.activation,
+        hidden_features=config.mlp.hidden_dim,
+        hidden_layers=config.mlp.total_hidden_layers,
+        activation=config.mlp.activation,
         epochs=epochs,
         batch_size=batch_size,
-        learning_rate=bundle.optimizer.learning_rate,
-        weight_decay=bundle.optimizer.weight_decay,
+        learning_rate=config.optimizer.learning_rate,
+        weight_decay=config.optimizer.weight_decay,
         seed=1,
     )
     return {
@@ -112,13 +112,13 @@ def run_synthetic_smoke(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface for global-signal development tasks."""
-    parser = argparse.ArgumentParser(description="Global-signal emulator entrypoint.")
+    """Build the command-line interface for T21 development tasks."""
+    parser = argparse.ArgumentParser(description="T21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
         "--print-legacy-config",
         action="store_true",
-        help="Print the legacy-aligned model and training defaults.",
+        help="Print the current T21 model and training defaults.",
     )
     parser.add_argument(
         "--synthetic-smoke",
@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run the current global-signal CLI.
+    """Run the current T21 CLI.
 
     At this stage the command is mainly for visibility and verification: it can
     print contracts, print legacy defaults, and run a smoke test, but it does
@@ -156,10 +156,10 @@ def main() -> None:
     args = build_parser().parse_args()
 
     if args.print_spec:
-        pprint(default_global_signal_spec())
+        pprint(t21_spec())
         return
     if args.print_legacy_config:
-        pprint(t21_frad_legacy_bundle())
+        pprint(t21_config())
         return
     if args.synthetic_smoke:
         epochs = 20 if args.epochs is None else args.epochs
@@ -183,24 +183,24 @@ def main() -> None:
             pprint(summary)
             return
 
-        bundle = t21_frad_legacy_bundle()
+        config = t21_config()
         model, history = train_mlp_regressor(
             jnp.asarray(prepared.train_features),
             jnp.asarray(prepared.train_targets),
             jnp.asarray(prepared.validation_features),
             jnp.asarray(prepared.validation_targets),
-            hidden_features=bundle.mlp.hidden_dim,
-            hidden_layers=bundle.mlp.total_hidden_layers,
-            activation=bundle.mlp.activation,
-            learning_rate=bundle.optimizer.learning_rate,
-            weight_decay=bundle.optimizer.weight_decay,
-            batch_size=bundle.training.batch_size if args.batch_size is None else args.batch_size,
-            epochs=bundle.training.epochs if args.epochs is None else args.epochs,
+            hidden_features=config.mlp.hidden_dim,
+            hidden_layers=config.mlp.total_hidden_layers,
+            activation=config.mlp.activation,
+            learning_rate=config.optimizer.learning_rate,
+            weight_decay=config.optimizer.weight_decay,
+            batch_size=config.training.batch_size if args.batch_size is None else args.batch_size,
+            epochs=config.training.epochs if args.epochs is None else args.epochs,
             seed=args.shuffle_seed,
             early_stopping_patience=(
-                bundle.training.early_stopping_patience if bundle.training.early_stop else None
+                config.training.early_stopping_patience if config.training.early_stop else None
             ),
-            early_stopping_min_delta=bundle.training.early_stopping_min_delta,
+            early_stopping_min_delta=config.training.early_stopping_min_delta,
         )
         pprint(
             {
@@ -213,6 +213,6 @@ def main() -> None:
         return
 
     raise SystemExit(
-        "Real global-signal dataset loading is available through --dataset-root. "
+        "Real T21 dataset loading is available through --dataset-root. "
         "Use --prepare-only to inspect prepared arrays, or --synthetic-smoke for the mock path."
     )

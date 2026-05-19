@@ -30,7 +30,7 @@ import numpy as np
 from flax import nnx
 
 from nenufar_emulators.core.datasets import SpectrumDataset
-from nenufar_emulators.core.network import DenseMLP, init_mlp
+from nenufar_emulators.models import DenseMLP, init_mlp
 from nenufar_emulators.core.scaling import FeatureScaling
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 

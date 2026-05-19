@@ -1,4 +1,4 @@
-"""Power-spectrum training entrypoints.
+"""Delta21 training helpers and CLI entrypoint.
 
 At the moment these entrypoints are intentionally modest: they expose the
 specifications and synthetic smoke runs needed to verify the repository before
@@ -14,13 +14,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.core.training import train_mlp_dataset, train_mlp_regressor
-from nenufar_emulators.power_spectrum.data import (
-    build_power_spectrum_dataset,
-    default_power_spectrum_spec,
+from nenufar_emulators.delta21.data import (
+    build_delta21_dataset,
+    delta21_spec,
     prepare_hera_idr4_delta21_training_split,
 )
-from nenufar_emulators.power_spectrum.model import delta21_frad_legacy_bundle
+from nenufar_emulators.delta21.model import delta21_config
+from nenufar_emulators.trainer import train_mlp_dataset, train_mlp_regressor
 
 
 def run_synthetic_smoke(
@@ -34,8 +34,8 @@ def run_synthetic_smoke(
     is to verify that the power-spectrum spec, tiling logic, and legacy-aligned
     architecture bundle are internally consistent.
     """
-    spec = default_power_spectrum_spec()
-    bundle = delta21_frad_legacy_bundle()
+    spec = delta21_spec()
+    config = delta21_config()
     rng = np.random.default_rng(0)
     nsamples = 24
     z = np.linspace(6.0, 16.0, 5)
@@ -63,7 +63,7 @@ def run_synthetic_smoke(
         targets[idx] = base_signal + 0.02 * np.log10(parameters[idx, 0]) + 0.03 * parameters[idx, 6]
 
     split = int(0.8 * nsamples)
-    base_train_dataset = build_power_spectrum_dataset(
+    base_train_dataset = build_delta21_dataset(
         targets[:split],
         (z, k),
         parameters[:split],
@@ -75,7 +75,7 @@ def run_synthetic_smoke(
         standardize_axes=True,
         standardize_parameters=True,
     )
-    train_dataset = build_power_spectrum_dataset(
+    train_dataset = build_delta21_dataset(
         targets[:split],
         (z, k),
         parameters[:split],
@@ -83,7 +83,7 @@ def run_synthetic_smoke(
         forward_pipeline=[standardization],
         tiling=True,
     )
-    validation_dataset = build_power_spectrum_dataset(
+    validation_dataset = build_delta21_dataset(
         targets[split:],
         (z, k),
         parameters[split:],
@@ -94,13 +94,13 @@ def run_synthetic_smoke(
     _, history = train_mlp_dataset(
         train_dataset,
         validation_dataset,
-        hidden_features=bundle.mlp.hidden_dim,
-        hidden_layers=bundle.mlp.total_hidden_layers,
-        activation=bundle.mlp.activation,
+        hidden_features=config.mlp.hidden_dim,
+        hidden_layers=config.mlp.total_hidden_layers,
+        activation=config.mlp.activation,
         epochs=epochs,
         batch_size=batch_size,
-        learning_rate=bundle.optimizer.learning_rate,
-        weight_decay=bundle.optimizer.weight_decay,
+        learning_rate=config.optimizer.learning_rate,
+        weight_decay=config.optimizer.weight_decay,
         seed=0,
     )
     return {
@@ -110,18 +110,18 @@ def run_synthetic_smoke(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface for power-spectrum development tasks.
+    """Build the command-line interface for Delta21 development tasks.
 
     The CLI is intentionally narrow for now. It exists to expose inspection and
     verification tasks while the real dataset-driven training path is still
     being migrated.
     """
-    parser = argparse.ArgumentParser(description="Power-spectrum emulator entrypoint.")
+    parser = argparse.ArgumentParser(description="Delta21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
         "--print-legacy-config",
         action="store_true",
-        help="Print the legacy-aligned model and training defaults.",
+        help="Print the current Delta21 model and training defaults.",
     )
     parser.add_argument(
         "--synthetic-smoke",
@@ -159,10 +159,10 @@ def main() -> None:
     args = build_parser().parse_args()
 
     if args.print_spec:
-        pprint(default_power_spectrum_spec())
+        pprint(delta21_spec())
         return
     if args.print_legacy_config:
-        pprint(delta21_frad_legacy_bundle())
+        pprint(delta21_config())
         return
     if args.synthetic_smoke:
         epochs = 20 if args.epochs is None else args.epochs
@@ -186,19 +186,19 @@ def main() -> None:
             pprint(summary)
             return
 
-        bundle = delta21_frad_legacy_bundle()
+        config = delta21_config()
         model, history = train_mlp_regressor(
             jnp.asarray(prepared.train_features),
             jnp.asarray(prepared.train_targets),
             jnp.asarray(prepared.validation_features),
             jnp.asarray(prepared.validation_targets),
-            hidden_features=bundle.mlp.hidden_dim,
-            hidden_layers=bundle.mlp.total_hidden_layers,
-            activation=bundle.mlp.activation,
-            learning_rate=bundle.optimizer.learning_rate,
-            weight_decay=bundle.optimizer.weight_decay,
-            batch_size=bundle.training.batch_size if args.batch_size is None else args.batch_size,
-            epochs=bundle.training.epochs if args.epochs is None else args.epochs,
+            hidden_features=config.mlp.hidden_dim,
+            hidden_layers=config.mlp.total_hidden_layers,
+            activation=config.mlp.activation,
+            learning_rate=config.optimizer.learning_rate,
+            weight_decay=config.optimizer.weight_decay,
+            batch_size=config.training.batch_size if args.batch_size is None else args.batch_size,
+            epochs=config.training.epochs if args.epochs is None else args.epochs,
             seed=args.interpolation_seed,
         )
         pprint(
@@ -212,6 +212,6 @@ def main() -> None:
         return
 
     raise SystemExit(
-        "Real power-spectrum dataset loading is available through --dataset-root. "
+        "Real Delta21 dataset loading is available through --dataset-root. "
         "Use --prepare-only to inspect prepared arrays, or --synthetic-smoke for the mock path."
     )

@@ -6,13 +6,13 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from nenufar_emulators.core.checkpointing import CheckpointMetadata, load, save
-from nenufar_emulators.core.network import forward_mlp, init_mlp
+from nenufar_emulators.archive import CheckpointMetadata, load, save
 from nenufar_emulators.core.normalisation import StandardizationPipeline
 from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.core.transforms import apply_transform, invert_transform
-from nenufar_emulators.global_signal.data import build_global_signal_dataset, default_global_signal_spec
+from nenufar_emulators.models import forward_mlp, init_mlp
+from nenufar_emulators.t21.data import build_t21_dataset, t21_spec
 
 
 def test_transform_round_trip_log10() -> None:
@@ -72,7 +72,7 @@ def test_checkpoint_metadata_to_dict() -> None:
 
 
 def test_checkpoint_archive_round_trip(tmp_path) -> None:
-    spec = default_global_signal_spec()
+    spec = t21_spec()
     parameters = np.column_stack(
         [
             np.array([1e-2, 1e-1]),
@@ -80,10 +80,10 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
             np.array([10.0, 20.0]),
             np.array([100.0, 1000.0]),
             np.array([1.0, 1.3]),
-            np.array([0.1, 0.2]),
+            np.array([100.0, 200.0]),
             np.array([0.05, 0.06]),
             np.array([1e2, 1e3]),
-            np.array([2.0, 3.0]),
+            np.array([231.0, 233.0]),
         ]
     )
     spectra = np.array(
@@ -93,7 +93,7 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
         ]
     )
     z = np.linspace(6.0, 10.0, 5)
-    base_dataset = build_global_signal_dataset(
+    base_dataset = build_t21_dataset(
         spectra,
         (z,),
         parameters,
@@ -105,7 +105,7 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
         standardize_axes=True,
         standardize_parameters=True,
     )
-    train_dataset = build_global_signal_dataset(
+    train_dataset = build_t21_dataset(
         spectra,
         (z,),
         parameters,
@@ -131,8 +131,8 @@ def test_checkpoint_archive_round_trip(tmp_path) -> None:
     )
     features = jnp.asarray(
         [
-            [0.0, -2.0, -3.0, 1.0, 2.0, 1.0, 0.1, 0.05, 2.0, 2.0],
-            [1.0, -1.0, -2.0, 1.3, 3.0, 1.3, 0.2, 0.06, 3.0, 3.0],
+            [0.0, -2.0, -3.0, 1.0, 2.0, 1.0, 100.0, 0.05, 2.0, 231.0],
+            [1.0, -1.0, -2.0, 1.3, 3.0, 1.3, 200.0, 0.06, 3.0, 233.0],
         ],
         dtype=jnp.float32,
     )

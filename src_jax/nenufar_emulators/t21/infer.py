@@ -1,4 +1,4 @@
-"""Global-signal inference entrypoints.
+"""T21 inference entrypoints.
 
 This is currently a placeholder surface for the future inference workflow.
 Keeping it in the tree now makes it clear where checkpoint loading and
@@ -11,8 +11,8 @@ import argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the placeholder inference CLI for global-signal emulators."""
-    parser = argparse.ArgumentParser(description="Global-signal inference entrypoint.")
+    """Build the placeholder inference CLI for T21."""
+    parser = argparse.ArgumentParser(description="T21 inference entrypoint.")
     parser.add_argument(
         "--describe",
         action="store_true",
