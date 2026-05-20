@@ -56,10 +56,10 @@ def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path
         "log10fradio",
         "pop",
     )
-    assert prepared.train_features.shape == (600, 10)
-    assert prepared.train_targets.shape == (600,)
-    assert prepared.validation_features.shape == (400, 10)
-    assert prepared.validation_targets.shape == (400,)
+    assert prepared.train_features.shape == (800, 10)
+    assert prepared.train_targets.shape == (800,)
+    assert prepared.validation_features.shape == (200, 10)
+    assert prepared.validation_targets.shape == (200,)
     scaling_by_name = {feature.name: feature.method for feature in prepared.feature_scaling}
     assert scaling_by_name["tau"] == "zscore"
     assert scaling_by_name["z"] == "minmax_minus_one_to_one"

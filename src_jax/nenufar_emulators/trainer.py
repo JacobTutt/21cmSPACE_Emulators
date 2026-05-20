@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from time import perf_counter
 
 import jax
 import jax.numpy as jnp
@@ -94,6 +95,8 @@ def train_mlp_regressor(
     seed: int = 0,
     early_stopping_patience: int | None = None,
     early_stopping_min_delta: float = 0.0,
+    log_every: int | None = 1,
+    log_prefix: str = "train_mlp_regressor",
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared dense emulator network on prepared in-memory arrays.
 
@@ -190,6 +193,7 @@ def train_mlp_regressor(
     epochs_without_improvement = 0
 
     for epoch in range(epochs):
+        epoch_start = perf_counter()
         key, train_key = jax.random.split(key)
         train_loss = 0.0
         train_batches = 0
@@ -228,6 +232,19 @@ def train_mlp_regressor(
         else:
             epochs_without_improvement += 1
 
+        if log_every is not None and ((epoch + 1) % log_every == 0):
+            message = (
+                f"[{log_prefix}] epoch={epoch + 1}/{epochs} "
+                f"train_loss={train_loss:.6e} val_loss={validation_loss:.6e}"
+            )
+            if best_epoch is not None and best_validation_loss < float("inf"):
+                message += (
+                    f" best_epoch={best_epoch + 1} "
+                    f"best_val_loss={best_validation_loss:.6e}"
+                )
+            message += f" epoch_seconds={perf_counter() - epoch_start:.2f}"
+            print(message, flush=True)
+
         if (
             early_stopping_patience is not None
             and epochs_without_improvement >= early_stopping_patience
@@ -259,6 +276,8 @@ def train_mlp_dataset(
     seed: int = 0,
     early_stopping_patience: int | None = None,
     early_stopping_min_delta: float = 0.0,
+    log_every: int | None = 1,
+    log_prefix: str = "train_mlp_dataset",
 ) -> tuple[DenseMLP, TrainingHistory]:
     """Train the shared MLP directly from dataset objects.
 
@@ -325,6 +344,7 @@ def train_mlp_dataset(
     epochs_without_improvement = 0
 
     for epoch in range(epochs):
+        epoch_start = perf_counter()
         key, train_key = jax.random.split(key)
         train_loss = 0.0
         train_batches = 0
@@ -359,6 +379,19 @@ def train_mlp_dataset(
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
+
+        if log_every is not None and ((epoch + 1) % log_every == 0):
+            message = (
+                f"[{log_prefix}] epoch={epoch + 1}/{epochs} "
+                f"train_loss={train_loss:.6e} val_loss={validation_loss:.6e}"
+            )
+            if best_epoch is not None and best_validation_loss < float("inf"):
+                message += (
+                    f" best_epoch={best_epoch + 1} "
+                    f"best_val_loss={best_validation_loss:.6e}"
+                )
+            message += f" epoch_seconds={perf_counter() - epoch_start:.2f}"
+            print(message, flush=True)
 
         if (
             early_stopping_patience is not None

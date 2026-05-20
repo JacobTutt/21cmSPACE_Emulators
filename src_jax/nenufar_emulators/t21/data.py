@@ -102,8 +102,8 @@ def prepare_hera_idr4_t21_training_split(
         scale_method={"tau": "normalize"},
         data_log=False,
         offset=None,
-        train_size=0.66,
-        test_size=0.34,
+        train_size=0.8,
+        test_size=0.2,
         random_state=random_state,
         shuffle_seed=shuffle_seed,
     )

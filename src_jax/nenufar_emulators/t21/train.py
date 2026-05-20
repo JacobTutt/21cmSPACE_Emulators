@@ -133,6 +133,7 @@ def train_t21_from_dataset_root(
     epochs: int | None = None,
     batch_size: int | None = None,
     shuffle_seed: int = 42,
+    log_every: int | None = 1,
 ) -> dict[str, Any]:
     """Prepare, train, and save a T21 model package from HERA IDR4 data."""
     prepared = prepare_hera_idr4_t21_training_split(
@@ -157,6 +158,8 @@ def train_t21_from_dataset_root(
             config.training.early_stopping_patience if config.training.early_stop else None
         ),
         early_stopping_min_delta=config.training.early_stopping_min_delta,
+        log_every=log_every,
+        log_prefix="t21",
     )
 
     output = Path("t21_model.nenemu") if output_path is None else Path(output_path)
@@ -239,6 +242,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
     parser.add_argument(
+        "--log-every",
+        type=int,
+        default=1,
+        help="Print training and validation losses every N epochs.",
+    )
+    parser.add_argument(
         "--shuffle-seed",
         type=int,
         default=42,
@@ -285,6 +294,7 @@ def main() -> None:
             epochs=args.epochs,
             batch_size=args.batch_size,
             shuffle_seed=args.shuffle_seed,
+            log_every=args.log_every,
         )
         pprint(summary)
         return

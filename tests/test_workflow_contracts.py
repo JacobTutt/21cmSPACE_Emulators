@@ -88,10 +88,10 @@ def test_delta21_and_t21_configs_match_current_architecture_choices() -> None:
     assert delta21.training.batch_size == 20000
 
     assert t21.mlp.input_dim == 10
-    assert t21.mlp.total_hidden_layers == 4
-    assert t21.mlp.hidden_dim == 20
-    assert t21.mlp.activation == "tanh"
-    assert t21.training.batch_size == 769
-    assert t21.training.epochs == 1000
-    assert t21.training.early_stop is True
-    assert t21.training.early_stopping_patience == 50
+    assert t21.mlp.total_hidden_layers == 7
+    assert t21.mlp.hidden_dim == 100
+    assert t21.mlp.activation == "relu"
+    assert t21.training.batch_size == 20000
+    assert t21.training.epochs == 10000
+    assert t21.training.early_stop is False
+    assert t21.training.early_stopping_patience is None

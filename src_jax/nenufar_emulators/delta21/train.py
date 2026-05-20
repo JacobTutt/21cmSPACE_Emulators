@@ -131,6 +131,7 @@ def train_delta21_from_dataset_root(
     epochs: int | None = None,
     batch_size: int | None = None,
     interpolation_seed: int = 0,
+    log_every: int | None = 1,
 ) -> dict[str, Any]:
     """Prepare, train, and save a Delta21 model package from HERA IDR4 data."""
     prepared = prepare_hera_idr4_delta21_training_split(
@@ -151,6 +152,8 @@ def train_delta21_from_dataset_root(
         batch_size=config.training.batch_size if batch_size is None else batch_size,
         epochs=config.training.epochs if epochs is None else epochs,
         seed=interpolation_seed,
+        log_every=log_every,
+        log_prefix="delta21",
     )
 
     output = Path("delta21_model.nenemu") if output_path is None else Path(output_path)
@@ -237,6 +240,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
     parser.add_argument(
+        "--log-every",
+        type=int,
+        default=1,
+        help="Print training and validation losses every N epochs.",
+    )
+    parser.add_argument(
         "--interpolation-seed",
         type=int,
         default=0,
@@ -283,6 +292,7 @@ def main() -> None:
             epochs=args.epochs,
             batch_size=args.batch_size,
             interpolation_seed=args.interpolation_seed,
+            log_every=args.log_every,
         )
         pprint(summary)
         return
