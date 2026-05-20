@@ -16,7 +16,7 @@ from nenufar_emulators.data.hera_idr4 import load_hera_idr4_t21
 from nenufar_emulators.conventions import PreparedFeatures, prepare_feature_matrix
 from nenufar_emulators.data.preparation import (
     PreparedSplit,
-    prepare_shared_grid_training_split,
+    prepare_fixed_grid_training_split,
 )
 
 HERA_IDR4_COLUMNS = (
@@ -84,28 +84,35 @@ def prepare_hera_idr4_t21_training_split(
     random_state: int = 42,
     shuffle_seed: int = 42,
 ) -> PreparedSplit:
-    """Prepare HERA IDR4 `T21` arrays using the fixed-grid T21 workflow.
-
-    Unlike the power-spectrum emulator, `T21` is not prepared through
-    per-simulation random interpolation. We split by simulation, resample all
-    signals onto one shared redshift grid declared by the emulator spec, and
-    then flatten those deterministic rows for training.
-    """
+    """Prepare HERA IDR4 `T21` arrays on one shared redshift grid."""
     product = load_hera_idr4_t21(dataset_root)
     prepared_parameters = prepare_hera_idr4_t21_parameters(product.parameters)
     spec = t21_spec()
-    return prepare_shared_grid_training_split(
+    return prepare_fixed_grid_training_split(
         axes=(product.axes.z,),
         axis_specs=spec.axes,
         parameters=prepared_parameters,
         target=product.target,
-        scale_method={"tau": "normalize"},
+        feature_scale_methods={
+            "z": "zscore",
+            "log10fstarII": "zscore",
+            "log10fstarIII": "zscore",
+            "log10Vc": "zscore",
+            "log10fX": "zscore",
+            "alpha": "minmax_zero_to_one",
+            "nu_0": "minmax_zero_to_one",
+            "tau": "zscore",
+            "log10fradio": "zscore",
+            "pop": "minmax_zero_to_one",
+        },
         data_log=False,
         offset=None,
-        train_size=0.8,
+        train_size=0.6,
+        validation_size=0.2,
         test_size=0.2,
         random_state=random_state,
         shuffle_seed=shuffle_seed,
+        standardize_target=True,
     )
 def build_t21_dataset(
     spectra: np.ndarray,

@@ -58,7 +58,7 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
         output_path=package_path,
         epochs=2,
         batch_size=128,
-        interpolation_seed=3,
+        shuffle_seed=3,
     )
 
     assert package_path.exists()
@@ -67,10 +67,10 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
 
     raw_parameters = loadmat(dataset_root / "hera_parameters_mat.mat")["parameters"][:2]
     z = np.array([6.0, 10.0], dtype=float)
-    k = np.array([0.02 / 0.6704, 0.05 / 0.6704, 0.99 / 0.6704], dtype=float)
+    k = np.array([0.05 / 0.6704, 0.99 / 0.6704], dtype=float)
     predictions = predict_delta21(package_path, raw_parameters, z, k)
 
-    assert predictions.shape == (2, 2, 3)
+    assert predictions.shape == (2, 2, 2)
     assert np.isfinite(predictions).all()
 
 
@@ -91,7 +91,7 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert summary["package_path"] == str(package_path)
 
     raw_parameters = loadmat(dataset_root / "hera_parameters_mat.mat")["parameters"][:2]
-    z = np.array([6.0, 10.0, 20.0, 30.0], dtype=float)
+    z = np.array([6.0, 10.0, 20.0, 27.0], dtype=float)
     predictions = predict_t21(package_path, raw_parameters, z)
 
     assert predictions.shape == (2, 4)

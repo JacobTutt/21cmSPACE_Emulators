@@ -15,7 +15,7 @@ from nenufar_emulators.core.normalisation import SpecTransformPipeline
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.data.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
 from nenufar_emulators.conventions import PreparedFeatures, prepare_feature_matrix
-from nenufar_emulators.data.preparation import PreparedSplit, prepare_interpolated_training_split
+from nenufar_emulators.data.preparation import PreparedSplit, prepare_fixed_grid_training_split
 
 HERA_IDR4_COLUMNS = (
     "fstarII",
@@ -89,28 +89,38 @@ def prepare_hera_idr4_delta21_training_split(
     dataset_root: str,
     *,
     random_state: int = 42,
-    interpolation_seed: int = 0,
+    shuffle_seed: int = 42,
 ) -> PreparedSplit:
-    """Prepare HERA IDR4 `Delta21` arrays for model fitting.
-
-    The resulting rows follow the interpolated sampling workflow used for the
-    current Delta21 emulator: split simulations first, draw training samples in
-    transformed axis space, and keep validation on a deterministic cropped
-    grid.
-    """
+    """Prepare HERA IDR4 `Delta21` arrays on one shared `(z, k)` grid."""
     product = load_hera_idr4_delta21(dataset_root)
     prepared_parameters = prepare_hera_idr4_delta21_parameters(product.parameters)
     spec = delta21_spec()
-    return prepare_interpolated_training_split(
+    return prepare_fixed_grid_training_split(
         axes=(product.axes.z, product.axes.k),
         axis_specs=spec.axes,
         parameters=prepared_parameters,
         target=product.target,
-        scale_method={"tau": "normalize"},
+        feature_scale_methods={
+            "z": "zscore",
+            "log10k": "zscore",
+            "log10fstarII": "zscore",
+            "log10fstarIII": "zscore",
+            "log10Vc": "zscore",
+            "log10fX": "zscore",
+            "alpha": "minmax_zero_to_one",
+            "nu_0": "minmax_zero_to_one",
+            "tau": "zscore",
+            "log10fradio": "zscore",
+            "pop": "minmax_zero_to_one",
+        },
         data_log=True,
         offset=1.0,
+        train_size=0.6,
+        validation_size=0.2,
+        test_size=0.2,
         random_state=random_state,
-        interpolation_seed=interpolation_seed,
+        shuffle_seed=shuffle_seed,
+        standardize_target=True,
     )
 def build_delta21_dataset(
     spectra: np.ndarray,

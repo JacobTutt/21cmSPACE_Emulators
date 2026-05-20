@@ -262,6 +262,37 @@ def train_mlp_regressor(
     )
 
 
+def evaluate_mlp_regressor(
+    model: DenseMLP,
+    features: jnp.ndarray,
+    targets: jnp.ndarray,
+    *,
+    batch_size: int = 256,
+) -> float:
+    """Evaluate mean squared error for a trained model on prepared arrays."""
+
+    @nnx.jit
+    def eval_step(
+        model_instance: DenseMLP,
+        batch_features: jnp.ndarray,
+        batch_targets: jnp.ndarray,
+    ) -> jnp.ndarray:
+        preds = model_instance(batch_features).squeeze(-1)
+        return mse(preds, batch_targets)
+
+    total_loss = 0.0
+    total_batches = 0
+    for batch_features, batch_targets in _iter_array_batches(
+        features,
+        targets,
+        batch_size,
+        shuffle=False,
+    ):
+        total_loss += float(eval_step(model, batch_features, batch_targets))
+        total_batches += 1
+    return total_loss / max(total_batches, 1)
+
+
 def train_mlp_dataset(
     train_dataset: SpectrumDataset,
     validation_dataset: SpectrumDataset,

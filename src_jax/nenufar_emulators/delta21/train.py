@@ -21,7 +21,11 @@ from nenufar_emulators.delta21.data import (
 )
 from nenufar_emulators.delta21.model import delta21_config
 from nenufar_emulators.serialization import CheckpointMetadata, save
-from nenufar_emulators.trainer import train_mlp_dataset, train_mlp_regressor
+from nenufar_emulators.trainer import (
+    evaluate_mlp_regressor,
+    train_mlp_dataset,
+    train_mlp_regressor,
+)
 
 
 def run_synthetic_smoke(
@@ -130,13 +134,13 @@ def train_delta21_from_dataset_root(
     output_path: str | Path | None = None,
     epochs: int | None = None,
     batch_size: int | None = None,
-    interpolation_seed: int = 0,
+    shuffle_seed: int = 42,
     log_every: int | None = 1,
 ) -> dict[str, Any]:
     """Prepare, train, and save a Delta21 model package from HERA IDR4 data."""
     prepared = prepare_hera_idr4_delta21_training_split(
         dataset_root,
-        interpolation_seed=interpolation_seed,
+        shuffle_seed=shuffle_seed,
     )
     config = delta21_config()
     model, history = train_mlp_regressor(
@@ -151,9 +155,19 @@ def train_delta21_from_dataset_root(
         weight_decay=config.optimizer.weight_decay,
         batch_size=config.training.batch_size if batch_size is None else batch_size,
         epochs=config.training.epochs if epochs is None else epochs,
-        seed=interpolation_seed,
+        seed=shuffle_seed,
+        early_stopping_patience=(
+            config.training.early_stopping_patience if config.training.early_stop else None
+        ),
+        early_stopping_min_delta=config.training.early_stopping_min_delta,
         log_every=log_every,
         log_prefix="delta21",
+    )
+    test_loss = evaluate_mlp_regressor(
+        model,
+        jnp.asarray(prepared.test_features),
+        jnp.asarray(prepared.test_targets),
+        batch_size=config.training.batch_size if batch_size is None else batch_size,
     )
 
     output = Path("delta21_model.nenemu") if output_path is None else Path(output_path)
@@ -164,13 +178,14 @@ def train_delta21_from_dataset_root(
         package_version=_installed_package_version(),
         emulator_spec=delta21_spec(),
         input_scaling=prepared.feature_scaling,
+        target_scaling=prepared.target_scaling,
         training_config={
             "mlp": asdict(config.mlp),
             "optimizer": asdict(config.optimizer),
             "training": asdict(config.training),
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
-            "interpolation_seed": interpolation_seed,
+            "shuffle_seed": shuffle_seed,
         },
     )
     package_path = save(
@@ -181,7 +196,7 @@ def train_delta21_from_dataset_root(
         loss=config.training.loss_name,
         metadata=metadata,
         epochs=config.training.epochs if epochs is None else epochs,
-        patience=None,
+        patience=config.training.early_stopping_patience if config.training.early_stop else None,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
     )
@@ -194,10 +209,13 @@ def train_delta21_from_dataset_root(
         "train_targets_shape": list(prepared.train_targets.shape),
         "validation_features_shape": list(prepared.validation_features.shape),
         "validation_targets_shape": list(prepared.validation_targets.shape),
+        "test_features_shape": list(prepared.test_features.shape),
+        "test_targets_shape": list(prepared.test_targets.shape),
         "final_train_loss": history.train_losses[-1],
         "final_validation_loss": history.validation_losses[-1],
         "best_epoch": history.best_epoch,
         "best_validation_loss": history.best_validation_loss,
+        "test_loss": test_loss,
         "trained_model_type": type(model).__name__,
     }
     _write_training_summary(package_path.with_suffix(".summary.json"), summary)
@@ -246,10 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print training and validation losses every N epochs.",
     )
     parser.add_argument(
-        "--interpolation-seed",
+        "--shuffle-seed",
         type=int,
-        default=0,
-        help="Seed used when sampling interpolation points for the Delta21 training rows.",
+        default=42,
+        help="Seed used when shuffling the fixed-grid Delta21 training rows after the split.",
     )
     return parser
 
@@ -273,7 +291,7 @@ def main() -> None:
     if args.dataset_root:
         prepared = prepare_hera_idr4_delta21_training_split(
             args.dataset_root,
-            interpolation_seed=args.interpolation_seed,
+            shuffle_seed=args.shuffle_seed,
         )
         summary = {
             "feature_names": prepared.feature_names,
@@ -281,6 +299,8 @@ def main() -> None:
             "train_targets_shape": prepared.train_targets.shape,
             "validation_features_shape": prepared.validation_features.shape,
             "validation_targets_shape": prepared.validation_targets.shape,
+            "test_features_shape": prepared.test_features.shape,
+            "test_targets_shape": prepared.test_targets.shape,
         }
         if args.prepare_only:
             pprint(summary)
@@ -291,7 +311,7 @@ def main() -> None:
             output_path=args.output,
             epochs=args.epochs,
             batch_size=args.batch_size,
-            interpolation_seed=args.interpolation_seed,
+            shuffle_seed=args.shuffle_seed,
             log_every=args.log_every,
         )
         pprint(summary)

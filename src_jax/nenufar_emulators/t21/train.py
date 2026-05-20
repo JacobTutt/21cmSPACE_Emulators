@@ -21,7 +21,11 @@ from nenufar_emulators.t21.data import (
 )
 from nenufar_emulators.t21.model import t21_config
 from nenufar_emulators.serialization import CheckpointMetadata, save
-from nenufar_emulators.trainer import train_mlp_dataset, train_mlp_regressor
+from nenufar_emulators.trainer import (
+    evaluate_mlp_regressor,
+    train_mlp_dataset,
+    train_mlp_regressor,
+)
 
 
 def run_synthetic_smoke(
@@ -161,6 +165,12 @@ def train_t21_from_dataset_root(
         log_every=log_every,
         log_prefix="t21",
     )
+    test_loss = evaluate_mlp_regressor(
+        model,
+        jnp.asarray(prepared.test_features),
+        jnp.asarray(prepared.test_targets),
+        batch_size=config.training.batch_size if batch_size is None else batch_size,
+    )
 
     output = Path("t21_model.nenemu") if output_path is None else Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +180,7 @@ def train_t21_from_dataset_root(
         package_version=_installed_package_version(),
         emulator_spec=t21_spec(),
         input_scaling=prepared.feature_scaling,
+        target_scaling=prepared.target_scaling,
         training_config={
             "mlp": asdict(config.mlp),
             "optimizer": asdict(config.optimizer),
@@ -200,10 +211,13 @@ def train_t21_from_dataset_root(
         "train_targets_shape": list(prepared.train_targets.shape),
         "validation_features_shape": list(prepared.validation_features.shape),
         "validation_targets_shape": list(prepared.validation_targets.shape),
+        "test_features_shape": list(prepared.test_features.shape),
+        "test_targets_shape": list(prepared.test_targets.shape),
         "final_train_loss": history.train_losses[-1],
         "final_validation_loss": history.validation_losses[-1],
         "best_epoch": history.best_epoch,
         "best_validation_loss": history.best_validation_loss,
+        "test_loss": test_loss,
         "trained_model_type": type(model).__name__,
     }
     _write_training_summary(package_path.with_suffix(".summary.json"), summary)
@@ -283,6 +297,8 @@ def main() -> None:
             "train_targets_shape": prepared.train_targets.shape,
             "validation_features_shape": prepared.validation_features.shape,
             "validation_targets_shape": prepared.validation_targets.shape,
+            "test_features_shape": prepared.test_features.shape,
+            "test_targets_shape": prepared.test_targets.shape,
         }
         if args.prepare_only:
             pprint(summary)

@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 from nenufar_emulators.serialization import CheckpointMetadata, load, save
 from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling
+from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from nenufar_emulators.core.transforms import apply_transform, invert_transform
 from nenufar_emulators.models import forward_mlp, init_mlp
@@ -63,6 +63,7 @@ def test_checkpoint_metadata_to_dict() -> None:
             FeatureScaling.from_values("z", np.array([6.0, 20.0]), "identity"),
             FeatureScaling.from_values("log10fradio", np.array([1.0, 2.0]), "zscore"),
         ),
+        target_scaling=None,
         training_config={"epochs": 5},
     )
     serialized = metadata.to_dict()
@@ -121,6 +122,11 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
             FeatureScaling.from_values("z", z, "identity"),
             FeatureScaling.from_values("log10fstarII", np.log10(parameters[:, 0]), "zscore"),
         ),
+        target_scaling=TargetScalingSurface.from_targets(
+            axis_names=("z",),
+            axis_values=(z,),
+            targets=spectra,
+        ),
         training_config={"epochs": 2},
     )
     model = init_mlp(
@@ -162,3 +168,4 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
     assert loaded["train_dataset"].parameter_names[0] == "fstarII"
     assert loaded["train_dataset"].as_batch().parameter_names[0] == "log10fstarII"
     assert len(loaded["train_pipeline"]) == 2
+    assert loaded["metadata"].target_scaling is not None

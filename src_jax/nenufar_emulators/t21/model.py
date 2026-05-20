@@ -36,5 +36,7 @@ def t21_config() -> T21Config:
             batch_size=20000,
             save_after_epochs=5,
             terminate_time_seconds=3600 * 2,
+            early_stop=True,
+            early_stopping_patience=50,
         ),
     )

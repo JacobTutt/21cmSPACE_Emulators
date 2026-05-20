@@ -109,6 +109,11 @@ def predict_delta21(
     flat_predictions = np.asarray(
         package["model"](jnp.asarray(scaled_features))
     ).squeeze(-1)
+    if metadata.target_scaling is not None:
+        flat_predictions = metadata.target_scaling.inverse_rows(
+            flat_predictions,
+            repeated_axes,
+        )
     physical_predictions = invert_transform(
         flat_predictions,
         spec.target_transform,

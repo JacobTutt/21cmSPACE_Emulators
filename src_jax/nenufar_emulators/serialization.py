@@ -24,7 +24,7 @@ from flax import nnx
 
 from nenufar_emulators.core.datasets import SpectrumDataset
 from nenufar_emulators.models import DenseMLP, init_mlp
-from nenufar_emulators.core.scaling import FeatureScaling
+from nenufar_emulators.core.scaling import FeatureScaling, TargetScalingSurface
 from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
 
@@ -127,6 +127,7 @@ class CheckpointMetadata:
     package_version: str
     emulator_spec: EmulatorSpec
     input_scaling: tuple[FeatureScaling, ...]
+    target_scaling: TargetScalingSurface | None
     training_config: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -141,6 +142,9 @@ class CheckpointMetadata:
             "package_version": self.package_version,
             "emulator_spec": asdict(self.emulator_spec),
             "input_scaling": [feature.to_dict() for feature in self.input_scaling],
+            "target_scaling": (
+                None if self.target_scaling is None else self.target_scaling.to_dict()
+            ),
             "training_config": self.training_config,
         }
 
@@ -161,6 +165,11 @@ class CheckpointMetadata:
                     std=float(feature["std"]),
                 )
                 for feature in payload["input_scaling"]
+            ),
+            target_scaling=(
+                None
+                if payload.get("target_scaling") is None
+                else TargetScalingSurface.from_dict(payload["target_scaling"])
             ),
             training_config=payload["training_config"],
         )

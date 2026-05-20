@@ -13,7 +13,7 @@ from nenufar_emulators.t21.data import prepare_hera_idr4_t21_training_split
 
 def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
     dataset_root = write_mock_hera_idr4_dataset(tmp_path)
-    prepared = prepare_hera_idr4_delta21_training_split(dataset_root, interpolation_seed=7)
+    prepared = prepare_hera_idr4_delta21_training_split(dataset_root, shuffle_seed=7)
 
     assert prepared.feature_names == (
         "z",
@@ -28,16 +28,20 @@ def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: 
         "log10fradio",
         "pop",
     )
-    assert prepared.train_features.shape == (1600, 11)
-    assert prepared.train_targets.shape == (1600,)
-    assert prepared.validation_features.shape == (6, 11)
-    assert prepared.validation_targets.shape == (6,)
+    assert prepared.train_features.shape == (1200, 11)
+    assert prepared.train_targets.shape == (1200,)
+    assert prepared.validation_features.shape == (400, 11)
+    assert prepared.validation_targets.shape == (400,)
+    assert prepared.test_features.shape == (400, 11)
+    assert prepared.test_targets.shape == (400,)
     assert prepared.train_features.dtype == np.float32
     assert prepared.train_targets.dtype == np.float32
     scaling_by_name = {feature.name: feature.method for feature in prepared.feature_scaling}
     assert scaling_by_name["tau"] == "zscore"
-    assert scaling_by_name["z"] == "minmax_minus_one_to_one"
-    assert scaling_by_name["log10k"] == "minmax_minus_one_to_one"
+    assert scaling_by_name["z"] == "zscore"
+    assert scaling_by_name["log10k"] == "zscore"
+    assert scaling_by_name["alpha"] == "minmax_zero_to_one"
+    assert prepared.target_scaling is not None
 
 
 def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
@@ -56,13 +60,17 @@ def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path
         "log10fradio",
         "pop",
     )
-    assert prepared.train_features.shape == (800, 10)
-    assert prepared.train_targets.shape == (800,)
+    assert prepared.train_features.shape == (600, 10)
+    assert prepared.train_targets.shape == (600,)
     assert prepared.validation_features.shape == (200, 10)
     assert prepared.validation_targets.shape == (200,)
+    assert prepared.test_features.shape == (200, 10)
+    assert prepared.test_targets.shape == (200,)
     scaling_by_name = {feature.name: feature.method for feature in prepared.feature_scaling}
     assert scaling_by_name["tau"] == "zscore"
-    assert scaling_by_name["z"] == "minmax_minus_one_to_one"
+    assert scaling_by_name["z"] == "zscore"
+    assert scaling_by_name["pop"] == "minmax_zero_to_one"
+    assert prepared.target_scaling is not None
 
 
 def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:

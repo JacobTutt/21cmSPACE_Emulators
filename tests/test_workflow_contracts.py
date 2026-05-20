@@ -93,5 +93,8 @@ def test_delta21_and_t21_configs_match_current_architecture_choices() -> None:
     assert t21.mlp.activation == "relu"
     assert t21.training.batch_size == 20000
     assert t21.training.epochs == 10000
-    assert t21.training.early_stop is False
-    assert t21.training.early_stopping_patience is None
+    assert t21.training.early_stop is True
+    assert t21.training.early_stopping_patience == 50
+
+    assert delta21.training.early_stop is True
+    assert delta21.training.early_stopping_patience == 50
