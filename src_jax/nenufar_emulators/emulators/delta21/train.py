@@ -13,17 +13,17 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.delta21.data import (
-    build_delta21_dataset,
+from nenufar_emulators.data_preprocessing.hera_idr4 import HERA_LITTLE_H
+from nenufar_emulators.data_preprocessing.preparation import prepare_fixed_grid_training_split
+from nenufar_emulators.emulators.delta21.data import (
     delta21_spec,
+    prepare_hera_idr4_delta21_parameters,
     prepare_hera_idr4_delta21_training_split,
 )
-from nenufar_emulators.delta21.model import delta21_config
-from nenufar_emulators.serialization import CheckpointMetadata, save
-from nenufar_emulators.trainer import (
+from nenufar_emulators.emulators.delta21.model import delta21_config
+from nenufar_emulators.utils.checkpointing import CheckpointMetadata, save
+from nenufar_emulators.training.trainer import (
     evaluate_mlp_regressor,
-    train_mlp_dataset,
     train_mlp_regressor,
 )
 
@@ -43,9 +43,9 @@ def run_synthetic_smoke(
     config = delta21_config()
     rng = np.random.default_rng(0)
     nsamples = 24
-    z = np.linspace(6.0, 16.0, 5)
-    k = np.geomspace(0.05, 0.5, 6)
-    parameters = np.column_stack(
+    z = np.linspace(6.0, 27.0, 8)
+    k = np.geomspace(3e-2 / HERA_LITTLE_H, 0.99 / HERA_LITTLE_H, 8)
+    raw_parameters = np.column_stack(
         [
             10 ** rng.uniform(-3.0, -1.0, size=nsamples),  # fstarII
             10 ** rng.uniform(-4.0, -2.0, size=nsamples),  # fstarIII
@@ -53,52 +53,52 @@ def run_synthetic_smoke(
             10 ** rng.uniform(1.0, 3.0, size=nsamples),  # fX
             rng.choice(np.array([1.0, 1.3, 1.5]), size=nsamples),  # alpha
             rng.choice(np.array([*range(100, 1600, 100), 2000, 3000], dtype=float), size=nsamples),  # nu_0
+            rng.uniform(10.0, 60.0, size=nsamples),  # zeta, discarded
             rng.uniform(0.03, 0.09, size=nsamples),  # tau
             10 ** rng.uniform(1.0, 4.0, size=nsamples),  # fradio
             rng.choice(np.array([231.0, 232.0, 233.0]), size=nsamples),  # pop
+            np.zeros(nsamples),  # feed, discarded
+            np.zeros(nsamples),  # delay, discarded
         ]
     )
 
-    # Build a positive target in physical space. The spec pipeline attached by
-    # the dataset will later apply the configured log10(target + 1) transform.
+    # Build a positive target in physical space. The prepared-array workflow
+    # later applies the configured log10(target + 1) transform.
     zz, kk = np.meshgrid(z, k, indexing="ij")
     base_signal = (zz + 1.0) * (kk + 0.5)
     targets = np.empty((nsamples, len(z), len(k)), dtype=float)
     for idx in range(nsamples):
-        targets[idx] = base_signal + 0.02 * np.log10(parameters[idx, 0]) + 0.03 * parameters[idx, 6]
+        targets[idx] = base_signal + 0.02 * np.log10(raw_parameters[idx, 0]) + 0.03 * raw_parameters[idx, 7]
 
-    split = int(0.8 * nsamples)
-    base_train_dataset = build_delta21_dataset(
-        targets[:split],
-        (z, k),
-        parameters[:split],
-        spec=spec,
-        tiling=False,
+    prepared = prepare_fixed_grid_training_split(
+        axes=(z, k),
+        axis_specs=spec.axes,
+        parameters=prepare_hera_idr4_delta21_parameters(raw_parameters),
+        target=targets,
+        feature_scale_methods={
+            "z": "zscore",
+            "log10k": "zscore",
+            "log10fstarII": "zscore",
+            "log10fstarIII": "zscore",
+            "log10Vc": "zscore",
+            "log10fX": "zscore",
+            "alpha": "minmax_zero_to_one",
+            "nu_0": "minmax_zero_to_one",
+            "tau": "zscore",
+            "log10fradio": "zscore",
+            "pop": "minmax_zero_to_one",
+        },
+        data_log=True,
+        offset=1.0,
+        random_state=0,
+        shuffle_seed=0,
+        standardize_target=True,
     )
-    standardization = StandardizationPipeline.from_batch(
-        base_train_dataset.as_batch(),
-        standardize_axes=True,
-        standardize_parameters=True,
-    )
-    train_dataset = build_delta21_dataset(
-        targets[:split],
-        (z, k),
-        parameters[:split],
-        spec=spec,
-        forward_pipeline=[standardization],
-        tiling=True,
-    )
-    validation_dataset = build_delta21_dataset(
-        targets[split:],
-        (z, k),
-        parameters[split:],
-        spec=spec,
-        forward_pipeline=[standardization],
-        tiling=True,
-    )
-    _, history = train_mlp_dataset(
-        train_dataset,
-        validation_dataset,
+    _, history = train_mlp_regressor(
+        jnp.asarray(prepared.train_features),
+        jnp.asarray(prepared.train_targets),
+        jnp.asarray(prepared.validation_features),
+        jnp.asarray(prepared.validation_targets),
         hidden_features=config.mlp.hidden_dim,
         hidden_layers=config.mlp.total_hidden_layers,
         activation=config.mlp.activation,

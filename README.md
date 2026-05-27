@@ -1,58 +1,139 @@
-# Nenufar_Emulators
+# Nenufar Emulators
 
-`Nenufar_Emulators` is a JAX-native repository for training and packaging
-21-cm emulators for inference work.
+`nenufar-emulators` is a JAX-first codebase for training and packaging 21-cm
+emulators. The current focus is the HERA IDR4-style emulator workflow used for:
 
-The current repository scope is intentionally narrow:
+- `T21`: global 21-cm signal emulation
+- `Delta21`: 21-cm power-spectrum emulation
 
-- `Delta21`: a tiled power-spectrum emulator trained on HERA IDR4 simulations
-- `T21`: a tiled global-signal emulator trained on HERA IDR4 simulations
+The motivation for this repository is to keep the scientific emulator contract
+explicit while moving the implementation toward a cleaner JAX interface. The
+code should make it clear how simulation files become training arrays, how the
+network is defined, how training is run, and how a saved emulator package can
+be loaded later for inference.
 
-The repository is designed to stand on its own as a clear, documented training
-and inference codebase. It keeps the scientific definitions that shape the
-learning problem, but presents them through a workflow-focused JAX layout
-rather than through the structure of an earlier project.
+## Repository Layout
 
-## Design Goals
+```text
+Nenufar_Emulators/
+  pyproject.toml
+  README.md
+  docs/
+    preprocessing.md
+    network.md
+    training.md
+  src_jax/
+    nenufar_emulators/
+      data_preprocessing/
+        hera_idr4.py
+        parameters.py
+        preparation.py
+      architectures/
+        mlp.py
+      training/
+        trainer.py
+      utils/
+        checkpointing.py
+        config.py
+        metrics.py
+        scaling.py
+        specs.py
+        tiling.py
+        transforms.py
+      emulators/
+        delta21/
+          data.py
+          model.py
+          train.py
+          infer.py
+        t21/
+          data.py
+          model.py
+          train.py
+          infer.py
+  tests/
+```
 
-- keep the scientific contracts explicit
-- keep the package layout close to the real workflow
-- document scientific choices clearly
-- make training and checkpointing testable
-- avoid scaffolding that is not part of the real product
+The rough split is:
 
-## Current Workflow
+- `data_preprocessing/`: load simulation files, prepare parameters, resample
+  targets, scale arrays, and produce train/validation/test arrays.
+- `architectures/`: define reusable neural-network classes.
+- `training/`: run optimization, validation, batching, and early stopping.
+- `utils/`: shared metadata, transforms, scaling, tiling, metrics, configs, and
+  checkpoint save/load code.
+- `emulators/`: concrete `t21` and `delta21` workflows that combine the shared
+  pieces into train and inference entry points.
+- `tests/`: contract tests and end-to-end smoke tests.
 
-For both supported emulators, the workflow is:
+## Workflow Walkthrough
 
-1. load HERA IDR4 files from disk
-2. apply the workflow parameter and target transforms
-3. prepare scalar training rows for the chosen emulator
-4. train a Flax NNX MLP with Optax
-5. save a metadata-rich emulator package
+The main path through the code is:
 
-The two emulators intentionally differ in how they prepare training rows:
+```text
+simulation files
+-> data loading
+-> parameter preparation
+-> target transform and fixed-grid resampling
+-> feature and target scaling
+-> MLP training
+-> .nenemu checkpoint package
+-> inference in physical units
+```
 
-- `Delta21` uses a random interpolation workflow over `z` and `k`
-- `T21` uses a fixed shared redshift grid
+The detailed walkthroughs are split by stage:
 
-## Documentation
+- [Preprocessing](docs/preprocessing.md): how raw arrays become emulator
+  training features and targets.
+- [Network](docs/network.md): how the MLP is defined and called.
+- [Training](docs/training.md): how batches, optimization, checkpoint metadata,
+  and inference reconstruction fit together.
 
-- [docs/architecture.md](docs/architecture.md): package structure and design intent
-- [docs/workflows.md](docs/workflows.md): end-to-end `Delta21` and `T21` workflows
-- [docs/migration_plan.md](docs/migration_plan.md): historical migration notes and parity goals
-- [docs/foundation_usage.md](docs/foundation_usage.md): setup and verification notes
+## Installation
 
-## Status
+From the repository root:
 
-The repository now has:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+```
 
-- HERA IDR4 data loading for `Delta21` and `T21`
-- explicit parameter preparation
-- JAX/Flax training paths for both emulators
-- checkpoint package save/load support
-- test coverage for preparation, training, and checkpoint contracts
+Run the tests:
 
-Inference and production checkpoint-driven prediction APIs still need more
-work before this should be treated as a finished scientific production
-package.
+```bash
+python -m pytest -q
+```
+
+## Command-Line Entry Points
+
+The package exposes four development commands:
+
+```bash
+nenufar-t21-train
+nenufar-t21-infer
+nenufar-delta21-train
+nenufar-delta21-infer
+```
+
+Each training command can print its default spec/config, run a synthetic smoke
+test, or train from a HERA IDR4 dataset root. Each inference command can inspect
+a saved `.nenemu` package or generate predictions from a package plus input
+parameter and axis files.
+
+## Saved Emulator Packages
+
+Training writes a `.nenemu` package. It stores:
+
+- model architecture settings
+- trained model state
+- training and validation losses
+- emulator spec
+- feature scaling metadata
+- target scaling metadata
+- training configuration
+
+This metadata is what lets inference rebuild the model inputs, undo target
+standardization, undo physical target transforms, and return predictions in
+physical units.

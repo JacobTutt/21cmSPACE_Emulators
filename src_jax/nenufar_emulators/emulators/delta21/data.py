@@ -10,12 +10,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from nenufar_emulators.core.datasets import NormalisationPipeline, SpectrumDataset
-from nenufar_emulators.core.normalisation import SpecTransformPipeline
-from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.data.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
-from nenufar_emulators.conventions import PreparedFeatures, prepare_feature_matrix
-from nenufar_emulators.data.preparation import PreparedSplit, prepare_fixed_grid_training_split
+from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from nenufar_emulators.data_preprocessing.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
+from nenufar_emulators.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
+from nenufar_emulators.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
 
 HERA_IDR4_COLUMNS = (
     "fstarII",
@@ -121,44 +119,4 @@ def prepare_hera_idr4_delta21_training_split(
         random_state=random_state,
         shuffle_seed=shuffle_seed,
         standardize_target=True,
-    )
-def build_delta21_dataset(
-    spectra: np.ndarray,
-    axes: tuple[np.ndarray, ...],
-    parameters: PreparedFeatures | np.ndarray,
-    *,
-    spec: EmulatorSpec | None = None,
-    parameter_names: tuple[str, ...] | None = None,
-    forward_pipeline: NormalisationPipeline | list[NormalisationPipeline] | None = None,
-    tiling: bool = True,
-) -> SpectrumDataset:
-    """Build a power-spectrum dataset using the declared workflow contract.
-
-    The dataset always includes a :class:`SpecTransformPipeline` so axis and
-    target transforms follow the declared emulator spec. Parameter transforms
-    are also applied if raw parameter names are supplied rather than a
-    pre-transformed :class:`PreparedFeatures` object.
-    """
-    emulator_spec = delta21_spec() if spec is None else spec
-    if isinstance(parameters, PreparedFeatures):
-        parameter_values = parameters.values
-        parameter_names = parameters.feature_names
-    else:
-        if parameter_names is None:
-            parameter_names = emulator_spec.parameter_names()
-        parameter_values = np.asarray(parameters, dtype=float)
-
-    pipelines: list[NormalisationPipeline] = [SpecTransformPipeline(emulator_spec)]
-    if forward_pipeline is not None:
-        pipelines.extend(
-            forward_pipeline if isinstance(forward_pipeline, list) else [forward_pipeline]
-        )
-    return SpectrumDataset(
-        spectra=np.asarray(spectra, dtype=float),
-        axes=tuple(np.asarray(axis, dtype=float) for axis in axes),
-        parameters=np.asarray(parameter_values, dtype=float),
-        axis_names=emulator_spec.axis_names(),
-        parameter_names=parameter_names,
-        forward_pipeline=pipelines,
-        tiling=tiling,
     )

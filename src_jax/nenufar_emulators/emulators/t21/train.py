@@ -13,17 +13,16 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.t21.data import (
-    build_t21_dataset,
+from nenufar_emulators.data_preprocessing.preparation import prepare_fixed_grid_training_split
+from nenufar_emulators.emulators.t21.data import (
+    prepare_hera_idr4_t21_parameters,
     prepare_hera_idr4_t21_training_split,
     t21_spec,
 )
-from nenufar_emulators.t21.model import t21_config
-from nenufar_emulators.serialization import CheckpointMetadata, save
-from nenufar_emulators.trainer import (
+from nenufar_emulators.emulators.t21.model import t21_config
+from nenufar_emulators.utils.checkpointing import CheckpointMetadata, save
+from nenufar_emulators.training.trainer import (
     evaluate_mlp_regressor,
-    train_mlp_dataset,
     train_mlp_regressor,
 )
 
@@ -43,8 +42,8 @@ def run_synthetic_smoke(
     config = t21_config()
     rng = np.random.default_rng(1)
     nsamples = 24
-    z = np.linspace(6.0, 20.0, 20)
-    parameters = np.column_stack(
+    z = np.linspace(6.0, 27.0, 30)
+    raw_parameters = np.column_stack(
         [
             10 ** rng.uniform(-3.0, -1.0, size=nsamples),  # fstarII
             10 ** rng.uniform(-4.0, -2.0, size=nsamples),  # fstarIII
@@ -52,9 +51,12 @@ def run_synthetic_smoke(
             10 ** rng.uniform(1.0, 3.0, size=nsamples),  # fX
             rng.choice(np.array([1.0, 1.3, 1.5]), size=nsamples),  # alpha
             rng.choice(np.array([*range(100, 1600, 100), 2000, 3000], dtype=float), size=nsamples),  # nu_0
+            rng.uniform(10.0, 60.0, size=nsamples),  # zeta, discarded
             rng.uniform(0.03, 0.09, size=nsamples),  # tau
             10 ** rng.uniform(1.0, 4.0, size=nsamples),  # fradio
             rng.choice(np.array([231.0, 232.0, 233.0]), size=nsamples),  # pop
+            np.zeros(nsamples),  # feed, discarded
+            np.zeros(nsamples),  # delay, discarded
         ]
     )
 
@@ -65,42 +67,38 @@ def run_synthetic_smoke(
         # non-axis inputs as well.
         targets[idx] = (
             np.sin(z / 4.0)
-            + 0.05 * np.log10(parameters[idx, 0])
-            + 0.03 * parameters[idx, 6]
+            + 0.05 * np.log10(raw_parameters[idx, 0])
+            + 0.03 * raw_parameters[idx, 7]
         )
 
-    split = int(0.8 * nsamples)
-    base_train_dataset = build_t21_dataset(
-        targets[:split],
-        (z,),
-        parameters[:split],
-        spec=spec,
-        tiling=False,
+    prepared = prepare_fixed_grid_training_split(
+        axes=(z,),
+        axis_specs=spec.axes,
+        parameters=prepare_hera_idr4_t21_parameters(raw_parameters),
+        target=targets,
+        feature_scale_methods={
+            "z": "zscore",
+            "log10fstarII": "zscore",
+            "log10fstarIII": "zscore",
+            "log10Vc": "zscore",
+            "log10fX": "zscore",
+            "alpha": "minmax_zero_to_one",
+            "nu_0": "minmax_zero_to_one",
+            "tau": "zscore",
+            "log10fradio": "zscore",
+            "pop": "minmax_zero_to_one",
+        },
+        data_log=False,
+        offset=None,
+        random_state=1,
+        shuffle_seed=1,
+        standardize_target=True,
     )
-    standardization = StandardizationPipeline.from_batch(
-        base_train_dataset.as_batch(),
-        standardize_axes=True,
-        standardize_parameters=True,
-    )
-    train_dataset = build_t21_dataset(
-        targets[:split],
-        (z,),
-        parameters[:split],
-        spec=spec,
-        forward_pipeline=[standardization],
-        tiling=True,
-    )
-    validation_dataset = build_t21_dataset(
-        targets[split:],
-        (z,),
-        parameters[split:],
-        spec=spec,
-        forward_pipeline=[standardization],
-        tiling=True,
-    )
-    _, history = train_mlp_dataset(
-        train_dataset,
-        validation_dataset,
+    _, history = train_mlp_regressor(
+        jnp.asarray(prepared.train_features),
+        jnp.asarray(prepared.train_targets),
+        jnp.asarray(prepared.validation_features),
+        jnp.asarray(prepared.validation_targets),
         hidden_features=config.mlp.hidden_dim,
         hidden_layers=config.mlp.total_hidden_layers,
         activation=config.mlp.activation,

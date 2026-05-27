@@ -6,13 +6,12 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from nenufar_emulators.serialization import CheckpointMetadata, load, save
-from nenufar_emulators.core.normalisation import StandardizationPipeline
-from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
-from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.core.transforms import apply_transform, invert_transform
-from nenufar_emulators.models import forward_mlp, init_mlp
-from nenufar_emulators.t21.data import build_t21_dataset, t21_spec
+from nenufar_emulators.utils.checkpointing import CheckpointMetadata, load, save
+from nenufar_emulators.utils.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
+from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from nenufar_emulators.utils.transforms import apply_transform, invert_transform
+from nenufar_emulators.architectures.mlp import init_mlp
+from nenufar_emulators.emulators.t21.data import t21_spec
 
 
 def test_transform_round_trip_log10() -> None:
@@ -74,19 +73,6 @@ def test_checkpoint_metadata_to_dict() -> None:
 
 def test_checkpoint_package_round_trip(tmp_path) -> None:
     spec = t21_spec()
-    parameters = np.column_stack(
-        [
-            np.array([1e-2, 1e-1]),
-            np.array([1e-3, 1e-2]),
-            np.array([10.0, 20.0]),
-            np.array([100.0, 1000.0]),
-            np.array([1.0, 1.3]),
-            np.array([100.0, 200.0]),
-            np.array([0.05, 0.06]),
-            np.array([1e2, 1e3]),
-            np.array([231.0, 233.0]),
-        ]
-    )
     spectra = np.array(
         [
             np.linspace(-1.0, 1.0, 5),
@@ -94,33 +80,13 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
         ]
     )
     z = np.linspace(6.0, 10.0, 5)
-    base_dataset = build_t21_dataset(
-        spectra,
-        (z,),
-        parameters,
-        spec=spec,
-        tiling=False,
-    )
-    standardization = StandardizationPipeline.from_batch(
-        base_dataset.as_batch(),
-        standardize_axes=True,
-        standardize_parameters=True,
-    )
-    train_dataset = build_t21_dataset(
-        spectra,
-        (z,),
-        parameters,
-        spec=spec,
-        forward_pipeline=[standardization],
-        tiling=True,
-    )
     metadata = CheckpointMetadata(
         model_name="t21-test",
         package_version="0.1.0",
         emulator_spec=spec,
         input_scaling=(
             FeatureScaling.from_values("z", z, "identity"),
-            FeatureScaling.from_values("log10fstarII", np.log10(parameters[:, 0]), "zscore"),
+            FeatureScaling.from_values("log10fstarII", np.array([-2.0, -1.0]), "zscore"),
         ),
         target_scaling=TargetScalingSurface.from_targets(
             axis_names=("z",),
@@ -142,15 +108,13 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
         ],
         dtype=jnp.float32,
     )
-    expected = forward_mlp(model, features)
+    expected = model(features)
     package_path = save(
         tmp_path / "demo_model",
         model,
         train_losses=[1.0, 0.5],
         val_losses=[1.2, 0.6],
         loss="mse",
-        train_dataset=train_dataset,
-        val_dataset=train_dataset,
         metadata=metadata,
         epochs=2,
         patience=1,
@@ -158,14 +122,10 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
         weight_decay=1e-4,
     )
     loaded = load(package_path)
-    recovered = forward_mlp(loaded["model"], features)
+    recovered = loaded["model"](features)
 
     assert package_path.name.endswith(".nenemu")
     assert np.allclose(np.asarray(recovered), np.asarray(expected))
     assert loaded["metadata"].model_name == "t21-test"
     assert loaded["hyperparams"]["hidden_features"] == 8
-    assert loaded["train_dataset"].tiling is True
-    assert loaded["train_dataset"].parameter_names[0] == "fstarII"
-    assert loaded["train_dataset"].as_batch().parameter_names[0] == "log10fstarII"
-    assert len(loaded["train_pipeline"]) == 2
     assert loaded["metadata"].target_scaling is not None

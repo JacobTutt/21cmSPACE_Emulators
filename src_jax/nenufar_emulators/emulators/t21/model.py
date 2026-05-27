@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nenufar_emulators.conventions import MLPConfig, OptimizerConfig, TrainingConfig
+from nenufar_emulators.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
 
 
 @dataclass(frozen=True)

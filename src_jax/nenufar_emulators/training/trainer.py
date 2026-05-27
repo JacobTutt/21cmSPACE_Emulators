@@ -1,13 +1,4 @@
-"""Shared JAX training utilities for emulator fitting.
-
-The repository supports two equivalent entry styles:
-
-- prepared feature/target arrays
-- dataset objects that yield tiled batches
-
-Both routes are implemented here so batching and optimization logic stay in
-one place.
-"""
+"""Shared JAX training utilities for prepared emulator arrays."""
 
 from __future__ import annotations
 
@@ -20,9 +11,8 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from nenufar_emulators.core.datasets import SpectrumDataset, TiledBatch
-from nenufar_emulators.core.metrics import mse
-from nenufar_emulators.models import ActivationName, DenseMLP, init_mlp
+from nenufar_emulators.utils.metrics import mse
+from nenufar_emulators.architectures.mlp import ActivationName, DenseMLP, init_mlp
 
 
 @dataclass(frozen=True)
@@ -61,12 +51,7 @@ def _iter_array_batches(
     shuffle: bool,
     key: jax.Array | None = None,
 ) -> Iterator[tuple[jnp.ndarray, jnp.ndarray]]:
-    """Yield mini-batches from already-prepared in-memory arrays.
-
-    This helper stays private because array batching is only an implementation
-    detail of the array-based trainer. The public batching contract for the
-    broader codebase lives on :class:`SpectrumDataset`.
-    """
+    """Yield mini-batches from already-prepared in-memory arrays."""
     if len(features) != len(targets):
         raise ValueError("features and targets must have the same length.")
     indices = jnp.arange(len(features))
@@ -292,150 +277,3 @@ def evaluate_mlp_regressor(
         total_batches += 1
     return total_loss / max(total_batches, 1)
 
-
-def train_mlp_dataset(
-    train_dataset: SpectrumDataset,
-    validation_dataset: SpectrumDataset,
-    *,
-    hidden_features: int = 64,
-    hidden_layers: int = 2,
-    activation: ActivationName = "relu",
-    learning_rate: float = 1e-3,
-    weight_decay: float = 1e-4,
-    batch_size: int = 256,
-    epochs: int = 50,
-    seed: int = 0,
-    early_stopping_patience: int | None = None,
-    early_stopping_min_delta: float = 0.0,
-    log_every: int | None = 1,
-    log_prefix: str = "train_mlp_dataset",
-) -> tuple[DenseMLP, TrainingHistory]:
-    """Train the shared MLP directly from dataset objects.
-
-    This is the preferred training entrypoint once data has been wrapped in the
-    new loader architecture. The datasets are responsible for preprocessing,
-    batching, and tiling, while this function only handles optimization.
-
-    Both datasets must be created with ``tiling=True`` so their batch iterators
-    yield :class:`~nenufar_emulators.core.datasets.TiledBatch` objects.
-    """
-    if not train_dataset.tiling or not validation_dataset.tiling:
-        raise ValueError("train_mlp_dataset expects train and validation datasets with tiling=True.")
-
-    example_batch = next(train_dataset.get_batch_iterator(batch_size=1, shuffle=False))
-    if not isinstance(example_batch, TiledBatch):
-        raise ValueError("Expected tiled batches from the training dataset.")
-
-    key = jax.random.PRNGKey(seed)
-    model = init_mlp(
-        key=key,
-        in_features=int(example_batch.features.shape[1]),
-        hidden_features=hidden_features,
-        hidden_layers=hidden_layers,
-        activation=activation,
-    )
-    optimizer = nnx.Optimizer(
-        model,
-        optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay),
-        wrt=nnx.Param,
-    )
-
-    @nnx.jit
-    def train_step(
-        model_instance: DenseMLP,
-        optimizer_instance: nnx.Optimizer,
-        batch_features: jnp.ndarray,
-        batch_targets: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Run one optimizer step on one already-tiled mini-batch."""
-
-        def loss_fn(current_model: DenseMLP) -> jnp.ndarray:
-            preds = current_model(batch_features).squeeze(-1)
-            return mse(preds, batch_targets)
-
-        loss, grads = nnx.value_and_grad(loss_fn)(model_instance)
-        optimizer_instance.update(model_instance, grads)
-        return loss
-
-    @nnx.jit
-    def eval_step(
-        model_instance: DenseMLP,
-        batch_features: jnp.ndarray,
-        batch_targets: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Evaluate loss on a tiled mini-batch without updating the model."""
-        preds = model_instance(batch_features).squeeze(-1)
-        return mse(preds, batch_targets)
-
-    train_losses: list[float] = []
-    validation_losses: list[float] = []
-    best_validation_loss = float("inf")
-    best_epoch: int | None = None
-    best_state: nnx.State | None = None
-    epochs_without_improvement = 0
-
-    for epoch in range(epochs):
-        epoch_start = perf_counter()
-        key, train_key = jax.random.split(key)
-        train_loss = 0.0
-        train_batches = 0
-        for batch in train_dataset.get_batch_iterator(
-            batch_size,
-            shuffle=True,
-            key=train_key,
-        ):
-            if not isinstance(batch, TiledBatch):
-                raise ValueError("Training dataset yielded an untiled batch unexpectedly.")
-            loss = train_step(model, optimizer, batch.features, batch.targets)
-            train_loss += float(loss)
-            train_batches += 1
-        train_loss /= max(train_batches, 1)
-
-        validation_loss = 0.0
-        validation_batches = 0
-        for batch in validation_dataset.get_batch_iterator(batch_size, shuffle=False):
-            if not isinstance(batch, TiledBatch):
-                raise ValueError("Validation dataset yielded an untiled batch unexpectedly.")
-            validation_loss += float(eval_step(model, batch.features, batch.targets))
-            validation_batches += 1
-        validation_loss /= max(validation_batches, 1)
-
-        train_losses.append(train_loss)
-        validation_losses.append(validation_loss)
-
-        if validation_loss < best_validation_loss - early_stopping_min_delta:
-            best_validation_loss = validation_loss
-            best_epoch = epoch
-            best_state = clone_model_state(model)
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-
-        if log_every is not None and ((epoch + 1) % log_every == 0):
-            message = (
-                f"[{log_prefix}] epoch={epoch + 1}/{epochs} "
-                f"train_loss={train_loss:.6e} val_loss={validation_loss:.6e}"
-            )
-            if best_epoch is not None and best_validation_loss < float("inf"):
-                message += (
-                    f" best_epoch={best_epoch + 1} "
-                    f"best_val_loss={best_validation_loss:.6e}"
-                )
-            message += f" epoch_seconds={perf_counter() - epoch_start:.2f}"
-            print(message, flush=True)
-
-        if (
-            early_stopping_patience is not None
-            and epochs_without_improvement >= early_stopping_patience
-        ):
-            break
-
-    if best_state is not None:
-        nnx.update(model, best_state)
-
-    return model, TrainingHistory(
-        train_losses=train_losses,
-        validation_losses=validation_losses,
-        best_epoch=best_epoch,
-        best_validation_loss=None if best_epoch is None else best_validation_loss,
-    )

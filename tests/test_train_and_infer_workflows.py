@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from nenufar_emulators.delta21.infer import predict_delta21
-from nenufar_emulators.delta21.train import train_delta21_from_dataset_root
-from nenufar_emulators.t21.infer import predict_t21
-from nenufar_emulators.t21.train import train_t21_from_dataset_root
+from nenufar_emulators.emulators.delta21.infer import predict_delta21
+from nenufar_emulators.emulators.delta21.train import train_delta21_from_dataset_root
+from nenufar_emulators.emulators.t21.infer import predict_t21
+from nenufar_emulators.emulators.t21.train import train_t21_from_dataset_root
 
 
 def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:

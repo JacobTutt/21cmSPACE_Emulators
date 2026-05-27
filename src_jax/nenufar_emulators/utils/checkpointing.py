@@ -2,15 +2,14 @@
 
 This module turns a trained model and its supporting metadata into one
 reusable ``.nenemu`` file. A saved package includes the network parameters,
-training history, preprocessing pipelines, and optional dataset snapshots that
-make the model reproducible on another machine.
+training history, and metadata needed to prepare inference inputs in the same
+way as training inputs.
 """
 
 from __future__ import annotations
 
 import io
 import json
-import pickle
 import zipfile
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -22,10 +21,9 @@ import jax.numpy as jnp
 import numpy as np
 from flax import nnx
 
-from nenufar_emulators.core.datasets import SpectrumDataset
-from nenufar_emulators.models import DenseMLP, init_mlp
-from nenufar_emulators.core.scaling import FeatureScaling, TargetScalingSurface
-from nenufar_emulators.core.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from nenufar_emulators.architectures.mlp import DenseMLP, init_mlp
+from nenufar_emulators.utils.scaling import FeatureScaling, TargetScalingSurface
+from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
 
 def _package_version() -> str:
@@ -175,61 +173,6 @@ class CheckpointMetadata:
         )
 
 
-def _dataset_config(dataset: SpectrumDataset) -> dict[str, Any]:
-    """Return the non-array configuration needed to rebuild a dataset split."""
-    return {
-        "axis_names": list(dataset.axis_names),
-        "parameter_names": list(dataset.parameter_names),
-        "tiling": dataset.tiling,
-    }
-
-
-def _write_dataset_arrays(npz_payload: dict[str, np.ndarray], split: str, dataset: SpectrumDataset) -> None:
-    """Append one dataset split's arrays to an ``np.savez`` payload dict."""
-    npz_payload[f"{split}/spectra"] = np.asarray(dataset.spectra)
-    npz_payload[f"{split}/parameters"] = np.asarray(dataset.parameters)
-    for idx, axis in enumerate(dataset.axes):
-        npz_payload[f"{split}/axis_{idx}"] = np.asarray(axis)
-
-
-def _reconstruct_dataset(
-    split: str,
-    config: dict[str, Any],
-    arrays: dict[str, np.ndarray] | None,
-    pipelines: dict[str, Any],
-) -> SpectrumDataset | dict[str, Any]:
-    """Rebuild a dataset split from stored arrays if they are present."""
-    split_key = f"{split}_dataset"
-    if split_key not in config:
-        raise KeyError(f"Missing dataset config for split {split!r}.")
-    dataset_config = config[split_key]
-    if arrays is None:
-        return dataset_config
-
-    prefix = f"{split}/"
-    required = [f"{prefix}spectra", f"{prefix}parameters"]
-    if not all(key in arrays for key in required):
-        return dataset_config
-
-    axis_arrays = []
-    axis_index = 0
-    while f"{prefix}axis_{axis_index}" in arrays:
-        axis_arrays.append(arrays[f"{prefix}axis_{axis_index}"])
-        axis_index += 1
-    if len(axis_arrays) != len(dataset_config["axis_names"]):
-        return dataset_config
-
-    return SpectrumDataset(
-        spectra=arrays[f"{prefix}spectra"],
-        axes=tuple(axis_arrays),
-        parameters=arrays[f"{prefix}parameters"],
-        axis_names=tuple(dataset_config["axis_names"]),
-        parameter_names=tuple(dataset_config["parameter_names"]),
-        forward_pipeline=pipelines.get(split) or None,
-        tiling=dataset_config["tiling"],
-    )
-
-
 def save(
     path: str | Path,
     model: DenseMLP,
@@ -237,9 +180,6 @@ def save(
     val_losses: list[float],
     loss: str,
     *,
-    train_dataset: SpectrumDataset | None = None,
-    val_dataset: SpectrumDataset | None = None,
-    test_dataset: SpectrumDataset | None = None,
     metadata: CheckpointMetadata | None = None,
     epochs: int = 1000,
     patience: int | None = None,
@@ -248,12 +188,8 @@ def save(
 ) -> Path:
     """Save a trained emulator to a ``.nenemu`` package.
 
-    - ``config.json`` for hyperparameters, history, and dataset configs
+    - ``config.json`` for hyperparameters, history, and metadata
     - ``params.npz`` for neural-network parameters
-    - ``pipeline.pkl`` for preprocessing pipeline objects
-
-    In addition, this repository stores ``datasets.npz`` when dataset objects
-    are provided, because our current datasets are array-backed.
     """
     package_path = Path(path)
     if package_path.suffix != ".nenemu":
@@ -280,25 +216,7 @@ def save(
     if metadata is not None:
         config["metadata"] = metadata.to_dict()
 
-    datasets = {
-        "train": train_dataset,
-        "val": val_dataset,
-        "test": test_dataset,
-    }
-    pipelines = {
-        split: None if dataset is None else dataset.forward_pipeline
-        for split, dataset in datasets.items()
-    }
-    for split, dataset in datasets.items():
-        if dataset is not None:
-            config[f"{split}_dataset"] = _dataset_config(dataset)
-
     flat_params = _flatten_state(nnx.state(model))
-
-    dataset_arrays: dict[str, np.ndarray] = {}
-    for split, dataset in datasets.items():
-        if dataset is not None:
-            _write_dataset_arrays(dataset_arrays, split, dataset)
 
     with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("config.json", json.dumps(config, indent=2))
@@ -307,21 +225,14 @@ def save(
         np.savez(params_buffer, **flat_params)
         zf.writestr("params.npz", params_buffer.getvalue())
 
-        zf.writestr("pipeline.pkl", pickle.dumps(pipelines))
-
-        if dataset_arrays:
-            dataset_buffer = io.BytesIO()
-            np.savez(dataset_buffer, **dataset_arrays)
-            zf.writestr("datasets.npz", dataset_buffer.getvalue())
-
     return package_path
 
 
 def load(path: str | Path) -> dict[str, Any]:
     """Load a trained emulator from a ``.nenemu`` package.
 
-    The returned dictionary includes a live NNX model object together with the
-    stored metadata, preprocessing pipeline, and any packaged dataset splits.
+    The returned dictionary includes a live NNX model object and the stored
+    metadata needed for inference.
     """
     package_path = Path(path)
     with zipfile.ZipFile(package_path, "r") as zf:
@@ -344,15 +255,7 @@ def load(path: str | Path) -> dict[str, Any]:
         )
         nnx.update(model, state)
 
-        pipelines = pickle.loads(zf.read("pipeline.pkl"))
-
-        dataset_arrays: dict[str, np.ndarray] | None = None
-        if "datasets.npz" in zf.namelist():
-            dataset_buffer = io.BytesIO(zf.read("datasets.npz"))
-            datasets_np = np.load(dataset_buffer)
-            dataset_arrays = {key: datasets_np[key] for key in datasets_np.files}
-
-        result: dict[str, Any] = {
+        return {
             "model": model,
             "params": nnx.state(model),
             "hyperparams": hyperparams,
@@ -365,15 +268,4 @@ def load(path: str | Path) -> dict[str, Any]:
                 if "metadata" not in config
                 else CheckpointMetadata.from_dict(config["metadata"])
             ),
-            "train_pipeline": pipelines["train"],
-            "val_pipeline": pipelines["val"],
-            "test_pipeline": pipelines["test"],
         }
-
-        for split in ("train", "val", "test"):
-            key = f"{split}_dataset"
-            if key not in config:
-                continue
-            result[key] = _reconstruct_dataset(split, config, dataset_arrays, pipelines)
-
-        return result

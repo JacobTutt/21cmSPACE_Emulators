@@ -1,23 +1,23 @@
-"""JAX-native emulators for HERA IDR4 Delta21 and T21 workflows."""
+"""Small reusable helpers shared across emulator workflows."""
 
 from nenufar_emulators.utils.checkpointing import CheckpointMetadata, load, save
-from nenufar_emulators.architectures.mlp import DenseMLP, init_mlp
 from nenufar_emulators.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
+from nenufar_emulators.utils.scaling import FeatureScaler, FeatureScaling
 from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.training.trainer import TrainingHistory, train_mlp_regressor
+from nenufar_emulators.utils.tiling import reconstruct_spectra, tile_spectra
 
 __all__ = [
     "AxisSpec",
     "CheckpointMetadata",
-    "DenseMLP",
     "EmulatorSpec",
+    "FeatureScaler",
+    "FeatureScaling",
     "MLPConfig",
     "OptimizerConfig",
     "ParameterSpec",
     "TrainingConfig",
-    "TrainingHistory",
-    "init_mlp",
     "load",
+    "reconstruct_spectra",
     "save",
-    "train_mlp_regressor",
+    "tile_spectra",
 ]

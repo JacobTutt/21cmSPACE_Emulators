@@ -22,10 +22,10 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from nenufar_emulators.conventions import PreparedFeatures
-from nenufar_emulators.core.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
-from nenufar_emulators.core.specs import AxisSpec
-from nenufar_emulators.core.transforms import apply_transform
+from nenufar_emulators.data_preprocessing.parameters import PreparedFeatures
+from nenufar_emulators.utils.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
+from nenufar_emulators.utils.specs import AxisSpec
+from nenufar_emulators.utils.transforms import apply_transform
 
 
 @dataclass(frozen=True)

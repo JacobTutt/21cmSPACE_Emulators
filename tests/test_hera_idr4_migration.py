@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 
-from nenufar_emulators.delta21.data import prepare_hera_idr4_delta21_training_split
-from nenufar_emulators.t21.data import prepare_hera_idr4_t21_training_split
+from nenufar_emulators.emulators.delta21.data import prepare_hera_idr4_delta21_training_split
+from nenufar_emulators.emulators.t21.data import prepare_hera_idr4_t21_training_split
 
 
 def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:

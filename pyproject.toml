@@ -22,10 +22,10 @@ dev = [
 ]
 
 [project.scripts]
-nenufar-delta21-train = "nenufar_emulators.delta21.train:main"
-nenufar-delta21-infer = "nenufar_emulators.delta21.infer:main"
-nenufar-t21-train = "nenufar_emulators.t21.train:main"
-nenufar-t21-infer = "nenufar_emulators.t21.infer:main"
+nenufar-delta21-train = "nenufar_emulators.emulators.delta21.train:main"
+nenufar-delta21-infer = "nenufar_emulators.emulators.delta21.infer:main"
+nenufar-t21-train = "nenufar_emulators.emulators.t21.train:main"
+nenufar-t21-infer = "nenufar_emulators.emulators.t21.infer:main"
 
 [tool.setuptools]
 package-dir = {"" = "src_jax"}

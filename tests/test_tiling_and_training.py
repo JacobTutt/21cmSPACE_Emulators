@@ -5,11 +5,10 @@ from __future__ import annotations
 import numpy as np
 import jax.numpy as jnp
 
-from nenufar_emulators.models import forward_mlp
-from nenufar_emulators.core.tiling import reconstruct_spectra, tile_spectra
-from nenufar_emulators.delta21.data import delta21_spec
-from nenufar_emulators.t21.data import t21_spec
-from nenufar_emulators.trainer import train_mlp_regressor
+from nenufar_emulators.utils.tiling import reconstruct_spectra, tile_spectra
+from nenufar_emulators.emulators.delta21.data import delta21_spec
+from nenufar_emulators.emulators.t21.data import t21_spec
+from nenufar_emulators.training.trainer import train_mlp_regressor
 
 
 def test_tile_and_reconstruct_shapes() -> None:
@@ -45,7 +44,7 @@ def test_synthetic_training_smoke() -> None:
         weight_decay=0.0,
         seed=0,
     )
-    preds = forward_mlp(model, jnp.asarray(validation_features)).squeeze(-1)
+    preds = model(jnp.asarray(validation_features)).squeeze(-1)
     mse = jnp.mean(jnp.square(preds - validation_targets))
     assert history.train_losses[-1] < history.train_losses[0]
     assert float(mse) < 0.1

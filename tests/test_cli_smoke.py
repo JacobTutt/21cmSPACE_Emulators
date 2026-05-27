@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from nenufar_emulators.delta21.train import run_synthetic_smoke as run_delta21_smoke
-from nenufar_emulators.t21.train import run_synthetic_smoke as run_t21_smoke
+from nenufar_emulators.emulators.delta21.train import run_synthetic_smoke as run_delta21_smoke
+from nenufar_emulators.emulators.t21.train import run_synthetic_smoke as run_t21_smoke
 
 
 def test_delta21_smoke_helper_runs() -> None:

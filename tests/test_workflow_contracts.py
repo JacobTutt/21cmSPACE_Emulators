@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from nenufar_emulators.delta21.data import delta21_spec, prepare_hera_idr4_delta21_parameters
-from nenufar_emulators.delta21.model import delta21_config
-from nenufar_emulators.t21.data import prepare_hera_idr4_t21_parameters, t21_spec
-from nenufar_emulators.t21.model import t21_config
+from nenufar_emulators.emulators.delta21.data import delta21_spec, prepare_hera_idr4_delta21_parameters
+from nenufar_emulators.emulators.delta21.model import delta21_config
+from nenufar_emulators.emulators.t21.data import prepare_hera_idr4_t21_parameters, t21_spec
+from nenufar_emulators.emulators.t21.model import t21_config
 
 
 def test_delta21_spec_matches_expected_feature_contract() -> None:

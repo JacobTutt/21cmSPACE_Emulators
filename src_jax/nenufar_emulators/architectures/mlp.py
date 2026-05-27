@@ -145,21 +145,3 @@ def init_mlp(
         rngs=nnx.Rngs(key),
     )
 
-
-def forward_mlp(
-    model: DenseMLP,
-    inputs: jnp.ndarray,
-    activation: ActivationName | None = None,
-) -> jnp.ndarray:
-    """Run a dense MLP forward pass using the provided NNX model.
-
-    The extra ``activation`` argument is only a guard for call sites that still
-    think in terms of a functional API. The model object itself is the real
-    source of truth for the network configuration.
-    """
-    if activation is not None and activation != model.activation:
-        raise ValueError(
-            "Requested activation does not match the instantiated model. "
-            f"Expected {model.activation!r}, received {activation!r}."
-        )
-    return model(inputs)

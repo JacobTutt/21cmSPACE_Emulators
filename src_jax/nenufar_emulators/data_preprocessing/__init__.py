@@ -1,6 +1,6 @@
-"""Data loading and row preparation for supported emulators."""
+"""Data loading and preprocessing for supported emulator workflows."""
 
-from nenufar_emulators.data.hera_idr4 import (
+from nenufar_emulators.data_preprocessing.hera_idr4 import (
     HERA_IDR4_COLUMNS,
     HERA_LITTLE_H,
     HeraIdr4Axes,
@@ -10,7 +10,11 @@ from nenufar_emulators.data.hera_idr4 import (
     load_hera_idr4_t21,
     nan_simulation_indices,
 )
-from nenufar_emulators.data.preparation import (
+from nenufar_emulators.data_preprocessing.parameters import (
+    PreparedFeatures,
+    prepare_feature_matrix,
+)
+from nenufar_emulators.data_preprocessing.preparation import (
     PreparedSplit,
     axis_combinations,
     build_feature_scaler,
@@ -29,6 +33,7 @@ __all__ = [
     "HERA_LITTLE_H",
     "HeraIdr4Axes",
     "HeraIdr4Product",
+    "PreparedFeatures",
     "PreparedSplit",
     "axis_combinations",
     "build_feature_scaler",
@@ -38,6 +43,7 @@ __all__ = [
     "load_hera_idr4_delta21",
     "load_hera_idr4_t21",
     "nan_simulation_indices",
+    "prepare_feature_matrix",
     "prepare_fixed_grid_training_split",
     "resample_targets_to_grid",
     "shuffle_rows",
