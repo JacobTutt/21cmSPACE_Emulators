@@ -7,15 +7,15 @@ from pathlib import Path
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from nenufar_emulators.emulators.delta21.infer import predict_delta21
-from nenufar_emulators.emulators.delta21.train import train_delta21_from_dataset_root
-from nenufar_emulators.emulators.t21.infer import predict_t21
-from nenufar_emulators.emulators.t21.train import train_t21_from_dataset_root
+from twentyonecmspace_emulators.emulators.delta21.infer import predict_delta21
+from twentyonecmspace_emulators.emulators.delta21.train import train_delta21_from_dataset_root
+from twentyonecmspace_emulators.emulators.t21.infer import predict_t21
+from twentyonecmspace_emulators.emulators.t21.train import train_t21_from_dataset_root
 
 
-def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:
-    """Write a compact HERA-like dataset for training and inference tests."""
-    root = tmp_path / "HERA_IDR4_Emulator_Data"
+def write_mock_twentyonecmspace_dataset(tmp_path: Path) -> Path:
+    """Write a compact 21cmSPACE-like dataset for training and inference tests."""
+    root = tmp_path / "21cmSPACE_Emulator_Data"
     root.mkdir()
 
     z = np.array([[6.0, 10.0, 20.0, 30.0]])
@@ -40,17 +40,17 @@ def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:
         delta21[idx] = base + (zz - 5.0) * (kk + 0.5)
         t21[idx] = -100.0 + base * 10.0 + 0.5 * z.ravel()
 
-    savemat(root / "hera_z_mat.mat", {"z21cm": z})
-    savemat(root / "hera_k_mat.mat", {"ks": k})
-    savemat(root / "hera_nu_mat.mat", {"nu_keV": nu_keV})
-    savemat(root / "hera_parameters_mat.mat", {"parameters": parameters})
-    savemat(root / "hera_Deltak_mat.mat", {"combined_Deltaks": delta21})
-    savemat(root / "hera_T21_mat.mat", {"combined_T21s": t21})
+    savemat(root / "21cmspace_z_mat.mat", {"z21cm": z})
+    savemat(root / "21cmspace_k_mat.mat", {"ks": k})
+    savemat(root / "21cmspace_nu_mat.mat", {"nu_keV": nu_keV})
+    savemat(root / "21cmspace_parameters_mat.mat", {"parameters": parameters})
+    savemat(root / "21cmspace_Deltak_mat.mat", {"combined_Deltaks": delta21})
+    savemat(root / "21cmspace_T21_mat.mat", {"combined_T21s": t21})
     return root
 
 
 def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
-    dataset_root = write_mock_hera_idr4_dataset(tmp_path)
+    dataset_root = write_mock_twentyonecmspace_dataset(tmp_path)
     package_path = tmp_path / "delta21_model.nenemu"
 
     summary = train_delta21_from_dataset_root(
@@ -65,7 +65,7 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert package_path.with_suffix(".summary.json").exists()
     assert summary["package_path"] == str(package_path)
 
-    raw_parameters = loadmat(dataset_root / "hera_parameters_mat.mat")["parameters"][:2]
+    raw_parameters = loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2]
     z = np.array([6.0, 10.0], dtype=float)
     k = np.array([0.05 / 0.6704, 0.99 / 0.6704], dtype=float)
     predictions = predict_delta21(package_path, raw_parameters, z, k)
@@ -75,7 +75,7 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
 
 
 def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
-    dataset_root = write_mock_hera_idr4_dataset(tmp_path)
+    dataset_root = write_mock_twentyonecmspace_dataset(tmp_path)
     package_path = tmp_path / "t21_model.nenemu"
 
     summary = train_t21_from_dataset_root(
@@ -90,7 +90,7 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert package_path.with_suffix(".summary.json").exists()
     assert summary["package_path"] == str(package_path)
 
-    raw_parameters = loadmat(dataset_root / "hera_parameters_mat.mat")["parameters"][:2]
+    raw_parameters = loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2]
     z = np.array([6.0, 10.0, 20.0, 27.0], dtype=float)
     predictions = predict_t21(package_path, raw_parameters, z)
 

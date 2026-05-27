@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nenufar_emulators.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
+from twentyonecmspace_emulators.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class Delta21Config:
 
 
 def delta21_config() -> Delta21Config:
-    """Return the default HERA IDR4 `Delta21` architecture and trainer.
+    """Return the default 21cmSPACE `Delta21` architecture and trainer.
 
     The Delta21 workflow uses four hidden layers of width 100 with ReLU
     activations. That gives the power-spectrum model enough capacity to learn

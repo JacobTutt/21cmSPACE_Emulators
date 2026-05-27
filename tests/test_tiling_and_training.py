@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import jax.numpy as jnp
 
-from nenufar_emulators.utils.tiling import reconstruct_spectra, tile_spectra
-from nenufar_emulators.emulators.delta21.data import delta21_spec
-from nenufar_emulators.emulators.t21.data import t21_spec
-from nenufar_emulators.training.trainer import train_mlp_regressor
+from twentyonecmspace_emulators.utils.tiling import reconstruct_spectra, tile_spectra
+from twentyonecmspace_emulators.emulators.delta21.data import delta21_spec
+from twentyonecmspace_emulators.emulators.t21.data import t21_spec
+from twentyonecmspace_emulators.training.trainer import train_mlp_regressor
 
 
 def test_tile_and_reconstruct_shapes() -> None:

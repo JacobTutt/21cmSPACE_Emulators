@@ -5,23 +5,23 @@ plain arrays that can be passed to the trainer.
 
 The main modules are:
 
-- [`data_preprocessing/hera_idr4.py`](../src_jax/nenufar_emulators/data_preprocessing/hera_idr4.py)
-- [`data_preprocessing/parameters.py`](../src_jax/nenufar_emulators/data_preprocessing/parameters.py)
-- [`data_preprocessing/preparation.py`](../src_jax/nenufar_emulators/data_preprocessing/preparation.py)
-- [`emulators/t21/data.py`](../src_jax/nenufar_emulators/emulators/t21/data.py)
-- [`emulators/delta21/data.py`](../src_jax/nenufar_emulators/emulators/delta21/data.py)
+- [`data_preprocessing/twentyonecmspace.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/twentyonecmspace.py)
+- [`data_preprocessing/parameters.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/parameters.py)
+- [`data_preprocessing/preparation.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/preparation.py)
+- [`emulators/t21/data.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/data.py)
+- [`emulators/delta21/data.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/data.py)
 
 ## Input Files
 
-The HERA IDR4 loader expects a dataset directory containing files such as:
+The 21cmSPACE loader expects a dataset directory containing files such as:
 
 ```text
-hera_z_mat.mat
-hera_k_mat.mat
-hera_nu_mat.mat
-hera_parameters_mat.mat
-hera_Deltak_mat.mat
-hera_T21_mat.mat
+21cmspace_z_mat.mat
+21cmspace_k_mat.mat
+21cmspace_nu_mat.mat
+21cmspace_parameters_mat.mat
+21cmspace_Deltak_mat.mat
+21cmspace_T21_mat.mat
 ```
 
 The loader returns:
@@ -34,7 +34,7 @@ The loader returns:
 
 ## Parameter Preparation
 
-The raw HERA parameter table has 12 columns:
+The raw 21cmSPACE parameter table has 12 columns:
 
 ```text
 fstarII, fstarIII, Vc, fX, alpha, nu_0, zeta, tau, fradio, pop, feed, delay
@@ -70,8 +70,8 @@ This logic lives in `prepare_feature_matrix(...)` and is wrapped by the
 emulator-specific helpers:
 
 ```python
-prepare_hera_idr4_t21_parameters(raw_parameters)
-prepare_hera_idr4_delta21_parameters(raw_parameters)
+prepare_twentyonecmspace_t21_parameters(raw_parameters)
+prepare_twentyonecmspace_delta21_parameters(raw_parameters)
 ```
 
 ## Emulator Specs

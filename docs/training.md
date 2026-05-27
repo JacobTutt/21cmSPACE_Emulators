@@ -6,13 +6,13 @@ parameter rules. It receives arrays and fits an MLP.
 
 The main modules are:
 
-- [`training/trainer.py`](../src_jax/nenufar_emulators/training/trainer.py)
-- [`utils/checkpointing.py`](../src_jax/nenufar_emulators/utils/checkpointing.py)
-- [`utils/scaling.py`](../src_jax/nenufar_emulators/utils/scaling.py)
-- [`emulators/t21/train.py`](../src_jax/nenufar_emulators/emulators/t21/train.py)
-- [`emulators/delta21/train.py`](../src_jax/nenufar_emulators/emulators/delta21/train.py)
-- [`emulators/t21/infer.py`](../src_jax/nenufar_emulators/emulators/t21/infer.py)
-- [`emulators/delta21/infer.py`](../src_jax/nenufar_emulators/emulators/delta21/infer.py)
+- [`training/trainer.py`](../src_jax/twentyonecmspace_emulators/training/trainer.py)
+- [`utils/checkpointing.py`](../src_jax/twentyonecmspace_emulators/utils/checkpointing.py)
+- [`utils/scaling.py`](../src_jax/twentyonecmspace_emulators/utils/scaling.py)
+- [`emulators/t21/train.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/train.py)
+- [`emulators/delta21/train.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/train.py)
+- [`emulators/t21/infer.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/infer.py)
+- [`emulators/delta21/infer.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/infer.py)
 
 ## Trainer Input
 

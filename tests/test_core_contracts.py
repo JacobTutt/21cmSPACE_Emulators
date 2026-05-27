@@ -6,12 +6,12 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from nenufar_emulators.utils.checkpointing import CheckpointMetadata, load, save
-from nenufar_emulators.utils.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
-from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.utils.transforms import apply_transform, invert_transform
-from nenufar_emulators.architectures.mlp import init_mlp
-from nenufar_emulators.emulators.t21.data import t21_spec
+from twentyonecmspace_emulators.utils.checkpointing import CheckpointMetadata, load, save
+from twentyonecmspace_emulators.utils.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
+from twentyonecmspace_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from twentyonecmspace_emulators.utils.transforms import apply_transform, invert_transform
+from twentyonecmspace_emulators.architectures.mlp import init_mlp
+from twentyonecmspace_emulators.emulators.t21.data import t21_spec
 
 
 def test_transform_round_trip_log10() -> None:

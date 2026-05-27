@@ -21,15 +21,15 @@ import jax.numpy as jnp
 import numpy as np
 from flax import nnx
 
-from nenufar_emulators.architectures.mlp import DenseMLP, init_mlp
-from nenufar_emulators.utils.scaling import FeatureScaling, TargetScalingSurface
-from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from twentyonecmspace_emulators.architectures.mlp import DenseMLP, init_mlp
+from twentyonecmspace_emulators.utils.scaling import FeatureScaling, TargetScalingSurface
+from twentyonecmspace_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
 
 def _package_version() -> str:
     """Return the installed package version or a sensible development fallback."""
     try:
-        return version("nenufar-emulators")
+        return version("21cmspace-emulators")
     except PackageNotFoundError:
         return "0.1.0"
 

@@ -2,12 +2,12 @@
 
 The shared network is defined in:
 
-- [`architectures/mlp.py`](../src_jax/nenufar_emulators/architectures/mlp.py)
+- [`architectures/mlp.py`](../src_jax/twentyonecmspace_emulators/architectures/mlp.py)
 
 The concrete workflow defaults are defined in:
 
-- [`emulators/t21/model.py`](../src_jax/nenufar_emulators/emulators/t21/model.py)
-- [`emulators/delta21/model.py`](../src_jax/nenufar_emulators/emulators/delta21/model.py)
+- [`emulators/t21/model.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/model.py)
+- [`emulators/delta21/model.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/model.py)
 
 ## DenseMLP
 

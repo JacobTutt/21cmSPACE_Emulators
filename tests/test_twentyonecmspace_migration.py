@@ -1,4 +1,4 @@
-"""Tests for HERA IDR4 preparation paths."""
+"""Tests for 21cmSPACE preparation paths."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 
-from nenufar_emulators.emulators.delta21.data import prepare_hera_idr4_delta21_training_split
-from nenufar_emulators.emulators.t21.data import prepare_hera_idr4_t21_training_split
+from twentyonecmspace_emulators.emulators.delta21.data import prepare_twentyonecmspace_delta21_training_split
+from twentyonecmspace_emulators.emulators.t21.data import prepare_twentyonecmspace_t21_training_split
 
 
-def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
-    dataset_root = write_mock_hera_idr4_dataset(tmp_path)
-    prepared = prepare_hera_idr4_delta21_training_split(dataset_root, shuffle_seed=7)
+def test_prepare_twentyonecmspace_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
+    dataset_root = write_mock_twentyonecmspace_dataset(tmp_path)
+    prepared = prepare_twentyonecmspace_delta21_training_split(dataset_root, shuffle_seed=7)
 
     assert prepared.feature_names == (
         "z",
@@ -44,9 +44,9 @@ def test_prepare_hera_idr4_delta21_split_matches_expected_shape_rules(tmp_path: 
     assert prepared.target_scaling is not None
 
 
-def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
-    dataset_root = write_mock_hera_idr4_dataset(tmp_path)
-    prepared = prepare_hera_idr4_t21_training_split(dataset_root, shuffle_seed=11)
+def test_prepare_twentyonecmspace_t21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
+    dataset_root = write_mock_twentyonecmspace_dataset(tmp_path)
+    prepared = prepare_twentyonecmspace_t21_training_split(dataset_root, shuffle_seed=11)
 
     assert prepared.feature_names == (
         "z",
@@ -73,9 +73,9 @@ def test_prepare_hera_idr4_t21_split_matches_expected_shape_rules(tmp_path: Path
     assert prepared.target_scaling is not None
 
 
-def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:
-    """Write a small HERA-like dataset for workflow tests."""
-    root = tmp_path / "HERA_IDR4_Emulator_Data"
+def write_mock_twentyonecmspace_dataset(tmp_path: Path) -> Path:
+    """Write a small 21cmSPACE-like dataset for workflow tests."""
+    root = tmp_path / "21cmSPACE_Emulator_Data"
     root.mkdir()
 
     z = np.array([[6.0, 10.0, 20.0, 30.0]])
@@ -100,10 +100,10 @@ def write_mock_hera_idr4_dataset(tmp_path: Path) -> Path:
         delta21[idx] = base + (zz - 5.0) * (kk + 0.5)
         t21[idx] = -100.0 + base * 10.0 + 0.5 * z.ravel()
 
-    savemat(root / "hera_z_mat.mat", {"z21cm": z})
-    savemat(root / "hera_k_mat.mat", {"ks": k})
-    savemat(root / "hera_nu_mat.mat", {"nu_keV": nu_keV})
-    savemat(root / "hera_parameters_mat.mat", {"parameters": parameters})
-    savemat(root / "hera_Deltak_mat.mat", {"combined_Deltaks": delta21})
-    savemat(root / "hera_T21_mat.mat", {"combined_T21s": t21})
+    savemat(root / "21cmspace_z_mat.mat", {"z21cm": z})
+    savemat(root / "21cmspace_k_mat.mat", {"ks": k})
+    savemat(root / "21cmspace_nu_mat.mat", {"nu_keV": nu_keV})
+    savemat(root / "21cmspace_parameters_mat.mat", {"parameters": parameters})
+    savemat(root / "21cmspace_Deltak_mat.mat", {"combined_Deltaks": delta21})
+    savemat(root / "21cmspace_T21_mat.mat", {"combined_T21s": t21})
     return root

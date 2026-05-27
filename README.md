@@ -1,7 +1,7 @@
-# Nenufar Emulators
+# 21cmSPACE Emulators
 
-`nenufar-emulators` is a JAX-first codebase for training and packaging 21-cm
-emulators. The current focus is the HERA IDR4-style emulator workflow used for:
+`21cmspace-emulators` is a JAX-first codebase for training and packaging 21-cm
+emulators. The current focus is the 21cmSPACE-style emulator workflow used for:
 
 - `T21`: global 21-cm signal emulation
 - `Delta21`: 21-cm power-spectrum emulation
@@ -15,7 +15,7 @@ be loaded later for inference.
 ## Repository Layout
 
 ```text
-Nenufar_Emulators/
+21cmspace-emulators/
   pyproject.toml
   README.md
   docs/
@@ -23,9 +23,9 @@ Nenufar_Emulators/
     network.md
     training.md
   src_jax/
-    nenufar_emulators/
+    twentyonecmspace_emulators/
       data_preprocessing/
-        hera_idr4.py
+        twentyonecmspace.py
         parameters.py
         preparation.py
       architectures/
@@ -111,14 +111,14 @@ python -m pytest -q
 The package exposes four development commands:
 
 ```bash
-nenufar-t21-train
-nenufar-t21-infer
-nenufar-delta21-train
-nenufar-delta21-infer
+21cmspace-t21-train
+21cmspace-t21-infer
+21cmspace-delta21-train
+21cmspace-delta21-infer
 ```
 
 Each training command can print its default spec/config, run a synthetic smoke
-test, or train from a HERA IDR4 dataset root. Each inference command can inspect
+test, or train from a 21cmSPACE dataset root. Each inference command can inspect
 a saved `.nenemu` package or generate predictions from a package plus input
 parameter and axis files.
 

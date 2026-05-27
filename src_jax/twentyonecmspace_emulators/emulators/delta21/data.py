@@ -1,6 +1,6 @@
 """Delta21 emulator data contracts and preparation helpers.
 
-This module turns raw HERA IDR4 arrays into the scalar regression problem used
+This module turns raw 21cmSPACE arrays into the scalar regression problem used
 to train the current Delta21 emulator. It defines the input contract, the
 parameter preparation rules, and the row-building workflow in one place so the
 full training setup is easy to inspect.
@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.data_preprocessing.hera_idr4 import HERA_LITTLE_H, load_hera_idr4_delta21
-from nenufar_emulators.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
-from nenufar_emulators.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
+from twentyonecmspace_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from twentyonecmspace_emulators.data_preprocessing.twentyonecmspace import (
+    DIMENSIONLESS_HUBBLE_PARAMETER,
+    load_twentyonecmspace_delta21,
+)
+from twentyonecmspace_emulators.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
+from twentyonecmspace_emulators.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
 
-HERA_IDR4_COLUMNS = (
+TWENTYONECMSPACE_COLUMNS = (
     "fstarII",
     "fstarIII",
     "Vc",
@@ -31,7 +34,7 @@ HERA_IDR4_COLUMNS = (
 )
 
 def delta21_spec() -> EmulatorSpec:
-    """Return the baseline HERA IDR4 Delta21 emulator contract.
+    """Return the baseline 21cmSPACE Delta21 emulator contract.
 
     This uses the established `Delta21` setup: two tiled axes (`z`, `k`) plus nine
     astrophysical parameters after dropping unused columns and applying the
@@ -45,7 +48,10 @@ def delta21_spec() -> EmulatorSpec:
             AxisSpec(
                 name="k",
                 transform="log10",
-                limits=(3e-2 / HERA_LITTLE_H, 0.99 / HERA_LITTLE_H),
+                limits=(
+                    3e-2 / DIMENSIONLESS_HUBBLE_PARAMETER,
+                    0.99 / DIMENSIONLESS_HUBBLE_PARAMETER,
+                ),
                 nsample=20,
             ),
         ),
@@ -66,8 +72,8 @@ def delta21_spec() -> EmulatorSpec:
         target_transform="log10",
         target_offset=1.0,
     )
-def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA IDR4 12-parameter arrays for the `Delta21` emulator.
+def prepare_twentyonecmspace_delta21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
+    """Prepare 21cmSPACE 12-parameter arrays for the `Delta21` emulator.
 
     The raw table contains 12 columns, but the workflow uses only nine of
     them. It drops `zeta`, `feed`, and `delay`, and logs the star-formation and
@@ -76,22 +82,22 @@ def prepare_hera_idr4_delta21_parameters(raw_parameters: np.ndarray) -> Prepared
     """
     return prepare_feature_matrix(
         raw_parameters,
-        HERA_IDR4_COLUMNS,
+        TWENTYONECMSPACE_COLUMNS,
         transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
         discard_params=("zeta", "feed", "delay"),
         discrete_params=("alpha", "nu_0", "pop"),
     )
 
 
-def prepare_hera_idr4_delta21_training_split(
+def prepare_twentyonecmspace_delta21_training_split(
     dataset_root: str,
     *,
     random_state: int = 42,
     shuffle_seed: int = 42,
 ) -> PreparedSplit:
-    """Prepare HERA IDR4 `Delta21` arrays on one shared `(z, k)` grid."""
-    product = load_hera_idr4_delta21(dataset_root)
-    prepared_parameters = prepare_hera_idr4_delta21_parameters(product.parameters)
+    """Prepare 21cmSPACE `Delta21` arrays on one shared `(z, k)` grid."""
+    product = load_twentyonecmspace_delta21(dataset_root)
+    prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
     spec = delta21_spec()
     return prepare_fixed_grid_training_split(
         axes=(product.axes.z, product.axes.k),

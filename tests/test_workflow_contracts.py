@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from nenufar_emulators.emulators.delta21.data import delta21_spec, prepare_hera_idr4_delta21_parameters
-from nenufar_emulators.emulators.delta21.model import delta21_config
-from nenufar_emulators.emulators.t21.data import prepare_hera_idr4_t21_parameters, t21_spec
-from nenufar_emulators.emulators.t21.model import t21_config
+from twentyonecmspace_emulators.emulators.delta21.data import delta21_spec, prepare_twentyonecmspace_delta21_parameters
+from twentyonecmspace_emulators.emulators.delta21.model import delta21_config
+from twentyonecmspace_emulators.emulators.t21.data import prepare_twentyonecmspace_t21_parameters, t21_spec
+from twentyonecmspace_emulators.emulators.t21.model import t21_config
 
 
 def test_delta21_spec_matches_expected_feature_contract() -> None:
@@ -32,14 +32,14 @@ def test_t21_spec_matches_expected_feature_contract() -> None:
     assert spec.target_offset == 0.0
 
 
-def test_prepare_hera_idr4_delta21_parameters_matches_expected_transform_names() -> None:
+def test_prepare_twentyonecmspace_delta21_parameters_matches_expected_transform_names() -> None:
     raw = np.array(
         [
             [1e-2, 1e-3, 10.0, 100.0, 1.0, 100.0, 30.0, 0.05, 1e2, 231.0, 0.0, 0.0],
             [1e-1, 1e-2, 20.0, 1000.0, 1.3, 200.0, 30.0, 0.06, 1e3, 233.0, 0.0, 0.0],
         ]
     )
-    prepared = prepare_hera_idr4_delta21_parameters(raw)
+    prepared = prepare_twentyonecmspace_delta21_parameters(raw)
     assert prepared.feature_names == (
         "log10fstarII",
         "log10fstarIII",
@@ -56,14 +56,14 @@ def test_prepare_hera_idr4_delta21_parameters_matches_expected_transform_names()
     assert "pop" in prepared.discrete_values
 
 
-def test_prepare_hera_idr4_t21_parameters_matches_expected_transform_names() -> None:
+def test_prepare_twentyonecmspace_t21_parameters_matches_expected_transform_names() -> None:
     raw = np.array(
         [
             [1e-2, 1e-3, 10.0, 100.0, 1.0, 100.0, 30.0, 0.05, 1e2, 231.0, 0.0, 0.0],
             [1e-1, 1e-2, 20.0, 1000.0, 1.3, 200.0, 30.0, 0.06, 1e3, 233.0, 0.0, 0.0],
         ]
     )
-    prepared = prepare_hera_idr4_t21_parameters(raw)
+    prepared = prepare_twentyonecmspace_t21_parameters(raw)
     assert prepared.feature_names == (
         "log10fstarII",
         "log10fstarIII",

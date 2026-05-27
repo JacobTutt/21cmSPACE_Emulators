@@ -10,14 +10,14 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from nenufar_emulators.utils.scaling import FeatureScaler
-from nenufar_emulators.utils.tiling import reconstruct_spectra
-from nenufar_emulators.utils.transforms import apply_transform, invert_transform
-from nenufar_emulators.emulators.delta21.data import (
+from twentyonecmspace_emulators.utils.scaling import FeatureScaler
+from twentyonecmspace_emulators.utils.tiling import reconstruct_spectra
+from twentyonecmspace_emulators.utils.transforms import apply_transform, invert_transform
+from twentyonecmspace_emulators.emulators.delta21.data import (
     delta21_spec,
-    prepare_hera_idr4_delta21_parameters,
+    prepare_twentyonecmspace_delta21_parameters,
 )
-from nenufar_emulators.utils.checkpointing import load
+from twentyonecmspace_emulators.utils.checkpointing import load
 
 
 def _load_array_file(path: str | Path) -> np.ndarray:
@@ -40,11 +40,11 @@ def _prepare_parameter_values(raw_parameters: np.ndarray) -> np.ndarray:
 
     expected_width = len(delta21_spec().parameters)
     if array.shape[1] == 12:
-        return prepare_hera_idr4_delta21_parameters(array).values
+        return prepare_twentyonecmspace_delta21_parameters(array).values
     if array.shape[1] == expected_width:
         return array
     raise ValueError(
-        "Delta21 inference expects either a raw 12-column HERA parameter table "
+        "Delta21 inference expects either a raw 12-column 21cmSPACE parameter table "
         f"or a pre-prepared {expected_width}-column feature table."
     )
 

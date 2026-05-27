@@ -1,7 +1,7 @@
-"""HERA IDR4 raw-data loaders.
+"""21cmSPACE raw-data loaders.
 
 This module centralizes the file names, MATLAB keys, and shared loading logic
-for the HERA IDR4 emulator dataset so the rest of the package can work with
+for the 21cmSPACE emulator dataset so the rest of the package can work with
 clean, typed data objects instead of repeating path fragments and MATLAB keys.
 """
 
@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 from scipy.io import loadmat
 
-HERA_LITTLE_H = 0.6704
+DIMENSIONLESS_HUBBLE_PARAMETER = 0.6704
 
-HERA_IDR4_COLUMNS = (
+TWENTYONECMSPACE_COLUMNS = (
     "fstarII",
     "fstarIII",
     "Vc",
@@ -32,8 +32,8 @@ HERA_IDR4_COLUMNS = (
 
 
 @dataclass(frozen=True)
-class HeraIdr4Axes:
-    """Shared physical axes stored in the HERA IDR4 dataset."""
+class TwentyOneCmSpaceAxes:
+    """Shared physical axes stored in the 21cmSPACE dataset."""
 
     z: np.ndarray
     k: np.ndarray
@@ -41,64 +41,68 @@ class HeraIdr4Axes:
 
 
 @dataclass(frozen=True)
-class HeraIdr4Product:
+class TwentyOneCmSpaceProduct:
     """One loaded science target plus the shared axes and parameter table."""
 
-    axes: HeraIdr4Axes
+    axes: TwentyOneCmSpaceAxes
     parameters: np.ndarray
     target: np.ndarray
     target_name: str
     nan_simulation_indices: np.ndarray
 
 
-def load_hera_idr4_axes(dataset_root: str | Path, *, little_h: float = HERA_LITTLE_H) -> HeraIdr4Axes:
-    """Load the shared HERA IDR4 axis arrays.
+def load_twentyonecmspace_axes(
+    dataset_root: str | Path,
+    *,
+    little_h: float = DIMENSIONLESS_HUBBLE_PARAMETER,
+) -> TwentyOneCmSpaceAxes:
+    """Load the shared 21cmSPACE axis arrays.
 
     The Delta21 workflow trains on ``k / h`` rather than on the stored raw
     ``k`` values, so the conversion is applied here once and then reused by
     the rest of the package.
     """
     root = Path(dataset_root)
-    return HeraIdr4Axes(
-        z=_load_mat_vector(root, "hera_z_mat.mat", "z21cm"),
-        k=_load_mat_vector(root, "hera_k_mat.mat", "ks") / little_h,
-        nu_keV=_load_mat_vector(root, "hera_nu_mat.mat", "nu_keV"),
+    return TwentyOneCmSpaceAxes(
+        z=_load_mat_vector(root, "21cmspace_z_mat.mat", "z21cm"),
+        k=_load_mat_vector(root, "21cmspace_k_mat.mat", "ks") / little_h,
+        nu_keV=_load_mat_vector(root, "21cmspace_nu_mat.mat", "nu_keV"),
     )
 
 
-def load_hera_idr4_delta21(
+def load_twentyonecmspace_delta21(
     dataset_root: str | Path,
     *,
-    little_h: float = HERA_LITTLE_H,
-) -> HeraIdr4Product:
-    """Load the raw HERA IDR4 `Delta21` training inputs."""
-    axes = load_hera_idr4_axes(dataset_root, little_h=little_h)
-    parameters = _load_mat_matrix(Path(dataset_root), "hera_parameters_mat.mat", "parameters")
-    target = _load_mat_matrix(Path(dataset_root), "hera_Deltak_mat.mat", "combined_Deltaks")
+    little_h: float = DIMENSIONLESS_HUBBLE_PARAMETER,
+) -> TwentyOneCmSpaceProduct:
+    """Load the raw 21cmSPACE `Delta21` training inputs."""
+    axes = load_twentyonecmspace_axes(dataset_root, little_h=little_h)
+    parameters = _load_mat_matrix(Path(dataset_root), "21cmspace_parameters_mat.mat", "parameters")
+    target = _load_mat_matrix(Path(dataset_root), "21cmspace_Deltak_mat.mat", "combined_Deltaks")
     return _package_product(axes, parameters, target, target_name="Delta21")
 
 
-def load_hera_idr4_t21(dataset_root: str | Path) -> HeraIdr4Product:
-    """Load the raw HERA IDR4 `T21` training inputs."""
-    axes = load_hera_idr4_axes(dataset_root)
-    parameters = _load_mat_matrix(Path(dataset_root), "hera_parameters_mat.mat", "parameters")
-    target = _load_mat_matrix(Path(dataset_root), "hera_T21_mat.mat", "combined_T21s")
+def load_twentyonecmspace_t21(dataset_root: str | Path) -> TwentyOneCmSpaceProduct:
+    """Load the raw 21cmSPACE `T21` training inputs."""
+    axes = load_twentyonecmspace_axes(dataset_root)
+    parameters = _load_mat_matrix(Path(dataset_root), "21cmspace_parameters_mat.mat", "parameters")
+    target = _load_mat_matrix(Path(dataset_root), "21cmspace_T21_mat.mat", "combined_T21s")
     return _package_product(axes, parameters, target, target_name="T21")
 
 
 def _package_product(
-    axes: HeraIdr4Axes,
+    axes: TwentyOneCmSpaceAxes,
     parameters: np.ndarray,
     target: np.ndarray,
     *,
     target_name: str,
-) -> HeraIdr4Product:
+) -> TwentyOneCmSpaceProduct:
     """Drop NaN simulations and return a self-describing loaded product."""
     nan_indices = nan_simulation_indices(target)
     if len(nan_indices) > 0:
         parameters = np.delete(parameters, nan_indices, axis=0)
         target = np.delete(target, nan_indices, axis=0)
-    return HeraIdr4Product(
+    return TwentyOneCmSpaceProduct(
         axes=axes,
         parameters=np.asarray(parameters, dtype=float),
         target=np.asarray(target, dtype=float),

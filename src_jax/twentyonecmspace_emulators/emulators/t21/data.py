@@ -1,6 +1,6 @@
 """T21 emulator data contracts and preparation helpers.
 
-This module owns the end of the workflow that turns raw HERA IDR4 global
+This module owns the end of the workflow that turns raw 21cmSPACE global
 signal arrays into the fixed-grid scalar regression problem used to train the
 current T21 emulator.
 """
@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from nenufar_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from nenufar_emulators.data_preprocessing.hera_idr4 import load_hera_idr4_t21
-from nenufar_emulators.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
-from nenufar_emulators.data_preprocessing.preparation import (
+from twentyonecmspace_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from twentyonecmspace_emulators.data_preprocessing.twentyonecmspace import load_twentyonecmspace_t21
+from twentyonecmspace_emulators.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
+from twentyonecmspace_emulators.data_preprocessing.preparation import (
     PreparedSplit,
     prepare_fixed_grid_training_split,
 )
 
-HERA_IDR4_COLUMNS = (
+TWENTYONECMSPACE_COLUMNS = (
     "fstarII",
     "fstarIII",
     "Vc",
@@ -33,7 +33,7 @@ HERA_IDR4_COLUMNS = (
 )
 
 def t21_spec() -> EmulatorSpec:
-    """Return the baseline HERA IDR4 T21 contract using ``fradio``.
+    """Return the baseline 21cmSPACE T21 contract using ``fradio``.
 
     The network sees one redshift axis plus the transformed astrophysical
     parameters that control the global signal.
@@ -61,30 +61,30 @@ def t21_spec() -> EmulatorSpec:
         target_transform="identity",
         target_offset=0.0,
     )
-def prepare_hera_idr4_t21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
-    """Prepare HERA IDR4 parameter tables for the current T21 emulator.
+def prepare_twentyonecmspace_t21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
+    """Prepare 21cmSPACE parameter tables for the current T21 emulator.
 
     The helper applies the parameter filtering and log transforms used by the
     current T21 workflow so the resulting feature matrix is ready for training.
     """
     return prepare_feature_matrix(
         raw_parameters,
-        HERA_IDR4_COLUMNS,
+        TWENTYONECMSPACE_COLUMNS,
         transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
         discard_params=("zeta", "feed", "delay"),
         discrete_params=("alpha", "nu_0", "pop"),
     )
 
 
-def prepare_hera_idr4_t21_training_split(
+def prepare_twentyonecmspace_t21_training_split(
     dataset_root: str,
     *,
     random_state: int = 42,
     shuffle_seed: int = 42,
 ) -> PreparedSplit:
-    """Prepare HERA IDR4 `T21` arrays on one shared redshift grid."""
-    product = load_hera_idr4_t21(dataset_root)
-    prepared_parameters = prepare_hera_idr4_t21_parameters(product.parameters)
+    """Prepare 21cmSPACE `T21` arrays on one shared redshift grid."""
+    product = load_twentyonecmspace_t21(dataset_root)
+    prepared_parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
     spec = t21_spec()
     return prepare_fixed_grid_training_split(
         axes=(product.axes.z,),

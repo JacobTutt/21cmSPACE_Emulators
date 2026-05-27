@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nenufar-emulators"
+name = "21cmspace-emulators"
 version = "0.1.0"
-description = "JAX-native emulators for NenuFAR-era 21-cm inference workflows."
+description = "JAX-native emulators for 21cmSPACE 21-cm inference workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -22,10 +22,10 @@ dev = [
 ]
 
 [project.scripts]
-nenufar-delta21-train = "nenufar_emulators.emulators.delta21.train:main"
-nenufar-delta21-infer = "nenufar_emulators.emulators.delta21.infer:main"
-nenufar-t21-train = "nenufar_emulators.emulators.t21.train:main"
-nenufar-t21-infer = "nenufar_emulators.emulators.t21.infer:main"
+21cmspace-delta21-train = "twentyonecmspace_emulators.emulators.delta21.train:main"
+21cmspace-delta21-infer = "twentyonecmspace_emulators.emulators.delta21.infer:main"
+21cmspace-t21-train = "twentyonecmspace_emulators.emulators.t21.train:main"
+21cmspace-t21-infer = "twentyonecmspace_emulators.emulators.t21.infer:main"
 
 [tool.setuptools]
 package-dir = {"" = "src_jax"}

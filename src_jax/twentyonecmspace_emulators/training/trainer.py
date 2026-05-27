@@ -11,8 +11,8 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from nenufar_emulators.utils.metrics import mse
-from nenufar_emulators.architectures.mlp import ActivationName, DenseMLP, init_mlp
+from twentyonecmspace_emulators.utils.metrics import mse
+from twentyonecmspace_emulators.architectures.mlp import ActivationName, DenseMLP, init_mlp
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ def train_mlp_regressor(
 
     - synthetic smoke testing
     - validating model and tiling contracts
-    - fitting prepared HERA training rows directly
+    - fitting prepared 21cmSPACE training rows directly
 
     Parameters
     ----------

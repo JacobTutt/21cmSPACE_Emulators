@@ -1,4 +1,4 @@
-"""T21 training helpers and CLI entrypoint."""
+"""Delta21 training helpers and CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -13,15 +13,16 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from nenufar_emulators.data_preprocessing.preparation import prepare_fixed_grid_training_split
-from nenufar_emulators.emulators.t21.data import (
-    prepare_hera_idr4_t21_parameters,
-    prepare_hera_idr4_t21_training_split,
-    t21_spec,
+from twentyonecmspace_emulators.data_preprocessing.twentyonecmspace import DIMENSIONLESS_HUBBLE_PARAMETER
+from twentyonecmspace_emulators.data_preprocessing.preparation import prepare_fixed_grid_training_split
+from twentyonecmspace_emulators.emulators.delta21.data import (
+    delta21_spec,
+    prepare_twentyonecmspace_delta21_parameters,
+    prepare_twentyonecmspace_delta21_training_split,
 )
-from nenufar_emulators.emulators.t21.model import t21_config
-from nenufar_emulators.utils.checkpointing import CheckpointMetadata, save
-from nenufar_emulators.training.trainer import (
+from twentyonecmspace_emulators.emulators.delta21.model import delta21_config
+from twentyonecmspace_emulators.utils.checkpointing import CheckpointMetadata, save
+from twentyonecmspace_emulators.training.trainer import (
     evaluate_mlp_regressor,
     train_mlp_regressor,
 )
@@ -32,17 +33,22 @@ def run_synthetic_smoke(
     epochs: int = 20,
     batch_size: int = 64,
 ) -> dict[str, float]:
-    """Run a synthetic end-to-end smoke training exercise.
+    """Run a small synthetic end-to-end smoke training exercise.
 
-    The synthetic target is deliberately simple but still depends on both the
-    redshift axis and the parameter vector so it exercises the same tiled-input
-    path that a real global-signal emulator will use.
+    This does not attempt to mimic the real science signal faithfully. Its job
+    is to verify that the Delta21 spec, tiling logic, and workflow config are
+    internally consistent.
     """
-    spec = t21_spec()
-    config = t21_config()
-    rng = np.random.default_rng(1)
+    spec = delta21_spec()
+    config = delta21_config()
+    rng = np.random.default_rng(0)
     nsamples = 24
-    z = np.linspace(6.0, 27.0, 30)
+    z = np.linspace(6.0, 27.0, 8)
+    k = np.geomspace(
+        3e-2 / DIMENSIONLESS_HUBBLE_PARAMETER,
+        0.99 / DIMENSIONLESS_HUBBLE_PARAMETER,
+        8,
+    )
     raw_parameters = np.column_stack(
         [
             10 ** rng.uniform(-3.0, -1.0, size=nsamples),  # fstarII
@@ -60,24 +66,22 @@ def run_synthetic_smoke(
         ]
     )
 
-    targets = np.empty((nsamples, len(z)), dtype=float)
+    # Build a positive target in physical space. The prepared-array workflow
+    # later applies the configured log10(target + 1) transform.
+    zz, kk = np.meshgrid(z, k, indexing="ij")
+    base_signal = (zz + 1.0) * (kk + 0.5)
+    targets = np.empty((nsamples, len(z), len(k)), dtype=float)
     for idx in range(nsamples):
-        # The sinusoid gives the mock signal a recognisable one-dimensional
-        # structure, while the parameter sum ensures the emulator must use the
-        # non-axis inputs as well.
-        targets[idx] = (
-            np.sin(z / 4.0)
-            + 0.05 * np.log10(raw_parameters[idx, 0])
-            + 0.03 * raw_parameters[idx, 7]
-        )
+        targets[idx] = base_signal + 0.02 * np.log10(raw_parameters[idx, 0]) + 0.03 * raw_parameters[idx, 7]
 
     prepared = prepare_fixed_grid_training_split(
-        axes=(z,),
+        axes=(z, k),
         axis_specs=spec.axes,
-        parameters=prepare_hera_idr4_t21_parameters(raw_parameters),
+        parameters=prepare_twentyonecmspace_delta21_parameters(raw_parameters),
         target=targets,
         feature_scale_methods={
             "z": "zscore",
+            "log10k": "zscore",
             "log10fstarII": "zscore",
             "log10fstarIII": "zscore",
             "log10Vc": "zscore",
@@ -88,10 +92,10 @@ def run_synthetic_smoke(
             "log10fradio": "zscore",
             "pop": "minmax_zero_to_one",
         },
-        data_log=False,
-        offset=None,
-        random_state=1,
-        shuffle_seed=1,
+        data_log=True,
+        offset=1.0,
+        random_state=0,
+        shuffle_seed=0,
         standardize_target=True,
     )
     _, history = train_mlp_regressor(
@@ -106,7 +110,7 @@ def run_synthetic_smoke(
         batch_size=batch_size,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
-        seed=1,
+        seed=0,
     )
     return {
         "final_train_loss": history.train_losses[-1],
@@ -117,7 +121,7 @@ def run_synthetic_smoke(
 def _installed_package_version() -> str:
     """Return the installed package version or a development fallback."""
     try:
-        return version("nenufar-emulators")
+        return version("21cmspace-emulators")
     except PackageNotFoundError:
         return "0.1.0"
 
@@ -128,7 +132,7 @@ def _write_training_summary(summary_path: Path, summary: dict[str, Any]) -> None
     summary_path.write_text(json.dumps(summary, indent=2))
 
 
-def train_t21_from_dataset_root(
+def train_delta21_from_dataset_root(
     dataset_root: str,
     *,
     output_path: str | Path | None = None,
@@ -137,12 +141,12 @@ def train_t21_from_dataset_root(
     shuffle_seed: int = 42,
     log_every: int | None = 1,
 ) -> dict[str, Any]:
-    """Prepare, train, and save a T21 model package from HERA IDR4 data."""
-    prepared = prepare_hera_idr4_t21_training_split(
+    """Prepare, train, and save a Delta21 model package from 21cmSPACE data."""
+    prepared = prepare_twentyonecmspace_delta21_training_split(
         dataset_root,
         shuffle_seed=shuffle_seed,
     )
-    config = t21_config()
+    config = delta21_config()
     model, history = train_mlp_regressor(
         jnp.asarray(prepared.train_features),
         jnp.asarray(prepared.train_targets),
@@ -161,7 +165,7 @@ def train_t21_from_dataset_root(
         ),
         early_stopping_min_delta=config.training.early_stopping_min_delta,
         log_every=log_every,
-        log_prefix="t21",
+        log_prefix="delta21",
     )
     test_loss = evaluate_mlp_regressor(
         model,
@@ -170,13 +174,13 @@ def train_t21_from_dataset_root(
         batch_size=config.training.batch_size if batch_size is None else batch_size,
     )
 
-    output = Path("t21_model.nenemu") if output_path is None else Path(output_path)
+    output = Path("delta21_model.nenemu") if output_path is None else Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
     metadata = CheckpointMetadata(
-        model_name="t21",
+        model_name="delta21",
         package_version=_installed_package_version(),
-        emulator_spec=t21_spec(),
+        emulator_spec=delta21_spec(),
         input_scaling=prepared.feature_scaling,
         target_scaling=prepared.target_scaling,
         training_config={
@@ -223,13 +227,17 @@ def train_t21_from_dataset_root(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface for T21 development tasks."""
-    parser = argparse.ArgumentParser(description="T21 emulator entrypoint.")
+    """Build the command-line interface for Delta21 development tasks.
+
+    The CLI is intentionally narrow for now. It exists to expose inspection and
+    verification tasks while the training path continues to be refined.
+    """
+    parser = argparse.ArgumentParser(description="Delta21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
         "--print-config",
         action="store_true",
-        help="Print the current T21 model and training defaults.",
+        help="Print the current Delta21 model and training defaults.",
     )
     parser.add_argument(
         "--synthetic-smoke",
@@ -239,12 +247,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset-root",
         type=str,
-        help="Path to the HERA IDR4 dataset root for real T21 preparation/training.",
+        help="Path to the 21cmSPACE dataset root for real Delta21 preparation/training.",
     )
     parser.add_argument(
         "--prepare-only",
         action="store_true",
-        help="Prepare real HERA IDR4 arrays and print a summary without training.",
+        help="Prepare real 21cmSPACE arrays and print a summary without training.",
     )
     parser.add_argument(
         "--output",
@@ -263,20 +271,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--shuffle-seed",
         type=int,
         default=42,
-        help="Seed used when shuffling the fixed-grid T21 training rows after the split.",
+        help="Seed used when shuffling the fixed-grid Delta21 training rows after the split.",
     )
     return parser
 
 
 def main() -> None:
-    """Run the T21 command-line workflow."""
+    """Run the Delta21 command-line workflow."""
     args = build_parser().parse_args()
 
     if args.print_spec:
-        pprint(t21_spec())
+        pprint(delta21_spec())
         return
     if args.print_config:
-        pprint(t21_config())
+        pprint(delta21_config())
         return
     if args.synthetic_smoke:
         epochs = 20 if args.epochs is None else args.epochs
@@ -285,7 +293,7 @@ def main() -> None:
         pprint(result)
         return
     if args.dataset_root:
-        prepared = prepare_hera_idr4_t21_training_split(
+        prepared = prepare_twentyonecmspace_delta21_training_split(
             args.dataset_root,
             shuffle_seed=args.shuffle_seed,
         )
@@ -302,7 +310,7 @@ def main() -> None:
             pprint(summary)
             return
 
-        summary = train_t21_from_dataset_root(
+        summary = train_delta21_from_dataset_root(
             args.dataset_root,
             output_path=args.output,
             epochs=args.epochs,
@@ -314,6 +322,6 @@ def main() -> None:
         return
 
     raise SystemExit(
-        "Real T21 dataset loading is available through --dataset-root. "
+        "Real Delta21 dataset loading is available through --dataset-root. "
         "Use --prepare-only to inspect prepared arrays, or --synthetic-smoke for the mock path."
     )
