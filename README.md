@@ -19,38 +19,15 @@ be loaded later for inference.
   pyproject.toml                         (package metadata and CLI entry points)
   README.md                              (project overview)
   docs/                                  (stage-by-stage workflow notes)
-    preprocessing.md                     (data loading and array preparation)
-    network.md                           (MLP architecture)
-    training.md                          (optimization, checkpoints, inference)
   src_jax/                               (Python source root)
     twentyonecmspace_emulators/
       data_preprocessing/                (load simulations and build arrays)
-        twentyonecmspace.py
-        parameters.py
-        preparation.py
       architectures/                     (shared network definitions)
-        mlp.py
       training/                          (batching, optimization, validation)
-        trainer.py
       utils/                             (specs, transforms, scaling, checkpointing)
-        checkpointing.py
-        config.py
-        metrics.py
-        scaling.py
-        specs.py
-        tiling.py
-        transforms.py
       emulators/                         (concrete T21 and Delta21 workflows)
         delta21/                         (power-spectrum emulator)
-          data.py
-          model.py
-          train.py
-          infer.py
         t21/                             (global-signal emulator)
-          data.py
-          model.py
-          train.py
-          infer.py
   tests/                                 (contract and workflow smoke tests)
 ```
 
