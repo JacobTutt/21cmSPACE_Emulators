@@ -16,23 +16,23 @@ be loaded later for inference.
 
 ```text
 21cmspace-emulators/
-  pyproject.toml
-  README.md
-  docs/
-    preprocessing.md
-    network.md
-    training.md
-  src_jax/
+  pyproject.toml                         (package metadata and CLI entry points)
+  README.md                              (project overview)
+  docs/                                  (stage-by-stage workflow notes)
+    preprocessing.md                     (data loading and array preparation)
+    network.md                           (MLP architecture)
+    training.md                          (optimization, checkpoints, inference)
+  src_jax/                               (Python source root)
     twentyonecmspace_emulators/
-      data_preprocessing/
+      data_preprocessing/                (load simulations and build arrays)
         twentyonecmspace.py
         parameters.py
         preparation.py
-      architectures/
+      architectures/                     (shared network definitions)
         mlp.py
-      training/
+      training/                          (batching, optimization, validation)
         trainer.py
-      utils/
+      utils/                             (specs, transforms, scaling, checkpointing)
         checkpointing.py
         config.py
         metrics.py
@@ -40,31 +40,19 @@ be loaded later for inference.
         specs.py
         tiling.py
         transforms.py
-      emulators/
-        delta21/
+      emulators/                         (concrete T21 and Delta21 workflows)
+        delta21/                         (power-spectrum emulator)
           data.py
           model.py
           train.py
           infer.py
-        t21/
+        t21/                             (global-signal emulator)
           data.py
           model.py
           train.py
           infer.py
-  tests/
+  tests/                                 (contract and workflow smoke tests)
 ```
-
-The rough split is:
-
-- `data_preprocessing/`: load simulation files, prepare parameters, resample
-  targets, scale arrays, and produce train/validation/test arrays.
-- `architectures/`: define reusable neural-network classes.
-- `training/`: run optimization, validation, batching, and early stopping.
-- `utils/`: shared metadata, transforms, scaling, tiling, metrics, configs, and
-  checkpoint save/load code.
-- `emulators/`: concrete `t21` and `delta21` workflows that combine the shared
-  pieces into train and inference entry points.
-- `tests/`: contract tests and end-to-end smoke tests.
 
 ## Workflow Walkthrough
 
