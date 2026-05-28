@@ -7,8 +7,9 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 
-from twentyonecmspace_emulators.emulators.delta21.data import prepare_twentyonecmspace_delta21_training_split
-from twentyonecmspace_emulators.emulators.t21.data import prepare_twentyonecmspace_t21_training_split
+from jaxemu_21cmSPACE.data_preprocessing.scaling import TargetScalingScalar
+from jaxemu_21cmSPACE.emulators21.delta21.data import prepare_twentyonecmspace_delta21_training_split
+from jaxemu_21cmSPACE.emulators21.t21.data import prepare_twentyonecmspace_t21_training_split
 
 
 def test_prepare_twentyonecmspace_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
@@ -41,7 +42,7 @@ def test_prepare_twentyonecmspace_delta21_split_matches_expected_shape_rules(tmp
     assert scaling_by_name["z"] == "zscore"
     assert scaling_by_name["log10k"] == "zscore"
     assert scaling_by_name["alpha"] == "minmax_zero_to_one"
-    assert prepared.target_scaling is not None
+    assert isinstance(prepared.target_scaling, TargetScalingScalar)
 
 
 def test_prepare_twentyonecmspace_t21_split_matches_expected_shape_rules(tmp_path: Path) -> None:
@@ -70,7 +71,7 @@ def test_prepare_twentyonecmspace_t21_split_matches_expected_shape_rules(tmp_pat
     assert scaling_by_name["tau"] == "zscore"
     assert scaling_by_name["z"] == "zscore"
     assert scaling_by_name["pop"] == "minmax_zero_to_one"
-    assert prepared.target_scaling is not None
+    assert isinstance(prepared.target_scaling, TargetScalingScalar)
 
 
 def write_mock_twentyonecmspace_dataset(tmp_path: Path) -> Path:

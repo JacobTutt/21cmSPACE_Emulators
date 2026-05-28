@@ -6,12 +6,18 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from twentyonecmspace_emulators.utils.checkpointing import CheckpointMetadata, load, save
-from twentyonecmspace_emulators.utils.scaling import FeatureScaler, FeatureScaling, TargetScalingSurface
-from twentyonecmspace_emulators.utils.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from twentyonecmspace_emulators.utils.transforms import apply_transform, invert_transform
-from twentyonecmspace_emulators.architectures.mlp import init_mlp
-from twentyonecmspace_emulators.emulators.t21.data import t21_spec
+from jaxemu_21cmSPACE.utils.checkpointing import CheckpointMetadata, load, save
+from jaxemu_21cmSPACE.data_preprocessing.scaling import (
+    FeatureScaler,
+    FeatureScaling,
+    TargetScalingScalar,
+)
+from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from jaxemu_21cmSPACE.data_preprocessing.transforms import apply_transform, invert_transform
+from flax import nnx
+
+from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
+from jaxemu_21cmSPACE.emulators21.t21.data import t21_spec
 
 
 def test_transform_round_trip_log10() -> None:
@@ -45,6 +51,15 @@ def test_feature_scaler_round_trip() -> None:
     matrix = np.array([[6.0, 0.04], [20.0, 0.06]])
     recovered = scaler.inverse_transform(scaler.transform(matrix))
     assert np.allclose(recovered, matrix)
+
+
+def test_target_scaling_scalar_round_trip() -> None:
+    targets = np.array([[-2.0, 0.0, 2.0], [1.0, 3.0, 5.0]])
+    scaler = TargetScalingScalar.from_targets(targets)
+    recovered = scaler.inverse_grid(scaler.transform_grid(targets))
+
+    assert scaler.std > 0
+    assert np.allclose(recovered, targets)
 
 
 def test_checkpoint_metadata_to_dict() -> None:
@@ -88,18 +103,14 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
             FeatureScaling.from_values("z", z, "identity"),
             FeatureScaling.from_values("log10fstarII", np.array([-2.0, -1.0]), "zscore"),
         ),
-        target_scaling=TargetScalingSurface.from_targets(
-            axis_names=("z",),
-            axis_values=(z,),
-            targets=spectra,
-        ),
+        target_scaling=TargetScalingScalar.from_targets(spectra),
         training_config={"epochs": 2},
     )
-    model = init_mlp(
-        jax.random.PRNGKey(0),
+    model = DenseMLP(
         in_features=len(spec.input_feature_names()),
         hidden_features=8,
         hidden_layers=2,
+        rngs=nnx.Rngs(jax.random.PRNGKey(0)),
     )
     features = jnp.asarray(
         [
@@ -125,6 +136,9 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
     recovered = loaded["model"](features)
 
     assert package_path.name.endswith(".nenemu")
+    assert package_path.is_dir()
+    assert (package_path / "0" / "state").exists()
+    assert (package_path / "0" / "config").exists()
     assert np.allclose(np.asarray(recovered), np.asarray(expected))
     assert loaded["metadata"].model_name == "t21-test"
     assert loaded["hyperparams"]["hidden_features"] == 8

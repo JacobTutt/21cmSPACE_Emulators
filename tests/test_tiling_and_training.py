@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
+import jax
 import jax.numpy as jnp
+from flax import nnx
 
-from twentyonecmspace_emulators.utils.tiling import reconstruct_spectra, tile_spectra
-from twentyonecmspace_emulators.emulators.delta21.data import delta21_spec
-from twentyonecmspace_emulators.emulators.t21.data import t21_spec
-from twentyonecmspace_emulators.training.trainer import train_mlp_regressor
+from jaxemu_21cmSPACE.data_preprocessing.tiling import reconstruct_spectra, tile_spectra
+from jaxemu_21cmSPACE.emulators21.delta21.data import delta21_spec
+from jaxemu_21cmSPACE.emulators21.t21.data import t21_spec
+from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
+from jaxemu_21cmSPACE.training.trainer import train_mlp_regressor
 
 
 def test_tile_and_reconstruct_shapes() -> None:
@@ -31,13 +34,18 @@ def test_synthetic_training_smoke() -> None:
     train_targets = train_features @ weights + 0.1
     validation_targets = validation_features @ weights + 0.1
 
-    model, history = train_mlp_regressor(
-        jnp.asarray(train_features),
-        jnp.asarray(train_targets),
-        jnp.asarray(validation_features),
-        jnp.asarray(validation_targets),
+    model = DenseMLP(
+        in_features=train_features.shape[1],
         hidden_features=16,
         hidden_layers=2,
+        rngs=nnx.Rngs(jax.random.PRNGKey(0)),
+    )
+    model, history = train_mlp_regressor(
+        model,
+        train_features,
+        train_targets,
+        validation_features,
+        validation_targets,
         epochs=40,
         batch_size=32,
         learning_rate=5e-3,
@@ -50,6 +58,35 @@ def test_synthetic_training_smoke() -> None:
     assert float(mse) < 0.1
 
 
+def test_training_accepts_device_arrays_without_epoch_logging() -> None:
+    rng = np.random.default_rng(2)
+    features = rng.normal(size=(64, 2)).astype(np.float32)
+    targets = (features[:, 0] - 0.25 * features[:, 1]).astype(np.float32)
+
+    model = DenseMLP(
+        in_features=features.shape[1],
+        hidden_features=8,
+        hidden_layers=1,
+        rngs=nnx.Rngs(jax.random.PRNGKey(2)),
+    )
+    _, history = train_mlp_regressor(
+        model,
+        jnp.asarray(features),
+        jnp.asarray(targets),
+        jnp.asarray(features[:16]),
+        jnp.asarray(targets[:16]),
+        epochs=3,
+        batch_size=16,
+        learning_rate=1e-3,
+        weight_decay=0.0,
+        seed=2,
+        log_every=None,
+    )
+
+    assert len(history.train_losses) == 3
+    assert len(history.validation_losses) == 3
+
+
 def test_early_stopping_records_and_restores_best_epoch() -> None:
     rng = np.random.default_rng(4)
     train_features = rng.normal(size=(32, 2))
@@ -57,13 +94,18 @@ def test_early_stopping_records_and_restores_best_epoch() -> None:
     train_targets = np.zeros(32)
     validation_targets = np.ones(8)
 
-    _, history = train_mlp_regressor(
-        jnp.asarray(train_features),
-        jnp.asarray(train_targets),
-        jnp.asarray(validation_features),
-        jnp.asarray(validation_targets),
+    model = DenseMLP(
+        in_features=train_features.shape[1],
         hidden_features=4,
         hidden_layers=1,
+        rngs=nnx.Rngs(jax.random.PRNGKey(3)),
+    )
+    _, history = train_mlp_regressor(
+        model,
+        train_features,
+        train_targets,
+        validation_features,
+        validation_targets,
         epochs=12,
         batch_size=8,
         learning_rate=0.0,

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from twentyonecmspace_emulators.emulators.delta21.infer import predict_delta21
-from twentyonecmspace_emulators.emulators.delta21.train import train_delta21_from_dataset_root
-from twentyonecmspace_emulators.emulators.t21.infer import predict_t21
-from twentyonecmspace_emulators.emulators.t21.train import train_t21_from_dataset_root
+from jaxemu_21cmSPACE.emulators21.delta21.infer import predict_delta21
+from jaxemu_21cmSPACE.emulators21.delta21.train import train_delta21_from_dataset_root
+from jaxemu_21cmSPACE.emulators21.t21.infer import predict_t21
+from jaxemu_21cmSPACE.emulators21.t21.train import train_t21_from_dataset_root
 
 
 def write_mock_twentyonecmspace_dataset(tmp_path: Path) -> Path:
@@ -65,13 +67,17 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert package_path.with_suffix(".summary.json").exists()
     assert summary["package_path"] == str(package_path)
 
-    raw_parameters = loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2]
-    z = np.array([6.0, 10.0], dtype=float)
-    k = np.array([0.05 / 0.6704, 0.99 / 0.6704], dtype=float)
+    raw_parameters = jnp.asarray(
+        loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2],
+        dtype=jnp.float32,
+    )
+    z = jnp.array([6.0, 10.0], dtype=jnp.float32)
+    k = jnp.array([0.05 / 0.6704, 0.99 / 0.6704], dtype=jnp.float32)
     predictions = predict_delta21(package_path, raw_parameters, z, k)
 
+    assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 2, 2)
-    assert np.isfinite(predictions).all()
+    assert np.isfinite(np.asarray(jax.device_get(predictions))).all()
 
 
 def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
@@ -90,9 +96,13 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert package_path.with_suffix(".summary.json").exists()
     assert summary["package_path"] == str(package_path)
 
-    raw_parameters = loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2]
-    z = np.array([6.0, 10.0, 20.0, 27.0], dtype=float)
+    raw_parameters = jnp.asarray(
+        loadmat(dataset_root / "21cmspace_parameters_mat.mat")["parameters"][:2],
+        dtype=jnp.float32,
+    )
+    z = jnp.array([6.0, 10.0, 20.0, 27.0], dtype=jnp.float32)
     predictions = predict_t21(package_path, raw_parameters, z)
 
+    assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 4)
-    assert np.isfinite(predictions).all()
+    assert np.isfinite(np.asarray(jax.device_get(predictions))).all()

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
   "jax",
   "flax",
+  "orbax-checkpoint",
   "optax",
   "numpy",
   "scipy",
@@ -22,17 +23,15 @@ dev = [
 ]
 
 [project.scripts]
-21cmspace-delta21-train = "twentyonecmspace_emulators.emulators.delta21.train:main"
-21cmspace-delta21-infer = "twentyonecmspace_emulators.emulators.delta21.infer:main"
-21cmspace-t21-train = "twentyonecmspace_emulators.emulators.t21.train:main"
-21cmspace-t21-infer = "twentyonecmspace_emulators.emulators.t21.infer:main"
-
-[tool.setuptools]
-package-dir = {"" = "src_jax"}
+21cmspace-delta21-train = "jaxemu_21cmSPACE.emulators21.delta21.train:main"
+21cmspace-delta21-infer = "jaxemu_21cmSPACE.emulators21.delta21.infer:main"
+21cmspace-t21-train = "jaxemu_21cmSPACE.emulators21.t21.train:main"
+21cmspace-t21-infer = "jaxemu_21cmSPACE.emulators21.t21.infer:main"
 
 [tool.setuptools.packages.find]
-where = ["src_jax"]
+where = ["."]
+include = ["jaxemu_21cmSPACE*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src_jax"]
+pythonpath = ["."]
