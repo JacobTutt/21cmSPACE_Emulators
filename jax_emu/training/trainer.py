@@ -24,7 +24,6 @@ import numpy as np
 import optax
 from flax import nnx
 
-from jax_emu.utils.metrics import mse
 from jax_emu.architectures.mlp import DenseMLP
 
 
@@ -77,7 +76,7 @@ def _iter_device_batches(
     shuffle: bool,
     rng: np.random.Generator | None = None,
     prefetch_batches: int,
-) -> Iterator[tuple[jax.Array, jax.Array]]:
+) -> Iterator[tuple[jax.Array, jax.Array, jax.Array, int]]:
     """
     For a given dataset stored on host memory, slice mini-batches and queue
     a small number of batches onto the JAX device ahead of them being requested
@@ -101,8 +100,9 @@ def _iter_device_batches(
 
     Yields
     ------
-    tuple[jax.Array, jax.Array]
-        A tuple of device feature and target batches.
+    tuple[jax.Array, jax.Array, jax.Array, int]
+        Device feature batch, device target batch, device mask batch, and the
+        number of real examples before padding.
     """
     # Ensure that at least one batch is being prefetched.
     if prefetch_batches < 1:
@@ -123,7 +123,7 @@ def _iter_device_batches(
     batch_starts = iter(range(0, len(indices), batch_size))
 
     # Initialise an empty queue that will hold device batches.
-    queue: deque[tuple[jax.Array, jax.Array]] = deque()
+    queue: deque[tuple[jax.Array, jax.Array, jax.Array, int]] = deque()
 
     def enqueue_next_batch() -> bool:
         """
@@ -137,11 +137,28 @@ def _iter_device_batches(
 
         # Select the next batch of indices and slice the host arrays.
         batch_index = indices[start : start + batch_size]
+        real_examples = int(len(batch_index))
+        if real_examples < batch_size:
+            # Pad the final batch to a fixed shape so JAX does not need to
+            # retrace or recompile the step for a smaller last batch.
+            pad_value = batch_index[-1]
+            pad_index = np.full(batch_size - real_examples, pad_value, dtype=batch_index.dtype)
+            batch_index = np.concatenate([batch_index, pad_index])
+
         batch_features = features[batch_index]
         batch_targets = targets[batch_index]
+        batch_mask = np.zeros(batch_size, dtype=np.float32)
+        batch_mask[:real_examples] = 1.0
 
         # device_put queues the host-to-device transfer and returns a device array.
-        queue.append((jax.device_put(batch_features), jax.device_put(batch_targets)))
+        queue.append(
+            (
+                jax.device_put(batch_features),
+                jax.device_put(batch_targets),
+                jax.device_put(batch_mask),
+                real_examples,
+            )
+        )
         return True
 
     # Fill the queue before training starts consuming batches.
@@ -232,6 +249,7 @@ def train_mlp_regressor(
         optimizer_instance: nnx.Optimizer,
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
+        batch_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         Run one compiled optimiser step on a device mini-batch.
@@ -242,7 +260,8 @@ def train_mlp_regressor(
             Predict the mini-batch and return the mean squared error.
             """
             preds = current_model(batch_features).squeeze(-1)
-            return mse(preds, batch_targets)
+            squared_error = jnp.square(preds - batch_targets) * batch_mask
+            return jnp.sum(squared_error) / jnp.maximum(jnp.sum(batch_mask), 1.0)
 
         # Compute the loss and gradients for current model parameters on this mini-batch.
         loss, grads = nnx.value_and_grad(loss_fn)(model_instance)
@@ -256,22 +275,18 @@ def train_mlp_regressor(
         model_instance: DenseMLP,
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
+        batch_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         Run one compiled validation step on a device mini-batch.
         """
-        # Predict the mini-batch and measure the loss without changing weights.
         preds = model_instance(batch_features).squeeze(-1)
-        return mse(preds, batch_targets)
+        squared_error = jnp.square(preds - batch_targets) * batch_mask
+        return jnp.sum(squared_error)
 
-    # Epoch-level host synchronization is only needed for Python-side logging or early stopping.
-    sync_each_epoch = early_stopping_patience is not None or log_every is not None
-
-    # Initalise lists for loss curves and early-stopping state to be stored.
+    # Initialise lists for loss curves and early-stopping state to be stored.
     train_losses: list[float] = []
     validation_losses: list[float] = []
-    train_loss_arrays: list[jax.Array] = []
-    validation_loss_arrays: list[jax.Array] = []
     best_validation_loss = float("inf")
     best_epoch: int | None = None
     best_state: nnx.State | None = None
@@ -280,11 +295,11 @@ def train_mlp_regressor(
     # Main training loop.
     for epoch in range(epochs):
         epoch_start = perf_counter()
-        train_loss_sum: jax.Array | None = None
-        train_batch_count = 0
+        train_squared_error: list[jax.Array] = []
+        train_example_count = 0
         # Within each epoch, the training set is reshuffeled and sliced into mini-batches.
         # Each training step is then performed on each mini-batch
-        for batch_features, batch_targets in _iter_device_batches(
+        for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
             train_features,
             train_targets,
             batch_size,
@@ -293,19 +308,18 @@ def train_mlp_regressor(
             prefetch_batches=prefetch_batches,
         ):
             # Train (update) the model on the mini-batch
-            loss = train_step(model, optimizer, batch_features, batch_targets)
-            # Accumulate losses on device instead of storing one scalar per mini-batch.
-            train_loss_sum = loss if train_loss_sum is None else train_loss_sum + loss
-            train_batch_count += 1
-        if train_loss_sum is None:
+            loss = train_step(model, optimizer, batch_features, batch_targets, batch_mask)
+            train_squared_error.append(loss * real_examples)
+            train_example_count += real_examples
+        if not train_squared_error:
             raise ValueError("Training data produced no mini-batches.")
-        # Average the training mini-batch losses on the device.
-        train_loss_array = train_loss_sum / train_batch_count
+        train_loss = float(np.asarray(jax.device_get(train_squared_error), dtype=np.float64).sum())
+        train_loss /= max(train_example_count, 1)
 
         # Evaluate on validation dataset after all model updates for this epoch are done.
-        validation_loss_sum: jax.Array | None = None
-        validation_batch_count = 0
-        for batch_features, batch_targets in _iter_device_batches(
+        validation_squared_error: list[jax.Array] = []
+        validation_example_count = 0
+        for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
             validation_features,
             validation_targets,
             batch_size,
@@ -313,36 +327,27 @@ def train_mlp_regressor(
             prefetch_batches=prefetch_batches,
         ):
             # Evaluate the model on the mini-batch without updating weights.
-            loss = eval_step(model, batch_features, batch_targets)
-            validation_loss_sum = (
-                loss if validation_loss_sum is None else validation_loss_sum + loss
-            )
-            validation_batch_count += 1
-        if validation_loss_sum is None:
+            loss = eval_step(model, batch_features, batch_targets, batch_mask)
+            validation_squared_error.append(loss)
+            validation_example_count += real_examples
+        if not validation_squared_error:
             raise ValueError("Validation data produced no mini-batches.")
-        # Average the validation mini-batch losses on the device.
-        validation_loss_array = validation_loss_sum / validation_batch_count
+        validation_loss = float(
+            np.asarray(jax.device_get(validation_squared_error), dtype=np.float64).sum()
+        )
+        validation_loss /= max(validation_example_count, 1)
 
-        # Keep the device scalars until host-side control flow or final history construction needs them.
-        train_loss_arrays.append(train_loss_array)
-        validation_loss_arrays.append(validation_loss_array)
+        train_losses.append(train_loss)
+        validation_losses.append(validation_loss)
 
-        if sync_each_epoch:
-            # Logging and early stopping require concrete Python floats, so this is the epoch sync point.
-            train_loss = float(train_loss_array)
-            validation_loss = float(validation_loss_array)
-
-            train_losses.append(train_loss)
-            validation_losses.append(validation_loss)
-
-            # Track the best validation state for early stopping.
-            if validation_loss < best_validation_loss - early_stopping_min_delta:
-                best_validation_loss = validation_loss
-                best_epoch = epoch
-                best_state = clone_model_state(model)
-                epochs_without_improvement = 0
-            else:
-                epochs_without_improvement += 1
+        # Track the best validation state for early stopping.
+        if validation_loss < best_validation_loss - early_stopping_min_delta:
+            best_validation_loss = validation_loss
+            best_epoch = epoch
+            best_state = clone_model_state(model)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
 
         # Optionally print progress.
         if log_every is not None and ((epoch + 1) % log_every == 0):
@@ -368,14 +373,6 @@ def train_mlp_regressor(
     # Restore the best validation state if one was recorded.
     if best_state is not None:
         nnx.update(model, best_state)
-
-    # If no Python-side control flow needed losses during training, transfer them once at the end.
-    if not sync_each_epoch:
-        train_losses = [float(loss) for loss in jax.device_get(jnp.asarray(train_loss_arrays))]
-        validation_losses = [
-            float(loss)
-            for loss in jax.device_get(jnp.asarray(validation_loss_arrays))
-        ]
 
     return model, TrainingHistory(
         train_losses=train_losses,
@@ -427,31 +424,33 @@ def evaluate_mlp_regressor(
         model_instance: DenseMLP,
         batch_features: jnp.ndarray,
         batch_targets: jnp.ndarray,
+        batch_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         Run one compiled evaluation step on a device mini-batch.
         """
-        # Predict the mini-batch and measure the loss without changing weights.
         preds = model_instance(batch_features).squeeze(-1)
-        return mse(preds, batch_targets)
+        squared_error = jnp.square(preds - batch_targets) * batch_mask
+        return jnp.sum(squared_error)
 
     # Keep NumPy arrays on the host for prefetching. Preserve JAX arrays if already on device.
     features = _preserve_device_array(features)
     targets = _preserve_device_array(targets)
 
     # Evaluate every mini-batch and accumulate losses on device.
-    loss_sum: jax.Array | None = None
-    batch_count = 0
-    for batch_features, batch_targets in _iter_device_batches(
+    squared_error: list[jax.Array] = []
+    example_count = 0
+    for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
         features,
         targets,
         batch_size,
         shuffle=False,
         prefetch_batches=prefetch_batches,
     ):
-        loss = eval_step(model, batch_features, batch_targets)
-        loss_sum = loss if loss_sum is None else loss_sum + loss
-        batch_count += 1
-    if loss_sum is None:
+        loss = eval_step(model, batch_features, batch_targets, batch_mask)
+        squared_error.append(loss)
+        example_count += real_examples
+    if not squared_error:
         raise ValueError("Evaluation data produced no mini-batches.")
-    return float(loss_sum / batch_count)
+    total_squared_error = float(np.asarray(jax.device_get(squared_error), dtype=np.float64).sum())
+    return total_squared_error / max(example_count, 1)
