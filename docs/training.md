@@ -1,18 +1,17 @@
 # Training
 
 Training starts after preprocessing has produced plain feature and target
-arrays. The trainer does not load simulation files or apply science-specific
-parameter rules. It receives arrays and fits an MLP.
+arrays. The trainer does not load simulation files, apply science-specific
+parameter rules, or create the model. It receives an existing MLP and fits it.
 
 The main modules are:
 
-- [`training/trainer.py`](../src_jax/twentyonecmspace_emulators/training/trainer.py)
-- [`utils/checkpointing.py`](../src_jax/twentyonecmspace_emulators/utils/checkpointing.py)
-- [`utils/scaling.py`](../src_jax/twentyonecmspace_emulators/utils/scaling.py)
-- [`emulators/t21/train.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/train.py)
-- [`emulators/delta21/train.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/train.py)
-- [`emulators/t21/infer.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/infer.py)
-- [`emulators/delta21/infer.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/infer.py)
+- [`training/trainer.py`](../jaxemu_21cmSPACE/training/trainer.py)
+- [`utils/checkpointing.py`](../jaxemu_21cmSPACE/utils/checkpointing.py)
+- [`emulators21/t21/train.py`](../jaxemu_21cmSPACE/emulators21/t21/train.py)
+- [`emulators21/delta21/train.py`](../jaxemu_21cmSPACE/emulators21/delta21/train.py)
+- [`emulators21/t21/infer.py`](../jaxemu_21cmSPACE/emulators21/t21/infer.py)
+- [`emulators21/delta21/infer.py`](../jaxemu_21cmSPACE/emulators21/delta21/infer.py)
 
 ## Trainer Input
 
@@ -20,6 +19,7 @@ The shared training function is:
 
 ```python
 train_mlp_regressor(
+    model,
     train_features,
     train_targets,
     validation_features,
@@ -28,26 +28,34 @@ train_mlp_regressor(
 )
 ```
 
-The arrays are already prepared:
+The model and arrays are already prepared:
 
+- `model` is an initialised or loaded `DenseMLP`
+- full feature and target arrays stay on the host
 - features are in canonical emulator feature order
 - feature scaling has already been applied
 - targets have already been transformed into training space
-- target standardization has already been applied if enabled
+- targets have already been divided by the global training-label std
 
 ## Training Loop
 
 During training, the code:
 
-1. initializes a `DenseMLP`
+1. creates a fresh Optax AdamW optimizer for the supplied model
 2. shuffles training rows each epoch
-3. forms mini-batches
-4. runs `model(batch_features)`
-5. computes mean squared error
-6. updates model parameters with Optax AdamW
-7. evaluates validation loss
-8. records train and validation losses
-9. restores the best model state if early stopping is enabled
+3. forms mini-batches on the host
+4. keeps a small queue of mini-batches prefetched on the JAX device
+5. runs `model(batch_features)`
+6. computes mean squared error
+7. updates model parameters
+8. evaluates validation loss
+9. records train and validation losses once per epoch
+10. restores the best model state if early stopping is enabled
+
+The default `prefetch_batches=2` means the trainer queues the next mini-batch
+with `jax.device_put` before the current one is consumed. This follows the JAX
+training-cookbook pattern where host-side batch preparation can overlap with
+jitted device computation.
 
 The trainer returns:
 
@@ -75,21 +83,23 @@ Each function:
 
 1. runs the emulator-specific preprocessing path
 2. loads the workflow model/training defaults
-3. trains the shared MLP
-4. evaluates the test split
-5. writes a `.nenemu` package
-6. writes a small JSON training summary beside the package
+3. initialises the workflow `DenseMLP`
+4. trains the supplied MLP
+5. evaluates the test split
+6. writes a `.nenemu` checkpoint directory
+7. writes a small JSON training summary beside the checkpoint
 
 ## Checkpoint Contents
 
-A `.nenemu` file is a zip package containing:
+A `.nenemu` path is a checkpoint directory containing:
 
 ```text
-config.json
-params.npz
+0/
+  config/
+  state/
 ```
 
-`config.json` stores:
+`config/` stores Orbax-managed JSON metadata:
 
 - package version
 - model hyperparameters
@@ -97,9 +107,9 @@ params.npz
 - loss name
 - checkpoint metadata
 
-`params.npz` stores:
+`state/` stores Orbax-managed arrays:
 
-- the flattened trained NNX model state
+- the trained NNX model state written by Orbax
 
 The checkpoint metadata stores:
 
@@ -120,9 +130,9 @@ model = package["model"]
 Internally, loading:
 
 1. reads the saved architecture settings
-2. constructs a `DenseMLP` of the same shape
-3. reads the saved NNX state arrays
-4. updates the new model object with the saved state
+2. builds an abstract `DenseMLP` of the same shape
+3. restores the latest Orbax checkpoint step by default
+4. merges the restored state into a live model object
 
 After loading, use the model directly:
 
@@ -138,7 +148,7 @@ For both workflows:
 
 ```text
 model output
--> undo target standardization
+-> undo global target scaling
 -> undo physical target transform
 -> reconstruct output grid
 ```
@@ -147,7 +157,7 @@ For `Delta21`, this means:
 
 ```text
 network output
--> unstandardized log10(Delta21 + 1)
+-> log10(Delta21 + 1)
 -> Delta21
 -> Delta21(z, k)
 ```
@@ -156,7 +166,7 @@ For `T21`, this means:
 
 ```text
 network output
--> unstandardized T21
+-> T21 in linear target space
 -> T21
 -> T21(z)
 ```

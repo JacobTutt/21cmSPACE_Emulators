@@ -1,4 +1,4 @@
-# 21cmSPACE Emulators
+# 21cmSPACE JAX Emulators
 
 `21cmspace-emulators` is a JAX-first codebase for training and packaging 21-cm
 emulators. The current focus is the 21cmSPACE-style emulator workflow used for:
@@ -9,8 +9,8 @@ emulators. The current focus is the 21cmSPACE-style emulator workflow used for:
 The motivation for this repository is to keep the scientific emulator contract
 explicit while moving the implementation toward a cleaner JAX interface. The
 code should make it clear how simulation files become training arrays, how the
-network is defined, how training is run, and how a saved emulator package can
-be loaded later for inference.
+network is defined, how training is run, and how a saved emulator checkpoint
+can be loaded later for inference.
 
 ## Repository Layout
 
@@ -19,15 +19,14 @@ be loaded later for inference.
   pyproject.toml                         (package metadata and CLI entry points)
   README.md                              (project overview)
   docs/                                  (stage-by-stage workflow notes)
-  src_jax/                               (Python source root)
-    twentyonecmspace_emulators/
-      data_preprocessing/                (load simulations and build arrays)
-      architectures/                     (shared network definitions)
-      training/                          (batching, optimization, validation)
-      utils/                             (specs, transforms, scaling, checkpointing)
-      emulators/                         (concrete T21 and Delta21 workflows)
-        delta21/                         (power-spectrum emulator)
-        t21/                             (global-signal emulator)
+  jaxemu_21cmSPACE/                      (JAX emulator project code)
+    data_preprocessing/                  (input contracts, transforms, scaling, tiling)
+    architectures/                       (shared network definitions)
+    training/                            (batching, optimization, validation)
+    utils/                               (checkpointing, configs, metrics)
+    emulators21/                         (21cmSPACE-specific loaders and workflows)
+      delta21/                           (power-spectrum emulator)
+      t21/                               (global-signal emulator)
   tests/                                 (contract and workflow smoke tests)
 ```
 
@@ -42,7 +41,7 @@ simulation files
 -> target transform and fixed-grid resampling
 -> feature and target scaling
 -> MLP training
--> .nenemu checkpoint package
+-> .nenemu checkpoint directory
 -> inference in physical units
 ```
 
@@ -84,15 +83,15 @@ The package exposes four development commands:
 
 Each training command can print its default spec/config, run a synthetic smoke
 test, or train from a 21cmSPACE dataset root. Each inference command can inspect
-a saved `.nenemu` package or generate predictions from a package plus input
+a saved `.nenemu` checkpoint or generate predictions from a checkpoint plus input
 parameter and axis files.
 
 ## Saved Emulator Packages
 
-Training writes a `.nenemu` package. It stores:
+Training writes a `.nenemu` checkpoint directory. It stores:
 
 - model architecture settings
-- trained model state
+- trained model state through Orbax
 - training and validation losses
 - emulator spec
 - feature scaling metadata

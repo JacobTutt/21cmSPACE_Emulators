@@ -2,12 +2,12 @@
 
 The shared network is defined in:
 
-- [`architectures/mlp.py`](../src_jax/twentyonecmspace_emulators/architectures/mlp.py)
+- [`architectures/mlp.py`](../jaxemu_21cmSPACE/architectures/mlp.py)
 
 The concrete workflow defaults are defined in:
 
-- [`emulators/t21/model.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/model.py)
-- [`emulators/delta21/model.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/model.py)
+- [`emulators21/t21/model.py`](../jaxemu_21cmSPACE/emulators21/t21/model.py)
+- [`emulators21/delta21/model.py`](../jaxemu_21cmSPACE/emulators21/delta21/model.py)
 
 ## DenseMLP
 
@@ -78,7 +78,7 @@ generic and the science workflow owns its chosen capacity.
 ## Saved Models
 
 Checkpoint loading rebuilds the same `DenseMLP` architecture from saved
-hyperparameters, then inserts the saved NNX state.
+hyperparameters, then restores the saved NNX state with Orbax.
 
 Conceptually:
 
@@ -88,6 +88,5 @@ model = package["model"]
 predictions = model(features)
 ```
 
-The initial random state used while loading is only needed to create an NNX
-object of the right shape. It is overwritten by the saved trained state before
-the model is returned.
+The model shape is reconstructed from metadata, then Orbax restores the trained
+NNX state and the state is merged into a live model object.

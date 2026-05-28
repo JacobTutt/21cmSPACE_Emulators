@@ -5,11 +5,15 @@ plain arrays that can be passed to the trainer.
 
 The main modules are:
 
-- [`data_preprocessing/twentyonecmspace.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/twentyonecmspace.py)
-- [`data_preprocessing/parameters.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/parameters.py)
-- [`data_preprocessing/preparation.py`](../src_jax/twentyonecmspace_emulators/data_preprocessing/preparation.py)
-- [`emulators/t21/data.py`](../src_jax/twentyonecmspace_emulators/emulators/t21/data.py)
-- [`emulators/delta21/data.py`](../src_jax/twentyonecmspace_emulators/emulators/delta21/data.py)
+- [`emulators21/twentyonecmspace.py`](../jaxemu_21cmSPACE/emulators21/twentyonecmspace.py)
+- [`data_preprocessing/specs.py`](../jaxemu_21cmSPACE/data_preprocessing/specs.py)
+- [`data_preprocessing/transforms.py`](../jaxemu_21cmSPACE/data_preprocessing/transforms.py)
+- [`data_preprocessing/scaling.py`](../jaxemu_21cmSPACE/data_preprocessing/scaling.py)
+- [`data_preprocessing/tiling.py`](../jaxemu_21cmSPACE/data_preprocessing/tiling.py)
+- [`data_preprocessing/parameters.py`](../jaxemu_21cmSPACE/data_preprocessing/parameters.py)
+- [`data_preprocessing/preparation.py`](../jaxemu_21cmSPACE/data_preprocessing/preparation.py)
+- [`emulators21/t21/data.py`](../jaxemu_21cmSPACE/emulators21/t21/data.py)
+- [`emulators21/delta21/data.py`](../jaxemu_21cmSPACE/emulators21/delta21/data.py)
 
 ## Input Files
 
@@ -135,7 +139,7 @@ It does the following:
 3. transform axes such as `k -> log10(k)`
 4. build one fixed shared axis grid from the emulator spec
 5. resample every simulation onto that grid
-6. standardize target grids using training-only statistics
+6. divide targets by one global training-label standard deviation
 7. flatten grids into scalar training rows
 8. compute feature scaling from training features
 9. scale train, validation, and test features
@@ -153,6 +157,11 @@ prepared.test_targets
 prepared.feature_scaling
 prepared.target_scaling
 ```
+
+For the concrete `t21` and `delta21` workflows, `prepared.target_scaling`
+stores one scalar standard deviation measured from the training targets. This
+matches the old `globalemu` style and avoids per-redshift or per-k target
+statistics.
 
 At this point the science-specific preprocessing is done. The trainer receives
 normal arrays and does not need to know where the simulations came from.
