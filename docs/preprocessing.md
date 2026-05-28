@@ -5,15 +5,15 @@ plain arrays that can be passed to the trainer.
 
 The main modules are:
 
-- [`emulators21/twentyonecmspace.py`](../jaxemu_21cmSPACE/emulators21/twentyonecmspace.py)
-- [`data_preprocessing/specs.py`](../jaxemu_21cmSPACE/data_preprocessing/specs.py)
-- [`data_preprocessing/transforms.py`](../jaxemu_21cmSPACE/data_preprocessing/transforms.py)
-- [`data_preprocessing/scaling.py`](../jaxemu_21cmSPACE/data_preprocessing/scaling.py)
-- [`data_preprocessing/tiling.py`](../jaxemu_21cmSPACE/data_preprocessing/tiling.py)
-- [`data_preprocessing/parameters.py`](../jaxemu_21cmSPACE/data_preprocessing/parameters.py)
-- [`data_preprocessing/preparation.py`](../jaxemu_21cmSPACE/data_preprocessing/preparation.py)
-- [`emulators21/t21/data.py`](../jaxemu_21cmSPACE/emulators21/t21/data.py)
-- [`emulators21/delta21/data.py`](../jaxemu_21cmSPACE/emulators21/delta21/data.py)
+- [`emulators_21cmspace/twentyonecmspace.py`](../emulators_21cmspace/twentyonecmspace.py)
+- [`data_preprocessing/specs.py`](../jax_emu/data_preprocessing/specs.py)
+- [`data_preprocessing/transforms.py`](../jax_emu/data_preprocessing/transforms.py)
+- [`data_preprocessing/scaling.py`](../jax_emu/data_preprocessing/scaling.py)
+- [`data_preprocessing/tiling.py`](../jax_emu/data_preprocessing/tiling.py)
+- [`data_preprocessing/parameters.py`](../jax_emu/data_preprocessing/parameters.py)
+- [`data_preprocessing/preparation.py`](../jax_emu/data_preprocessing/preparation.py)
+- [`emulators_21cmspace/t21/data.py`](../emulators_21cmspace/t21/data.py)
+- [`emulators_21cmspace/delta21/data.py`](../emulators_21cmspace/delta21/data.py)
 
 ## Input Files
 

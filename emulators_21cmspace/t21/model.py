@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jaxemu_21cmSPACE.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
+from jax_emu.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
 
 
 # Workflow Configuration

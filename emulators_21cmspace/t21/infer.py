@@ -18,9 +18,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from jaxemu_21cmSPACE.data_preprocessing.scaling import FeatureScaling
-from jaxemu_21cmSPACE.utils.checkpointing import load
-from jaxemu_21cmSPACE.emulators21.t21.data import t21_spec
+from jax_emu.data_preprocessing.scaling import FeatureScaling
+from jax_emu.utils.checkpointing import load
+from emulators_21cmspace.t21.data import t21_spec
 
 
 # Loading Utilities

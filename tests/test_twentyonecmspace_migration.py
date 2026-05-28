@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 
-from jaxemu_21cmSPACE.data_preprocessing.scaling import TargetScalingScalar
-from jaxemu_21cmSPACE.emulators21.delta21.data import prepare_twentyonecmspace_delta21_training_split
-from jaxemu_21cmSPACE.emulators21.t21.data import prepare_twentyonecmspace_t21_training_split
+from jax_emu.data_preprocessing.scaling import TargetScalingScalar
+from emulators_21cmspace.delta21.data import prepare_twentyonecmspace_delta21_training_split
+from emulators_21cmspace.t21.data import prepare_twentyonecmspace_t21_training_split
 
 
 def test_prepare_twentyonecmspace_delta21_split_matches_expected_shape_rules(tmp_path: Path) -> None:

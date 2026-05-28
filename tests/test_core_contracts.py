@@ -6,18 +6,18 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from jaxemu_21cmSPACE.utils.checkpointing import CheckpointMetadata, load, save
-from jaxemu_21cmSPACE.data_preprocessing.scaling import (
+from jax_emu.utils.checkpointing import CheckpointMetadata, load, save
+from jax_emu.data_preprocessing.scaling import (
     FeatureScaler,
     FeatureScaling,
     TargetScalingScalar,
 )
-from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from jaxemu_21cmSPACE.data_preprocessing.transforms import apply_transform, invert_transform
+from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from jax_emu.data_preprocessing.transforms import apply_transform, invert_transform
 from flax import nnx
 
-from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
-from jaxemu_21cmSPACE.emulators21.t21.data import t21_spec
+from jax_emu.architectures.mlp import DenseMLP
+from emulators_21cmspace.t21.data import t21_spec
 
 
 def test_transform_round_trip_log10() -> None:

@@ -8,8 +8,8 @@ pipelines, including:
 - regression loss and evaluation metrics (metrics.py)
 """
 
-from jaxemu_21cmSPACE.utils.checkpointing import CheckpointMetadata, load, save
-from jaxemu_21cmSPACE.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
+from jax_emu.utils.checkpointing import CheckpointMetadata, load, save
+from jax_emu.utils.config import MLPConfig, OptimizerConfig, TrainingConfig
 
 __all__ = [
     "CheckpointMetadata",

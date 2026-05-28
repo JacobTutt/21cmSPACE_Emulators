@@ -22,12 +22,12 @@ import jax
 import orbax.checkpoint as ocp
 from flax import nnx
 
-from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
-from jaxemu_21cmSPACE.data_preprocessing.scaling import (
+from jax_emu.architectures.mlp import DenseMLP
+from jax_emu.data_preprocessing.scaling import (
     FeatureScaling,
     TargetScalingScalar,
 )
-from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
 
 
 # Versioning

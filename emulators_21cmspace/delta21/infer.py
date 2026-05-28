@@ -18,11 +18,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from jaxemu_21cmSPACE.data_preprocessing.scaling import FeatureScaling
-from jaxemu_21cmSPACE.emulators21.delta21.data import (
+from jax_emu.data_preprocessing.scaling import FeatureScaling
+from emulators_21cmspace.delta21.data import (
     delta21_spec,
 )
-from jaxemu_21cmSPACE.utils.checkpointing import load
+from jax_emu.utils.checkpointing import load
 
 
 # Loading Utilities

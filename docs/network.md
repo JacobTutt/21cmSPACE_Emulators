@@ -2,12 +2,12 @@
 
 The shared network is defined in:
 
-- [`architectures/mlp.py`](../jaxemu_21cmSPACE/architectures/mlp.py)
+- [`architectures/mlp.py`](../jax_emu/architectures/mlp.py)
 
 The concrete workflow defaults are defined in:
 
-- [`emulators21/t21/model.py`](../jaxemu_21cmSPACE/emulators21/t21/model.py)
-- [`emulators21/delta21/model.py`](../jaxemu_21cmSPACE/emulators21/delta21/model.py)
+- [`emulators_21cmspace/t21/model.py`](../emulators_21cmspace/t21/model.py)
+- [`emulators_21cmspace/delta21/model.py`](../emulators_21cmspace/delta21/model.py)
 
 ## DenseMLP
 

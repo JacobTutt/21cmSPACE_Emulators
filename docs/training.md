@@ -6,12 +6,12 @@ parameter rules, or create the model. It receives an existing MLP and fits it.
 
 The main modules are:
 
-- [`training/trainer.py`](../jaxemu_21cmSPACE/training/trainer.py)
-- [`utils/checkpointing.py`](../jaxemu_21cmSPACE/utils/checkpointing.py)
-- [`emulators21/t21/train.py`](../jaxemu_21cmSPACE/emulators21/t21/train.py)
-- [`emulators21/delta21/train.py`](../jaxemu_21cmSPACE/emulators21/delta21/train.py)
-- [`emulators21/t21/infer.py`](../jaxemu_21cmSPACE/emulators21/t21/infer.py)
-- [`emulators21/delta21/infer.py`](../jaxemu_21cmSPACE/emulators21/delta21/infer.py)
+- [`training/trainer.py`](../jax_emu/training/trainer.py)
+- [`utils/checkpointing.py`](../jax_emu/utils/checkpointing.py)
+- [`emulators_21cmspace/t21/train.py`](../emulators_21cmspace/t21/train.py)
+- [`emulators_21cmspace/delta21/train.py`](../emulators_21cmspace/delta21/train.py)
+- [`emulators_21cmspace/t21/infer.py`](../emulators_21cmspace/t21/infer.py)
+- [`emulators_21cmspace/delta21/infer.py`](../emulators_21cmspace/delta21/infer.py)
 
 ## Trainer Input
 

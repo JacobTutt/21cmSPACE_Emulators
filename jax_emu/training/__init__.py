@@ -1,6 +1,6 @@
 """Training loops for prepared emulator arrays."""
 
-from jaxemu_21cmSPACE.training.trainer import (
+from jax_emu.training.trainer import (
     TrainingHistory,
     evaluate_mlp_regressor,
     train_mlp_regressor,

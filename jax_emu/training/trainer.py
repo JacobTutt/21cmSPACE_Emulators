@@ -24,8 +24,8 @@ import numpy as np
 import optax
 from flax import nnx
 
-from jaxemu_21cmSPACE.utils.metrics import mse
-from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
+from jax_emu.utils.metrics import mse
+from jax_emu.architectures.mlp import DenseMLP
 
 
 # Training History

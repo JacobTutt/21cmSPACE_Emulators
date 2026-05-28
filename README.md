@@ -19,14 +19,14 @@ can be loaded later for inference.
   pyproject.toml                         (package metadata and CLI entry points)
   README.md                              (project overview)
   docs/                                  (stage-by-stage workflow notes)
-  jaxemu_21cmSPACE/                      (JAX emulator project code)
+  jax_emu/                               (reusable JAX emulator infrastructure)
     data_preprocessing/                  (input contracts, transforms, scaling, tiling)
     architectures/                       (shared network definitions)
     training/                            (batching, optimization, validation)
     utils/                               (checkpointing, configs, metrics)
-    emulators21/                         (21cmSPACE-specific loaders and workflows)
-      delta21/                           (power-spectrum emulator)
-      t21/                               (global-signal emulator)
+  emulators_21cmspace/                   (21cmSPACE-specific downstream workflows)
+    delta21/                             (power-spectrum emulator)
+    t21/                                 (global-signal emulator)
   tests/                                 (contract and workflow smoke tests)
 ```
 

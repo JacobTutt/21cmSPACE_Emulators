@@ -19,14 +19,14 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from jaxemu_21cmSPACE.data_preprocessing.parameters import PreparedFeatures
-from jaxemu_21cmSPACE.data_preprocessing.scaling import (
+from jax_emu.data_preprocessing.parameters import PreparedFeatures
+from jax_emu.data_preprocessing.scaling import (
     FeatureScaler,
     FeatureScaling,
     TargetScalingScalar,
 )
-from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec
-from jaxemu_21cmSPACE.data_preprocessing.transforms import apply_transform
+from jax_emu.data_preprocessing.specs import AxisSpec
+from jax_emu.data_preprocessing.transforms import apply_transform
 
 
 # Data Containers

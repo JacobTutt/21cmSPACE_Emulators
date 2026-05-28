@@ -11,19 +11,19 @@ It includes helpers for:
 - spectral tiling and reconstruction (tiling.py)
 """
 
-from jaxemu_21cmSPACE.data_preprocessing.scaling import (
+from jax_emu.data_preprocessing.scaling import (
     FeatureScaler,
     FeatureScaling,
     TargetScalingScalar,
 )
-from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from jaxemu_21cmSPACE.data_preprocessing.tiling import reconstruct_spectra, tile_spectra
-from jaxemu_21cmSPACE.data_preprocessing.transforms import apply_transform, invert_transform
-from jaxemu_21cmSPACE.data_preprocessing.parameters import (
+from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from jax_emu.data_preprocessing.tiling import reconstruct_spectra, tile_spectra
+from jax_emu.data_preprocessing.transforms import apply_transform, invert_transform
+from jax_emu.data_preprocessing.parameters import (
     PreparedFeatures,
     prepare_feature_matrix,
 )
-from jaxemu_21cmSPACE.data_preprocessing.preparation import (
+from jax_emu.data_preprocessing.preparation import (
     PreparedSplit,
     axis_combinations,
     build_feature_scaler,

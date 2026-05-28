@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from jaxemu_21cmSPACE.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from jaxemu_21cmSPACE.emulators21.twentyonecmspace import (
+from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
+from emulators_21cmspace.twentyonecmspace import (
     DIMENSIONLESS_HUBBLE_PARAMETER,
     TWENTYONECMSPACE_COLUMNS,
     load_twentyonecmspace_delta21,
 )
-from jaxemu_21cmSPACE.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
-from jaxemu_21cmSPACE.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
+from jax_emu.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
+from jax_emu.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
 
 
 # Emulator Specification

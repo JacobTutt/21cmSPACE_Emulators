@@ -1,10 +1,11 @@
 """
-T21 training helpers and CLI entrypoint.
+Delta21 training helpers and CLI entrypoint.
 
-This module provides the high-level orchestration for training a T21 emulator.
-It includes utilities for running synthetic smoke tests, preparing real
-21cmSPACE data, executing the training loop, and saving versioned model
-checkpoints. It also defines the command-line interface for the T21 workflow.
+This module provides the high-level orchestration for training a Delta21
+emulator. It includes utilities for running synthetic smoke tests, preparing
+real 21cmSPACE power-spectrum data, executing the training loop, and saving
+versioned model checkpoints. It also defines the command-line interface for
+the Delta21 workflow.
 """
 
 from __future__ import annotations
@@ -21,16 +22,17 @@ import jax
 import numpy as np
 from flax import nnx
 
-from jaxemu_21cmSPACE.data_preprocessing.preparation import prepare_fixed_grid_training_split
-from jaxemu_21cmSPACE.architectures.mlp import DenseMLP
-from jaxemu_21cmSPACE.emulators21.t21.data import (
-    prepare_twentyonecmspace_t21_parameters,
-    prepare_twentyonecmspace_t21_training_split,
-    t21_spec,
+from emulators_21cmspace.twentyonecmspace import DIMENSIONLESS_HUBBLE_PARAMETER
+from jax_emu.data_preprocessing.preparation import prepare_fixed_grid_training_split
+from jax_emu.architectures.mlp import DenseMLP
+from emulators_21cmspace.delta21.data import (
+    delta21_spec,
+    prepare_twentyonecmspace_delta21_parameters,
+    prepare_twentyonecmspace_delta21_training_split,
 )
-from jaxemu_21cmSPACE.emulators21.t21.model import t21_config
-from jaxemu_21cmSPACE.utils.checkpointing import CheckpointMetadata, save
-from jaxemu_21cmSPACE.training.trainer import (
+from emulators_21cmspace.delta21.model import delta21_config
+from jax_emu.utils.checkpointing import CheckpointMetadata, save
+from jax_emu.training.trainer import (
     evaluate_mlp_regressor,
     train_mlp_regressor,
 )
@@ -47,11 +49,11 @@ def run_synthetic_smoke(
     prefetch_batches: int = 2,
 ) -> dict[str, float]:
     """
-    Run a synthetic end-to-end smoke training exercise.
+    Run a small synthetic end-to-end smoke training exercise.
 
-    The synthetic target is deliberately simple but still depends on both the
-    redshift axis and the parameter vector so it exercises the same tiled-input
-    path that a real global-signal emulator will use.
+    This does not attempt to mimic the real science signal faithfully. Its job
+    is to verify that the Delta21 spec, tiling logic, and workflow config are
+    internally consistent.
 
     Parameters
     ----------
@@ -68,13 +70,18 @@ def run_synthetic_smoke(
         A dictionary containing the final train and validation losses.
     """
     # Load default specs and configuration.
-    spec = t21_spec()
-    config = t21_config()
-    rng = np.random.default_rng(1)
+    spec = delta21_spec()
+    config = delta21_config()
+    rng = np.random.default_rng(0)
 
     # Generate mock parameters and coordinates.
     nsamples = 24
-    z = np.linspace(6.0, 27.0, 30)
+    z = np.linspace(6.0, 27.0, 8)
+    k = np.geomspace(
+        3e-2 / DIMENSIONLESS_HUBBLE_PARAMETER,
+        0.99 / DIMENSIONLESS_HUBBLE_PARAMETER,
+        8,
+    )
     raw_parameters = np.column_stack(
         [
             10 ** rng.uniform(-3.0, -1.0, size=nsamples),  # fstarII
@@ -92,26 +99,24 @@ def run_synthetic_smoke(
         ]
     )
 
-    # Create mock signals based on a sinusoidal function plus parameter dependence.
-    targets = np.empty((nsamples, len(z)), dtype=float)
+    # Build a positive target in physical space. The prepared-array workflow
+    # later applies the configured log10(target + 1) transform.
+    zz, kk = np.meshgrid(z, k, indexing="ij")
+    base_signal = (zz + 1.0) * (kk + 0.5)
+    targets = np.empty((nsamples, len(z), len(k)), dtype=float)
     for idx in range(nsamples):
-        # The sinusoid gives the mock signal a recognisable one-dimensional
-        # structure, while the parameter sum ensures the emulator must use the
-        # non-axis inputs as well.
-        targets[idx] = (
-            np.sin(z / 4.0)
-            + 0.05 * np.log10(raw_parameters[idx, 0])
-            + 0.03 * raw_parameters[idx, 7]
-        )
+        # Create mock power-spectrum signals.
+        targets[idx] = base_signal + 0.02 * np.log10(raw_parameters[idx, 0]) + 0.03 * raw_parameters[idx, 7]
 
-    # Run the preparation pipeline on mock data.
+    # Run the preparation pipeline on mock data (2D grids).
     prepared = prepare_fixed_grid_training_split(
-        axes=(z,),
+        axes=(z, k),
         axis_specs=spec.axes,
-        parameters=prepare_twentyonecmspace_t21_parameters(raw_parameters),
+        parameters=prepare_twentyonecmspace_delta21_parameters(raw_parameters),
         target=targets,
         feature_scale_methods={
             "z": "zscore",
+            "log10k": "zscore",
             "log10fstarII": "zscore",
             "log10fstarIII": "zscore",
             "log10Vc": "zscore",
@@ -122,11 +127,11 @@ def run_synthetic_smoke(
             "log10fradio": "zscore",
             "pop": "minmax_zero_to_one",
         },
-        data_log=False,
-        offset=None,
-        random_state=1,
-        shuffle_seed=1,
-        # Divide linear T21 targets by one global training-label std.
+        data_log=True,
+        offset=1.0,
+        random_state=0,
+        shuffle_seed=0,
+        # Divide log-space Delta21 targets by one global training-label std.
         standardize_target=True,
     )
 
@@ -136,7 +141,7 @@ def run_synthetic_smoke(
         hidden_features=config.mlp.hidden_dim,
         hidden_layers=config.mlp.total_hidden_layers,
         activation=config.mlp.activation,
-        rngs=nnx.Rngs(jax.random.PRNGKey(1)),
+        rngs=nnx.Rngs(jax.random.PRNGKey(0)),
     )
 
     # Run a short training loop.
@@ -151,7 +156,7 @@ def run_synthetic_smoke(
         prefetch_batches=prefetch_batches,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
-        seed=1,
+        seed=0,
     )
 
     return {
@@ -162,9 +167,9 @@ def run_synthetic_smoke(
 
 # Training Workflows
 # ------------------
-# Orchestration for training real T21 models from simulation data.
+# Orchestration for training real Delta21 models from simulation data.
 
-def train_t21_from_dataset_root(
+def train_delta21_from_dataset_root(
     dataset_root: str,
     *,
     output_path: str | Path | None = None,
@@ -175,7 +180,7 @@ def train_t21_from_dataset_root(
     log_every: int | None = 1,
 ) -> dict[str, Any]:
     """
-    Prepare, train, and save a T21 model package from 21cmSPACE data.
+    Prepare, train, and save a Delta21 model package from 21cmSPACE data.
 
     Parameters
     ----------
@@ -195,12 +200,12 @@ def train_t21_from_dataset_root(
     dict
         A summary of the training run, including loss metrics and file paths.
     """
-    # 1. Prepare the datasets (splitting, resampling, scaling, flattening).
-    prepared = prepare_twentyonecmspace_t21_training_split(
+    # 1. Prepare the datasets (splitting, resampling onto (z, k) grid, scaling, flattening).
+    prepared = prepare_twentyonecmspace_delta21_training_split(
         dataset_root,
         shuffle_seed=shuffle_seed,
     )
-    config = t21_config()
+    config = delta21_config()
 
     # 2. Build the neural network architecture.
     model = DenseMLP(
@@ -233,7 +238,7 @@ def train_t21_from_dataset_root(
         ),
         early_stopping_min_delta=config.training.early_stopping_min_delta,
         log_every=log_every,
-        log_prefix="t21",
+        log_prefix="delta21",
     )
 
     # 4. Evaluate performance on the held-out test set.
@@ -250,14 +255,14 @@ def train_t21_from_dataset_root(
     )
 
     # 5. Prepare and save the versioned model package (.nenemu).
-    output = Path("t21_model.nenemu") if output_path is None else Path(output_path)
+    output = Path("delta21_model.nenemu") if output_path is None else Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Create the metadata object required for future inference.
     metadata = CheckpointMetadata(
-        model_name="t21",
+        model_name="delta21",
         package_version=_installed_package_version(),
-        emulator_spec=t21_spec(),
+        emulator_spec=delta21_spec(),
         input_scaling=prepared.feature_scaling,
         target_scaling=prepared.target_scaling,
         training_config={
@@ -269,7 +274,7 @@ def train_t21_from_dataset_root(
             "shuffle_seed": shuffle_seed,
         },
     )
-    # Write the weights and config to disk.
+    # Write weights and configuration to disk.
     package_path = save(
         output,
         model,
@@ -307,18 +312,18 @@ def train_t21_from_dataset_root(
 
 # CLI Entrypoint
 # -------------
-# Logic for parsing arguments and executing requested T21 tasks.
+# Logic for parsing arguments and executing requested Delta21 tasks.
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    Build the command-line interface for T21 development tasks.
+    Build the command-line interface for Delta21 development tasks.
     """
-    parser = argparse.ArgumentParser(description="T21 emulator entrypoint.")
+    parser = argparse.ArgumentParser(description="Delta21 emulator entrypoint.")
     parser.add_argument("--print-spec", action="store_true", help="Print the default emulator spec.")
     parser.add_argument(
         "--print-config",
         action="store_true",
-        help="Print the current T21 model and training defaults.",
+        help="Print the current Delta21 model and training defaults.",
     )
     parser.add_argument(
         "--synthetic-smoke",
@@ -328,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset-root",
         type=str,
-        help="Path to the 21cmSPACE dataset root for real T21 preparation/training.",
+        help="Path to the 21cmSPACE dataset root for real Delta21 preparation/training.",
     )
     parser.add_argument(
         "--prepare-only",
@@ -357,29 +362,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--shuffle-seed",
         type=int,
         default=42,
-        help="Seed used when shuffling the fixed-grid T21 training rows after the split.",
+        help="Seed used when shuffling the fixed-grid Delta21 training rows after the split.",
     )
     return parser
 
 
 def main() -> None:
     """
-    Run the T21 command-line workflow.
+    Run the Delta21 command-line workflow.
     """
     args = build_parser().parse_args()
 
     # Route based on the provided CLI flags.
     if args.print_spec:
-        pprint(t21_spec())
+        pprint(delta21_spec())
         return
     if args.print_config:
-        pprint(t21_config())
+        pprint(delta21_config())
         return
     if args.synthetic_smoke:
         epochs = 20 if args.epochs is None else args.epochs
         batch_size = 64 if args.batch_size is None else args.batch_size
         prefetch_batches = (
-            t21_config().training.prefetch_batches
+            delta21_config().training.prefetch_batches
             if args.prefetch_batches is None
             else args.prefetch_batches
         )
@@ -391,8 +396,8 @@ def main() -> None:
         pprint(result)
         return
     if args.dataset_root:
-        # Prepare the real dataset.
-        prepared = prepare_twentyonecmspace_t21_training_split(
+        # Prepare the real power-spectrum dataset.
+        prepared = prepare_twentyonecmspace_delta21_training_split(
             args.dataset_root,
             shuffle_seed=args.shuffle_seed,
         )
@@ -411,7 +416,7 @@ def main() -> None:
             return
 
         # Execute training on the prepared data.
-        summary = train_t21_from_dataset_root(
+        summary = train_delta21_from_dataset_root(
             args.dataset_root,
             output_path=args.output,
             epochs=args.epochs,
@@ -424,14 +429,13 @@ def main() -> None:
         return
 
     raise SystemExit(
-        "Real T21 dataset loading is available through --dataset-root. "
+        "Real Delta21 dataset loading is available through --dataset-root. "
         "Use --prepare-only to inspect prepared arrays, or --synthetic-smoke for the mock path."
     )
 
 
 # Internal Helpers
 # ----------------
-# Lower-level utilities for versioning and file writing.
 
 def _installed_package_version() -> str:
     """Return the installed package version or a development fallback."""

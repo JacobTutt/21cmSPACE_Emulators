@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from jaxemu_21cmSPACE.emulators21.delta21.data import delta21_spec, prepare_twentyonecmspace_delta21_parameters
-from jaxemu_21cmSPACE.emulators21.delta21.model import delta21_config
-from jaxemu_21cmSPACE.emulators21.t21.data import prepare_twentyonecmspace_t21_parameters, t21_spec
-from jaxemu_21cmSPACE.emulators21.t21.model import t21_config
+from emulators_21cmspace.delta21.data import delta21_spec, prepare_twentyonecmspace_delta21_parameters
+from emulators_21cmspace.delta21.model import delta21_config
+from emulators_21cmspace.t21.data import prepare_twentyonecmspace_t21_parameters, t21_spec
+from emulators_21cmspace.t21.model import t21_config
 
 
 def test_delta21_spec_matches_expected_feature_contract() -> None:
