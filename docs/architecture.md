@@ -37,29 +37,6 @@ call.
 | `out_features` | Number of output values per input row. Current workflows use scalar regression, so this is usually `1`. |
 | `rngs` | Flax NNX random-number container used to initialise the network parameters. |
 
-The direct `DenseMLP` constructor uses the names that belong to the neural
-network itself:
-
-```python
-from flax import nnx
-
-from jax_emu.architectures.mlp import DenseMLP
-
-model = DenseMLP(
-    in_features=8,
-    hidden_features=64,
-    hidden_layers=3,
-    out_features=1,
-    activation="relu",
-    rngs=nnx.Rngs(0),
-)
-```
-
-In emulator configuration files the same idea is usually written in terms of
-`input_dim`, `hidden_dim`, `n_hidden_blocks`, `activation`, and `output_dim`.
-The training code can infer `input_dim` from the prepared feature array, so the
-important user choices are usually the hidden width, depth, and activation.
-
 
 
 ## Activation Functions
@@ -74,3 +51,20 @@ a stack of dense layers would still only represent a linear map.
 | `gelu` | `jax.nn.gelu` | Conceptually `gelu(x) = x Phi(x)`, where `Phi` is the standard normal CDF. JAX uses its approximate form by default. |
 
 ![Activation functions](assets/activation-functions.svg)
+
+
+## Example
+```python
+from flax import nnx
+
+from jax_emu.architectures.mlp import DenseMLP
+
+model = DenseMLP(
+    in_features=8,
+    hidden_features=64,
+    hidden_layers=3,
+    out_features=1,
+    activation="relu",
+    rngs=nnx.Rngs(0),
+)
+```

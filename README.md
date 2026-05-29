@@ -1,6 +1,6 @@
 # 21cmSPACE JAX Emulators
 
-The repository is designed to be a practical guide for building JAX emulators
+The repository is designed to be a practical guide for those wanting to build simple JAX emulators
 from 21-cm cosmology simulations and other associated multi-wavelength probes
 for use within JAX-accelerated Bayesian inference frameworks, for example
 [BlackJAX](https://github.com/blackjax-devs/blackjax).

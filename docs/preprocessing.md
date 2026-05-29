@@ -90,6 +90,12 @@ defines the parameter column order.
 Splitting is done at the simulation level before tiling. This keeps a full
 simulation target grid in only one split.
 
+- **Training set**: Data used to update the model parameters.
+- **Validation set**: Held-out data used during training to monitor
+  generalization and drive early stopping.
+- **Test set**: A final held-out split used after training to report emulator
+  performance.
+
 ```python
 from jax_emu.data_preprocessing import apply_transform, split_simulations
 
