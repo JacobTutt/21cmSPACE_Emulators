@@ -59,9 +59,9 @@ requested spectrum, surface, or grid.
 Start here, then move into the stage-specific docs:
 
 - [Architecture](docs/architecture.md): package layout, specs, checkpoints, and inference contracts.
-- [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
 - [Preprocessing](docs/preprocessing.md): parameter preparation, target transforms, scaling, and tiling.
-- [Examples](docs/examples.md): index for worked workflows, including global 21-cm and power-spectrum examples.
+- [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
+- [Examples](docs/examples.md): worked global 21-cm and power-spectrum workflows.
 
 ## Installation
 
