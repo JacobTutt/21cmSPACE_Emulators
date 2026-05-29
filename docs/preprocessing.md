@@ -81,8 +81,15 @@ prepared_parameters = prepare_feature_matrix(
 )
 ```
 
-The output stores both the numerical matrix and the feature names. The feature
-order is part of the model contract.
+This function turns the raw parameter table into a `PreparedFeatures` object.
+That object is the first product passed into the rest of the preprocessing
+pipeline.
+
+| Product | Meaning |
+| --- | --- |
+| `values` | Numerical parameter matrix after discarded columns and log transforms. |
+| `feature_names` | Column names in the exact order expected by the network. |
+| `discrete_values` | Allowed values for discrete parameters, useful for metadata and checks. |
 
 ## Axis and Target Transforms
 
@@ -95,6 +102,10 @@ from jax_emu.data_preprocessing import apply_transform, invert_transform
 log_target = apply_transform(target, transform="log10", offset=1e-8)
 physical_target = invert_transform(log_target, transform="log10", offset=1e-8)
 ```
+
+`apply_transform` is the forward map into training space. `invert_transform`
+is the matching map back to physical space. The optional `offset` keeps
+log-transformed positive targets finite.
 
 Transform and normalisation are separate steps:
 
@@ -127,6 +138,10 @@ from jax_emu.data_preprocessing import split_simulations
 )
 ```
 
+The products are still simulation-level arrays. Each parameter row remains
+paired with its full target grid, so no single simulation can leak across train,
+validation, and test.
+
 Fit preprocessing statistics from the training split only. Reuse them for
 validation, test, and inference.
 
@@ -157,6 +172,16 @@ scaled_train_features = feature_scaler.transform(train_features)
 scaled_validation_features = feature_scaler.transform(validation_features)
 ```
 
+`FeatureScaling.from_values` fits one column rule from the training rows.
+`FeatureScaler` applies the ordered tuple of rules to a full feature matrix.
+The important products are:
+
+| Product | Used for |
+| --- | --- |
+| `scaling` | Metadata saved with the emulator checkpoint. |
+| `feature_scaler` | Object that applies the same rules to any split or inference input. |
+| `scaled_*_features` | Arrays passed directly to the network. |
+
 Scaling metadata is fitted once from training rows:
 
 ```text
@@ -176,6 +201,11 @@ target_scaling = TargetScalingScalar.from_targets(train_target_grid)
 scaled_train_targets = target_scaling.transform_grid(train_target_grid)
 scaled_validation_targets = target_scaling.transform_grid(validation_target_grid)
 ```
+
+`TargetScalingScalar.from_targets` fits one global standard deviation from the
+training targets. The transformed target arrays are the labels used by the
+trainer. The scaler itself is saved so predictions can be multiplied back to the
+unscaled target space.
 
 After inference, invert target scaling before inverting the physical target
 transform:
@@ -213,6 +243,17 @@ predicted_grid = reconstruct_spectra(
 )
 ```
 
+`tile_spectra` produces the final scalar-regression training product:
+
+```text
+features:    (n_simulations * n_grid_points, n_axes + n_parameters)
+target_rows: (n_simulations * n_grid_points,)
+axis_shape:  original grid shape needed for reconstruction
+```
+
+`reconstruct_spectra` performs the shape inverse after prediction. It folds the
+flat network outputs back into per-simulation grids.
+
 This is a shape transform. It does not change the physical values.
 
 ## Full Preparation Helper
@@ -249,8 +290,14 @@ prepared = prepare_fixed_grid_training_split(
 )
 ```
 
-The returned object contains the prepared train, validation, and test arrays,
-plus the metadata needed to repeat the same preprocessing during inference.
+The returned `PreparedSplit` is the hand-off to training code. It contains:
+
+| Product | Meaning |
+| --- | --- |
+| `train_*`, `validation_*`, `test_*` | Final feature and target arrays for each split. |
+| `feature_names` | Feature order used by the network. |
+| `feature_scaling` | Input scaling metadata to save with the emulator. |
+| `target_scaling` | Optional output scaling metadata to invert predictions. |
 
 ## Training
 
