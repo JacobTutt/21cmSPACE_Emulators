@@ -61,16 +61,34 @@ load dataset
 ### Prepare Arrays
 
 ```python
+import numpy as np
+
 from emulators_21cmspace.t21.data import (
     prepare_twentyonecmspace_t21_parameters,
     t21_spec,
 )
 from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_t21
-from jax_emu.data_preprocessing import prepare_fixed_grid_training_split
+from jax_emu.data_preprocessing import (
+    PreparedSplit,
+    TargetScalingScalar,
+    build_feature_scaler,
+    build_fixed_axis_grid,
+    flatten_resampled_rows,
+    resample_targets_to_grid,
+    shuffle_rows,
+    split_simulations,
+    transform_target,
+    transformed_axis_configuration,
+)
 
 product = load_twentyonecmspace_t21(dataset_root)
 prepared_parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
 spec = t21_spec()
+
+z_axis = product.axes.z
+raw_t21_targets = product.target
+axes = (z_axis,)
+axis_specs = spec.axes
 
 feature_scale_methods = {
     "z": "zscore",
@@ -85,20 +103,105 @@ feature_scale_methods = {
     "pop": "minmax_zero_to_one",
 }
 
-prepared = prepare_fixed_grid_training_split(
-    axes=(product.axes.z,),
-    axis_specs=spec.axes,
-    parameters=prepared_parameters,
-    target=product.target,
-    feature_scale_methods=feature_scale_methods,
+transformed_target = transform_target(
+    raw_t21_targets,
     data_log=False,
     offset=None,
+)
+
+(
+    train_parameters,
+    validation_parameters,
+    test_parameters,
+    train_target,
+    validation_target,
+    test_target,
+) = split_simulations(
+    prepared_parameters.values,
+    transformed_target,
     train_size=0.6,
     validation_size=0.2,
     test_size=0.2,
     random_state=42,
-    shuffle_seed=42,
-    standardize_target=True,
+)
+
+transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
+sampled_axes = build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
+
+feature_names = (
+    *(axis.feature_name() for axis in axis_specs),
+    *prepared_parameters.feature_names,
+)
+
+train_target_grid = resample_targets_to_grid(
+    train_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+validation_target_grid = resample_targets_to_grid(
+    validation_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+test_target_grid = resample_targets_to_grid(
+    test_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+
+target_scaling = TargetScalingScalar.from_targets(train_target_grid)
+train_target_grid = target_scaling.transform_grid(train_target_grid)
+validation_target_grid = target_scaling.transform_grid(validation_target_grid)
+test_target_grid = target_scaling.transform_grid(test_target_grid)
+
+train_features, train_targets = flatten_resampled_rows(
+    train_parameters,
+    train_target_grid,
+    sampled_axes=sampled_axes,
+)
+validation_features, validation_targets = flatten_resampled_rows(
+    validation_parameters,
+    validation_target_grid,
+    sampled_axes=sampled_axes,
+)
+test_features, test_targets = flatten_resampled_rows(
+    test_parameters,
+    test_target_grid,
+    sampled_axes=sampled_axes,
+)
+
+feature_scaler = build_feature_scaler(
+    train_features,
+    feature_names=feature_names,
+    method_overrides=feature_scale_methods,
+)
+
+train_features = feature_scaler.transform(train_features).astype(np.float32)
+validation_features = feature_scaler.transform(validation_features).astype(np.float32)
+test_features = feature_scaler.transform(test_features).astype(np.float32)
+
+train_targets = np.asarray(train_targets, dtype=np.float32)
+validation_targets = np.asarray(validation_targets, dtype=np.float32)
+test_targets = np.asarray(test_targets, dtype=np.float32)
+
+train_features, train_targets = shuffle_rows(train_features, train_targets, seed=42)
+validation_features, validation_targets = shuffle_rows(
+    validation_features,
+    validation_targets,
+    seed=42,
+)
+test_features, test_targets = shuffle_rows(test_features, test_targets, seed=42)
+
+prepared = PreparedSplit(
+    feature_names=feature_names,
+    train_features=train_features,
+    train_targets=train_targets,
+    validation_features=validation_features,
+    validation_targets=validation_targets,
+    test_features=test_features,
+    test_targets=test_targets,
+    feature_scaling=feature_scaler.scaling,
+    target_scaling=target_scaling,
 )
 
 print(prepared.feature_names)
@@ -243,16 +346,35 @@ same parameter transforms and feature scaling used during training.
 ### Prepare Arrays
 
 ```python
+import numpy as np
+
 from emulators_21cmspace.delta21.data import (
     delta21_spec,
     prepare_twentyonecmspace_delta21_parameters,
 )
 from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_delta21
-from jax_emu.data_preprocessing import prepare_fixed_grid_training_split
+from jax_emu.data_preprocessing import (
+    PreparedSplit,
+    TargetScalingScalar,
+    build_feature_scaler,
+    build_fixed_axis_grid,
+    flatten_resampled_rows,
+    resample_targets_to_grid,
+    shuffle_rows,
+    split_simulations,
+    transform_target,
+    transformed_axis_configuration,
+)
 
 product = load_twentyonecmspace_delta21(dataset_root)
 prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
 spec = delta21_spec()
+
+z_axis = product.axes.z
+k_axis = product.axes.k
+raw_delta21_targets = product.target
+axes = (z_axis, k_axis)
+axis_specs = spec.axes
 
 feature_scale_methods = {
     "z": "zscore",
@@ -268,20 +390,105 @@ feature_scale_methods = {
     "pop": "minmax_zero_to_one",
 }
 
-prepared = prepare_fixed_grid_training_split(
-    axes=(product.axes.z, product.axes.k),
-    axis_specs=spec.axes,
-    parameters=prepared_parameters,
-    target=product.target,
-    feature_scale_methods=feature_scale_methods,
+transformed_target = transform_target(
+    raw_delta21_targets,
     data_log=True,
     offset=1e-8,
+)
+
+(
+    train_parameters,
+    validation_parameters,
+    test_parameters,
+    train_target,
+    validation_target,
+    test_target,
+) = split_simulations(
+    prepared_parameters.values,
+    transformed_target,
     train_size=0.6,
     validation_size=0.2,
     test_size=0.2,
     random_state=42,
-    shuffle_seed=42,
-    standardize_target=True,
+)
+
+transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
+sampled_axes = build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
+
+feature_names = (
+    *(axis.feature_name() for axis in axis_specs),
+    *prepared_parameters.feature_names,
+)
+
+train_target_grid = resample_targets_to_grid(
+    train_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+validation_target_grid = resample_targets_to_grid(
+    validation_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+test_target_grid = resample_targets_to_grid(
+    test_target,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+
+target_scaling = TargetScalingScalar.from_targets(train_target_grid)
+train_target_grid = target_scaling.transform_grid(train_target_grid)
+validation_target_grid = target_scaling.transform_grid(validation_target_grid)
+test_target_grid = target_scaling.transform_grid(test_target_grid)
+
+train_features, train_targets = flatten_resampled_rows(
+    train_parameters,
+    train_target_grid,
+    sampled_axes=sampled_axes,
+)
+validation_features, validation_targets = flatten_resampled_rows(
+    validation_parameters,
+    validation_target_grid,
+    sampled_axes=sampled_axes,
+)
+test_features, test_targets = flatten_resampled_rows(
+    test_parameters,
+    test_target_grid,
+    sampled_axes=sampled_axes,
+)
+
+feature_scaler = build_feature_scaler(
+    train_features,
+    feature_names=feature_names,
+    method_overrides=feature_scale_methods,
+)
+
+train_features = feature_scaler.transform(train_features).astype(np.float32)
+validation_features = feature_scaler.transform(validation_features).astype(np.float32)
+test_features = feature_scaler.transform(test_features).astype(np.float32)
+
+train_targets = np.asarray(train_targets, dtype=np.float32)
+validation_targets = np.asarray(validation_targets, dtype=np.float32)
+test_targets = np.asarray(test_targets, dtype=np.float32)
+
+train_features, train_targets = shuffle_rows(train_features, train_targets, seed=42)
+validation_features, validation_targets = shuffle_rows(
+    validation_features,
+    validation_targets,
+    seed=42,
+)
+test_features, test_targets = shuffle_rows(test_features, test_targets, seed=42)
+
+prepared = PreparedSplit(
+    feature_names=feature_names,
+    train_features=train_features,
+    train_targets=train_targets,
+    validation_features=validation_features,
+    validation_targets=validation_targets,
+    test_features=test_features,
+    test_targets=test_targets,
+    feature_scaling=feature_scaler.scaling,
+    target_scaling=target_scaling,
 )
 
 print(prepared.feature_names)
