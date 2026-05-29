@@ -28,13 +28,14 @@ call.
 
 ![Dense MLP configuration](assets/dense-mlp-properties.svg)
 
-| Field | Meaning | Maps to `DenseMLP` |
-| --- | --- | --- |
-| `input_dim` | Number of input features after tiling and preprocessing. This is axis coordinates plus astrophysical parameters. | `in_features` when a fixed width is known, though training entrypoints usually use `prepared.train_features.shape[1]`. |
-| `hidden_dim` | Width of every hidden layer. | `hidden_features` |
-| `n_hidden_blocks` | Number of hidden linear blocks after the first hidden layer. | `hidden_layers = 1 + n_hidden_blocks` via `total_hidden_layers`. |
-| `activation` | Non-linearity applied after each hidden linear layer. | `activation` |
-| `output_dim` | Number of output values per input row. Current workflows use scalar regression, so this is `1`. | `out_features`; defaults to `1` in `DenseMLP`. |
+| `DenseMLP` input | Definition |
+| --- | --- |
+| `in_features` | Number of input features after tiling and preprocessing. This is axis coordinates plus astrophysical parameters. |
+| `hidden_features` | Width of every hidden layer. |
+| `hidden_layers` | Number of hidden linear layers before the final readout. |
+| `activation` | Non-linearity applied after each hidden linear layer. |
+| `out_features` | Number of output values per input row. Current workflows use scalar regression, so this is usually `1`. |
+| `rngs` | Flax NNX random-number container used to initialise the network parameters. |
 
 The direct `DenseMLP` constructor uses the names that belong to the neural
 network itself:
@@ -59,40 +60,17 @@ In emulator configuration files the same idea is usually written in terms of
 The training code can infer `input_dim` from the prepared feature array, so the
 important user choices are usually the hidden width, depth, and activation.
 
-```python
-from flax import nnx
-
-from jax_emu.architectures.mlp import DenseMLP
-from jax_emu.utils.config import MLPConfig
-
-config = MLPConfig(
-    input_dim=8,
-    hidden_dim=100,
-    n_hidden_blocks=3,
-    output_dim=1,
-    activation="gelu",
-)
-
-model = DenseMLP(
-    in_features=config.input_dim,
-    hidden_features=config.hidden_dim,
-    hidden_layers=config.total_hidden_layers,
-    out_features=config.output_dim,
-    activation=config.activation,
-    rngs=nnx.Rngs(0),
-)
-```
 
 
 ## Activation Functions
 
-Activation functions introduce the non-linearity in the network. Without them,
+The role of the activation functions is to introduce the non-linearity in the network. Without them,
 a stack of dense layers would still only represent a linear map.
-
-![Activation functions](assets/activation-functions.svg)
 
 | Name | Implementation | Equation |
 | --- | --- | --- |
 | `relu` | `jax.nn.relu` | `relu(x) = max(0, x)` |
 | `tanh` | `jax.numpy.tanh` | `tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))` |
 | `gelu` | `jax.nn.gelu` | Conceptually `gelu(x) = x Phi(x)`, where `Phi` is the standard normal CDF. JAX uses its approximate form by default. |
+
+![Activation functions](assets/activation-functions.svg)
