@@ -9,9 +9,13 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from emulators_21cmspace.delta21.infer import build_delta21_predictor, predict_delta21
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_emulator,
+    build_delta21_predictor,
+    predict_delta21,
+)
 from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
-from emulators_21cmspace.t21.infer import predict_t21
+from emulators_21cmspace.t21.infer import build_t21_emulator, predict_t21
 from emulators_21cmspace.t21.train import train_t21_from_dataset_root
 
 
@@ -76,6 +80,11 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
     predictions = predict_delta21(package_path, raw_parameters, z, k)
     predictor = build_delta21_predictor(package_path)
     compiled_predictions = predictor(raw_parameters, z, k)
+    emulator = build_delta21_emulator(
+        package_path,
+        compile_inputs=(raw_parameters, z, k),
+    )
+    emulator_predictions = emulator.forward_model(raw_parameters, z, k)
 
     assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 2, 2)
@@ -83,6 +92,9 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert isinstance(compiled_predictions, jax.Array)
     assert compiled_predictions.shape == (2, 2, 2)
     assert np.isfinite(np.asarray(jax.device_get(compiled_predictions))).all()
+    assert isinstance(emulator_predictions, jax.Array)
+    assert emulator_predictions.shape == (2, 2, 2)
+    assert np.isfinite(np.asarray(jax.device_get(emulator_predictions))).all()
 
 
 def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
@@ -107,7 +119,15 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
     )
     z = jnp.array([6.0, 10.0, 20.0, 27.0], dtype=jnp.float32)
     predictions = predict_t21(package_path, raw_parameters, z)
+    emulator = build_t21_emulator(
+        package_path,
+        compile_inputs=(raw_parameters, z),
+    )
+    emulator_predictions = emulator.forward_model(raw_parameters, z)
 
     assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 4)
     assert np.isfinite(np.asarray(jax.device_get(predictions))).all()
+    assert isinstance(emulator_predictions, jax.Array)
+    assert emulator_predictions.shape == (2, 4)
+    assert np.isfinite(np.asarray(jax.device_get(emulator_predictions))).all()

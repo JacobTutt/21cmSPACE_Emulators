@@ -272,19 +272,18 @@ During inference, the same metadata is loaded from the checkpoint:
 6. **Reconstruction**: fold flat predictions back into spectral arrays.
 
 ```python
-from emulators_21cmspace.delta21.infer import build_delta21_predictor, load_delta21_package
+from emulators_21cmspace.delta21.infer import build_delta21_emulator, load_delta21_package
 
 package = load_delta21_package("delta21_model.nenemu")
-predictor = build_delta21_predictor(package)
-
-delta21 = predictor(
-    parameters=physical_parameters,
-    z_values=z_grid,
-    k_values=k_grid,
+emulator = build_delta21_emulator(
+    package,
+    compile_inputs=(physical_parameters, z_grid, k_grid),
 )
+
+delta21 = emulator.forward_model(physical_parameters, z_grid, k_grid)
 ```
 
-The predictor closes over the loaded model and metadata. `metadata.emulator_spec`
+The emulator closes over the loaded model and metadata. `metadata.emulator_spec`
 supplies the transforms, `metadata.input_scaling` supplies the input
 normalisation, and `metadata.target_scaling` supplies the inverse target
 scaling.

@@ -12,13 +12,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from pprint import pprint
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from jax_emu.data_preprocessing.scaling import FeatureScaling
+from jax_emu.infer import Emulator
 from jax_emu.utils.checkpointing import load
 from emulators_21cmspace.t21.data import t21_spec
 
@@ -60,6 +60,13 @@ def load_t21_package(path: str | Path) -> dict[str, Any]:
     """
     # Use the shared Orbax loading utility.
     package = load(path)
+    return _validate_t21_package(package)
+
+
+def _validate_t21_package(package: dict[str, Any]) -> dict[str, Any]:
+    """
+    Validate that a loaded package can be used for T21 inference.
+    """
     metadata = package["metadata"]
     # Ensure the checkpoint is not missing the required inference metadata.
     if metadata is None:
@@ -73,6 +80,42 @@ def load_t21_package(path: str | Path) -> dict[str, Any]:
 # Prediction Logic
 # ----------------
 # Core workflow for moving from astrophysical parameters to physical signals.
+
+def build_t21_emulator(
+    package_or_path: str | Path | dict[str, Any],
+    *,
+    compile_inputs: tuple[jax.Array, ...] | None = None,
+) -> Emulator:
+    """
+    Build a reusable T21 emulator object.
+    """
+    # Resolve and validate the package outside JIT. File I/O and metadata checks
+    # should happen once before repeated accelerator-side inference calls.
+    package = (
+        load_t21_package(package_or_path)
+        if isinstance(package_or_path, (str, Path))
+        else _validate_t21_package(package_or_path)
+    )
+    return Emulator(
+        package=package,
+        parameter_adapter=_prepare_parameter_values,
+        compile_inputs=compile_inputs,
+    )
+
+
+def build_t21_predictor(
+    package_or_path: str | Path | dict[str, Any],
+    *,
+    compile_inputs: tuple[jax.Array, ...] | None = None,
+) -> Callable[[jax.Array, jax.Array], jax.Array]:
+    """
+    Build a reusable JIT-compiled T21 prediction function.
+    """
+    # Keep the existing function-style API by returning the generic emulator's
+    # forward model method.
+    emulator = build_t21_emulator(package_or_path, compile_inputs=compile_inputs)
+    return emulator.forward_model
+
 
 def predict_t21(
     package_or_path: str | Path | dict[str, Any],
@@ -97,61 +140,10 @@ def predict_t21(
     jax.Array
         Device array with shape (n_sims, n_z).
     """
-    # 1. Resolve the model package.
-    package = (
-        load_t21_package(package_or_path)
-        if isinstance(package_or_path, (str, Path))
-        else package_or_path
-    )
-    metadata = package["metadata"]
-    spec = metadata.emulator_spec
-
-    # 2. Prepare the input features.
-    prepared_parameters = _prepare_parameter_values(parameters)
-    z = z_values.ravel()
-    # Apply the same coordinate transform (if any) used during training.
-    axis_features = _apply_transform_jax(z, spec.axes[0].transform)[:, None]
-
-    # Tile coordinates and parameters to create the (n_sims * n_z, n_features) matrix.
-    repeated_axes = jnp.tile(axis_features, (prepared_parameters.shape[0], 1))
-    repeated_parameters = jnp.repeat(
-        prepared_parameters,
-        repeats=axis_features.shape[0],
-        axis=0,
-    )
-    features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
-
-    # 3. Validate feature alignment.
-    # Ensure the columns in our feature matrix match the order expected by the model.
-    expected_names = spec.input_feature_names()
-    actual_names = tuple(feature.name for feature in metadata.input_scaling)
-    if actual_names != expected_names:
-        raise ValueError(
-            "Saved feature scaling order does not match the emulator spec. "
-            f"Expected {expected_names}, received {actual_names}."
-        )
-
-    # 4. Execute the model forward pass.
-    # Scale the features using training-set statistics.
-    scaled_features = _scale_features_jax(features, metadata.input_scaling)
-    # Call the JAX model and keep predictions on the device.
-    flat_predictions = package["model"](scaled_features).squeeze(-1)
-
-    # 5. Post-process the predictions.
-    # Invert target scaling if it was applied during training.
-    # New workflow checkpoints use one global scalar, so this is just multiplication.
-    if metadata.target_scaling is not None:
-        flat_predictions = flat_predictions * metadata.target_scaling.std
-    # Invert the physical target transform (e.g. log10).
-    physical_predictions = _invert_transform_jax(
-        flat_predictions,
-        spec.target_transform,
-        offset=spec.target_offset,
-    )
-
-    # 6. Reconstruct the spectral arrays.
-    # Fold the flattened vector back into (nsamples, n_z).
-    return physical_predictions.reshape((prepared_parameters.shape[0], z.shape[0]))
+    # Build the compiled predictor and immediately use it. For repeated calls,
+    # build the predictor once with build_t21_predictor(...) and reuse it.
+    predictor = build_t21_predictor(package_or_path)
+    return predictor(parameters, z_values)
 
 
 # Diagnostics
@@ -289,59 +281,3 @@ def _prepare_parameter_values(raw_parameters: jax.Array) -> jax.Array:
         "T21 inference expects either a raw 12-column 21cmSPACE parameter table "
         f"or a pre-prepared {expected_width}-column feature table."
     )
-
-
-def _apply_transform_jax(values: jax.Array, transform: str) -> jax.Array:
-    """
-    Apply a named coordinate transform on the JAX device.
-    """
-    if transform == "identity":
-        return values
-    if transform == "log10":
-        return jnp.log10(values)
-    raise ValueError(f"Unsupported transform {transform}.")
-
-
-def _invert_transform_jax(values: jax.Array, transform: str, offset: float = 0.0) -> jax.Array:
-    """
-    Undo a named target transform on the JAX device.
-    """
-    if transform == "identity":
-        return values
-    if transform == "log10":
-        return jnp.power(10.0, values) - offset
-    raise ValueError(f"Unsupported transform {transform}.")
-
-
-def _scale_features_jax(
-    features: jax.Array,
-    scaling: tuple[FeatureScaling, ...],
-) -> jax.Array:
-    """
-    Apply saved input-feature scaling on the JAX device.
-    """
-    columns = []
-    for idx, feature in enumerate(scaling):
-        values = features[:, idx]
-        if feature.method == "identity":
-            scaled = values
-        elif feature.method == "zscore":
-            scaled = (values - feature.mean) / feature.std
-        elif feature.method == "minmax_minus_one_to_one":
-            denom = feature.maximum - feature.minimum
-            scaled = (
-                jnp.zeros_like(values)
-                if denom == 0
-                else (2.0 * (values - feature.minimum) / denom) - 1.0
-            )
-        elif feature.method == "minmax_zero_to_one":
-            denom = feature.maximum - feature.minimum
-            scaled = (
-                jnp.zeros_like(values)
-                if denom == 0
-                else (values - feature.minimum) / denom
-            )
-        else:
-            raise ValueError(f"Unsupported scaling method {feature.method}.")
-        columns.append(scaled)
-    return jnp.stack(columns, axis=1).astype(jnp.float32)

@@ -135,25 +135,31 @@ physical inputs
 -> physical prediction
 ```
 
+This route is implemented by the generic `jax_emu.Emulator` class. The
+emulator-specific loaders, such as the Delta21 and T21 helpers, mainly validate
+the saved package and attach any dataset-specific parameter adapter needed to
+accept raw simulation parameter tables.
+
 For example, if a `Delta21` model was trained with `log10(k)` and
 `log10(Delta21 + 1e-8)`, the checkpoint records those choices. The inference
 helper can then apply the same forward transforms before the network and the
 same inverse transforms after the network.
 
 ```python
-from emulators_21cmspace.delta21.infer import (
-    build_delta21_predictor,
-    load_delta21_package,
-)
+from emulators_21cmspace.delta21.infer import build_delta21_emulator, load_delta21_package
 
 # The emulator-specific loader validates that the checkpoint metadata is present.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
-# Build the compiled numerical inference function once.
-predictor = build_delta21_predictor(package)
+# Build the reusable emulator object once.
+# Pass compile_inputs to pay the first JIT compilation cost immediately.
+emulator = build_delta21_emulator(
+    package,
+    compile_inputs=(physical_parameters, z, k),
+)
 
-# Reuse the predictor for repeated calls, for example inside an inference loop.
-delta21 = predictor(physical_parameters, z, k)
+# Reuse the compiled forward model, for example inside an inference loop.
+delta21 = emulator.forward_model(physical_parameters, z, k)
 ```
 
 For one-off calls, the convenience wrapper can still load and predict in one
@@ -170,5 +176,6 @@ delta21 = predict_delta21(
 )
 ```
 
-For repeated inference, prefer `build_delta21_predictor`. It keeps disk I/O and
-metadata validation outside the compiled numerical path.
+For repeated inference, prefer `build_delta21_emulator`. It keeps disk I/O and
+metadata validation outside the compiled numerical path and exposes a reusable
+`forward_model` method.

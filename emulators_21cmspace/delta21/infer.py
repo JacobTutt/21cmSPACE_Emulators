@@ -17,12 +17,11 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from flax import nnx
 
-from jax_emu.data_preprocessing.scaling import FeatureScaling
 from emulators_21cmspace.delta21.data import (
     delta21_spec,
 )
+from jax_emu.infer import Emulator
 from jax_emu.utils.checkpointing import load
 
 
@@ -86,27 +85,30 @@ def _validate_delta21_package(package: dict[str, Any]) -> dict[str, Any]:
 # ----------------
 # Core workflow for moving from astrophysical parameters to physical power spectra.
 
-def build_delta21_predictor(
+def build_delta21_emulator(
     package_or_path: str | Path | dict[str, Any],
-) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
+    *,
+    compile_inputs: tuple[jax.Array, ...] | None = None,
+) -> Emulator:
     """
-    Build a reusable JIT-compiled Delta21 prediction function.
+    Build a reusable Delta21 emulator object.
 
-    This resolves the checkpoint package and validates the metadata once. The
-    returned function then contains only the numerical inference path: parameter
-    preparation, axis tiling, feature scaling, model evaluation, inverse target
-    scaling, inverse target transform, and grid reconstruction.
+    This resolves the checkpoint package and validates the metadata once, then
+    delegates the compiled forward model to the generic `jax_emu.Emulator`
+    wrapper.
 
     Parameters
     ----------
     package_or_path:
         Either a path to a model package or an already loaded package dictionary.
+    compile_inputs:
+        Optional tuple `(parameters, z_values, k_values)` used to force JIT
+        compilation during initialization.
 
     Returns
     -------
-    Callable[[jax.Array, jax.Array, jax.Array], jax.Array]
-        A compiled prediction function with signature
-        ``predict(parameters, z_values, k_values)``.
+    Emulator
+        Reusable emulator object with a compiled `forward_model` method.
     """
     # Resolve and validate the package outside JIT. File I/O and metadata checks
     # should happen once before repeated accelerator-side inference calls.
@@ -115,87 +117,25 @@ def build_delta21_predictor(
         if isinstance(package_or_path, (str, Path))
         else _validate_delta21_package(package_or_path)
     )
-    model = package["model"]
-    metadata = package["metadata"]
-    spec = metadata.emulator_spec
+    return Emulator(
+        package=package,
+        parameter_adapter=_prepare_parameter_values,
+        compile_inputs=compile_inputs,
+    )
 
-    # Check feature order once before compilation. The compiled function can then
-    # assume that the saved scaling metadata matches the emulator specification.
-    expected_names = spec.input_feature_names()
-    actual_names = tuple(feature.name for feature in metadata.input_scaling)
-    if actual_names != expected_names:
-        raise ValueError(
-            "Saved feature scaling order does not match the emulator spec. "
-            f"Expected {expected_names}, received {actual_names}."
-        )
 
-    axis_transforms = (spec.axes[0].transform, spec.axes[1].transform)
-    target_transform = spec.target_transform
-    target_offset = spec.target_offset
-    input_scaling = metadata.input_scaling
-    target_std = None if metadata.target_scaling is None else metadata.target_scaling.std
-
-    @nnx.jit
-    def _predict(
-        model_instance: Any,
-        parameters: jax.Array,
-        z_values: jax.Array,
-        k_values: jax.Array,
-    ) -> jax.Array:
-        """
-        Run the compiled numerical Delta21 inference path.
-        """
-        # Prepare raw 12-column or already-prepared 9-column parameters.
-        prepared_parameters = _prepare_parameter_values(parameters)
-        # Flatten coordinate arrays so the following meshgrid is always 1D x 1D.
-        z = z_values.ravel()
-        k = k_values.ravel()
-
-        # Generate the evaluation grid for (z, k).
-        zz, kk = jnp.meshgrid(z, k, indexing="ij")
-        # Apply the same coordinate transforms used during training.
-        axis_features = jnp.stack(
-            [
-                _apply_transform_jax(zz.ravel(), axis_transforms[0]),
-                _apply_transform_jax(kk.ravel(), axis_transforms[1]),
-            ],
-            axis=1,
-        )
-
-        # Tile coordinates and parameters into scalar regression rows.
-        repeated_axes = jnp.tile(axis_features, (prepared_parameters.shape[0], 1))
-        repeated_parameters = jnp.repeat(
-            prepared_parameters,
-            repeats=axis_features.shape[0],
-            axis=0,
-        )
-        features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
-
-        # Scale features using training-set statistics and evaluate the model.
-        scaled_features = _scale_features_jax(features, input_scaling)
-        flat_predictions = model_instance(scaled_features).squeeze(-1)
-
-        # Undo target scaling and target transforms to return physical values.
-        if target_std is not None:
-            flat_predictions = flat_predictions * target_std
-        physical_predictions = _invert_transform_jax(
-            flat_predictions,
-            target_transform,
-            offset=target_offset,
-        )
-
-        # Fold the flattened vector back into (nsamples, n_z, n_k).
-        return physical_predictions.reshape(
-            (prepared_parameters.shape[0], z.shape[0], k.shape[0])
-        )
-
-    def predict(parameters: jax.Array, z_values: jax.Array, k_values: jax.Array) -> jax.Array:
-        """
-        Predict Delta21 using the compiled model-specific inference function.
-        """
-        return _predict(model, parameters, z_values, k_values)
-
-    return predict
+def build_delta21_predictor(
+    package_or_path: str | Path | dict[str, Any],
+    *,
+    compile_inputs: tuple[jax.Array, ...] | None = None,
+) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
+    """
+    Build a reusable JIT-compiled Delta21 prediction function.
+    """
+    # Keep the existing function-style API by returning the generic emulator's
+    # forward model method.
+    emulator = build_delta21_emulator(package_or_path, compile_inputs=compile_inputs)
+    return emulator.forward_model
 
 
 def predict_delta21(
@@ -370,59 +310,3 @@ def _prepare_parameter_values(raw_parameters: jax.Array) -> jax.Array:
         "Delta21 inference expects either a raw 12-column 21cmSPACE parameter table "
         f"or a pre-prepared {expected_width}-column feature table."
     )
-
-
-def _apply_transform_jax(values: jax.Array, transform: str) -> jax.Array:
-    """
-    Apply a named coordinate transform on the JAX device.
-    """
-    if transform == "identity":
-        return values
-    if transform == "log10":
-        return jnp.log10(values)
-    raise ValueError(f"Unsupported transform {transform}.")
-
-
-def _invert_transform_jax(values: jax.Array, transform: str, offset: float = 0.0) -> jax.Array:
-    """
-    Undo a named target transform on the JAX device.
-    """
-    if transform == "identity":
-        return values
-    if transform == "log10":
-        return jnp.power(10.0, values) - offset
-    raise ValueError(f"Unsupported transform {transform}.")
-
-
-def _scale_features_jax(
-    features: jax.Array,
-    scaling: tuple[FeatureScaling, ...],
-) -> jax.Array:
-    """
-    Apply saved input-feature scaling on the JAX device.
-    """
-    columns = []
-    for idx, feature in enumerate(scaling):
-        values = features[:, idx]
-        if feature.method == "identity":
-            scaled = values
-        elif feature.method == "zscore":
-            scaled = (values - feature.mean) / feature.std
-        elif feature.method == "minmax_minus_one_to_one":
-            denom = feature.maximum - feature.minimum
-            scaled = (
-                jnp.zeros_like(values)
-                if denom == 0
-                else (2.0 * (values - feature.minimum) / denom) - 1.0
-            )
-        elif feature.method == "minmax_zero_to_one":
-            denom = feature.maximum - feature.minimum
-            scaled = (
-                jnp.zeros_like(values)
-                if denom == 0
-                else (values - feature.minimum) / denom
-            )
-        else:
-            raise ValueError(f"Unsupported scaling method {feature.method}.")
-        columns.append(scaled)
-    return jnp.stack(columns, axis=1).astype(jnp.float32)

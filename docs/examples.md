@@ -410,8 +410,8 @@ DenseMLP architecture + trained weights + T21 preprocessing metadata
 # JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
 
-# T21 inference helpers load the checkpoint and apply the saved preprocessing contract.
-from emulators_21cmspace.t21.infer import load_t21_package, predict_t21
+# T21 inference helpers load the checkpoint and build a reusable emulator.
+from emulators_21cmspace.t21.infer import build_t21_emulator, load_t21_package
 
 # Load the trained model and its saved metadata.
 package = load_t21_package("outputs/t21_model.nenemu")
@@ -427,8 +427,14 @@ physical_parameters = jnp.asarray(
 # Choose the redshift coordinates where the signal should be predicted.
 z = jnp.linspace(6.0, 27.0, 200)
 
+# Build the reusable emulator object and compile it for these input shapes.
+emulator = build_t21_emulator(
+    package,
+    compile_inputs=(physical_parameters, z),
+)
+
 # Predict T21 and return an array with shape (n_sims, n_z).
-t21 = predict_t21(package, physical_parameters, z)
+t21 = emulator.forward_model(physical_parameters, z)
 
 # Inspect the prediction shape.
 print(t21.shape)
@@ -801,17 +807,14 @@ DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 # JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
 
-# Delta21 inference helpers load the checkpoint and build a compiled predictor.
+# Delta21 inference helpers load the checkpoint and build a reusable emulator.
 from emulators_21cmspace.delta21.infer import (
-    build_delta21_predictor,
+    build_delta21_emulator,
     load_delta21_package,
 )
 
 # Load the trained model and its saved metadata.
 package = load_delta21_package("outputs/delta21_model.nenemu")
-
-# Build the JIT-compiled numerical inference function once.
-predictor = build_delta21_predictor(package)
 
 # Provide one raw 12-column physical parameter row in the original dataset order.
 physical_parameters = jnp.asarray(
@@ -827,8 +830,14 @@ z = jnp.linspace(6.0, 27.0, 50)
 # Choose the physical k coordinates using logarithmic spacing in k.
 k = jnp.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50, dtype=jnp.float32)
 
+# Build the reusable emulator object and compile it for these input shapes.
+emulator = build_delta21_emulator(
+    package,
+    compile_inputs=(physical_parameters, z, k),
+)
+
 # Predict Delta21 and return an array with shape (n_sims, n_z, n_k).
-delta21 = predictor(physical_parameters, z, k)
+delta21 = emulator.forward_model(physical_parameters, z, k)
 
 # Inspect the prediction shape.
 print(delta21.shape)
