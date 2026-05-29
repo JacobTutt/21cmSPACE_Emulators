@@ -64,46 +64,55 @@ Start here, then move into the stage-specific docs:
 
 ## Installation
 
-The project is managed with `uv` and includes a lock file. The main install
-choice is the JAX backend: CPU-only JAX, CUDA 12 JAX, or CUDA 13 JAX. Choose
-one backend extra for the machine you are using.
+This project uses JAX, which requires a backend matched to your hardware
+(CPU or NVIDIA GPU). We recommend using `uv` for the fastest setup, but
+standard `pip` is also supported. The JAX project keeps the current backend
+compatibility notes at
+[docs.jax.dev/en/latest/installation.html](https://docs.jax.dev/en/latest/installation.html).
 
-CPU-only development install:
+### Choose Your Backend
+
+Identify which machine you are using to determine which extra to install:
+
+- `cpu`: local development on laptops or machines without NVIDIA GPUs.
+- `cuda13`: modern systems with recent NVIDIA drivers.
+- `cuda12`: older clusters or systems running CUDA 12.x.
+
+### Option A: Using uv (Recommended)
+
+`uv` will manage the virtual environment and lock dependencies.
+
+For CPU development:
 
 ```bash
 uv sync --extra cpu --extra dev
 source .venv/bin/activate
 ```
 
-NVIDIA GPU install with CUDA 13 packages:
+For GPU systems, choose the command that matches your driver stack:
 
 ```bash
+# CUDA 13 (latest)
 uv sync --extra cuda13 --extra dev
-source .venv/bin/activate
-```
 
-NVIDIA GPU install with CUDA 12 packages:
-
-```bash
+# CUDA 12 (older systems)
 uv sync --extra cuda12 --extra dev
+
 source .venv/bin/activate
 ```
 
-Use CUDA 13 when your driver stack supports it; use CUDA 12 for older CUDA 12
-systems. The JAX project keeps the current backend compatibility notes at
-[docs.jax.dev/en/latest/installation.html](https://docs.jax.dev/en/latest/installation.html).
+### Option B: Using pip
 
-The same extras can be installed with `pip` if you are not using `uv`:
+If you prefer not to use `uv`, install the package manually into your own
+virtual environment.
 
 ```bash
+# 1. Create and enter the environment
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
+
+# 2. Install based on your hardware
+# Replace [cpu] with [cuda13] or [cuda12] if using a GPU
 python -m pip install -e ".[cpu,dev]"
-```
-
-For GPU machines, replace `cpu` with `cuda12` or `cuda13`:
-
-```bash
-python -m pip install -e ".[cuda13,dev]"
 ```
