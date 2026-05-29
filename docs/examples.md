@@ -35,22 +35,26 @@ fstarII, fstarIII, Vc, fX, alpha, nu_0, zeta, tau, fradio, pop, feed, delay
 Inference accepts either that raw 12-column table or the prepared 9-column
 feature table used by the model.
 
+## What The Example Does
+
+Each workflow follows the same structure:
+
+1. **Prepare arrays**: load the raw `.mat` files, drop failed simulations, apply
+   the emulator-specific parameter transforms, split the simulations, resample
+   onto a fixed grid, tile into scalar rows, and scale the features.
+2. **Train a model**: pass the prepared arrays to the shared JAX trainer.
+3. **Save a checkpoint**: write the model weights and preprocessing metadata to
+   a `.nenemu` directory.
+4. **Run inference**: load the checkpoint, rebuild the same input features from
+   physical parameters and coordinates, run the model, and invert the output
+   transforms.
+
 ## Global 21-cm Signal: `T21`
 
 The `T21` workflow trains and runs inference with the global brightness
 temperature emulator.
 
-### Smoke Test
-
-Run a synthetic end-to-end check without any 21cmSPACE files:
-
-```bash
-21cmspace-t21-train --synthetic-smoke --epochs 2 --batch-size 64
-```
-
-This checks the pipeline. It does not produce a science-quality model.
-
-### Training
+### Prepare Training Arrays
 
 Inspect the prepared array shapes first:
 
@@ -60,7 +64,13 @@ Inspect the prepared array shapes first:
   --prepare-only
 ```
 
-Train a checkpoint from the dataset root:
+This runs the loading and preprocessing path without fitting the neural network.
+It is useful for checking the number of scalar rows produced by the fixed
+redshift grid.
+
+### Train A Checkpoint
+
+Train the model from the same dataset root:
 
 ```bash
 21cmspace-t21-train \
@@ -73,6 +83,12 @@ Train a checkpoint from the dataset root:
 
 If `--output` is omitted, the checkpoint is written to `t21_model.nenemu`.
 Training also writes a JSON summary beside it.
+
+The checkpoint contains:
+
+```text
+DenseMLP architecture + trained weights + T21 preprocessing metadata
+```
 
 ### Inference
 
@@ -152,18 +168,7 @@ Print the live defaults with:
 The `Delta21` workflow trains and runs inference with the 21-cm power-spectrum
 emulator.
 
-### Smoke Test
-
-Run a synthetic end-to-end check without any 21cmSPACE files:
-
-```bash
-21cmspace-delta21-train --synthetic-smoke --epochs 2 --batch-size 64
-```
-
-This checks the pipeline and grid tiling. It does not produce a science-quality
-model.
-
-### Training
+### Prepare Training Arrays
 
 Inspect the prepared array shapes first:
 
@@ -173,7 +178,13 @@ Inspect the prepared array shapes first:
   --prepare-only
 ```
 
-Train a checkpoint from the dataset root:
+This loads the power-spectrum grid, transforms the axes, interpolates each
+simulation onto the fixed `(z, k)` grid, and tiles the surface into scalar
+training rows.
+
+### Train A Checkpoint
+
+Train the model from the same dataset root:
 
 ```bash
 21cmspace-delta21-train \
@@ -186,6 +197,12 @@ Train a checkpoint from the dataset root:
 
 If `--output` is omitted, the checkpoint is written to
 `delta21_model.nenemu`. Training also writes a JSON summary beside it.
+
+The checkpoint contains:
+
+```text
+DenseMLP architecture + trained weights + Delta21 preprocessing metadata
+```
 
 ### Inference
 
