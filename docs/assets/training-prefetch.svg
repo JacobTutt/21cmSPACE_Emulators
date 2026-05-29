@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
   <title id="title">Mini-batch loading and asynchronous prefetching</title>
-  <desc id="desc">A two-row comparison. The top row shows sequential prepare, move, train mini-batches with GPU idle gaps. The bottom row shows asynchronous prefetching where future batches are prepared and moved while the current batch trains, giving higher throughput and less wasted GPU time.</desc>
+  <desc id="desc">A two-panel comparison. Both panels use Host, Move, and GPU lanes. The top panel shows strictly sequential preparation, transfer, and training. The bottom panel shows asynchronous prefetching where training blocks are continuous and future batches are prepared and moved during current training.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
@@ -11,100 +11,102 @@
       .prepare { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; }
       .move { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.5; }
       .train { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
-      .idle { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.2; opacity: 0.8; }
+      .idle { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.2; opacity: 0.85; }
       .axis { stroke: #64748b; stroke-width: 1.6; marker-end: url(#arrow); }
-      .dash { stroke: #cbd5e1; stroke-width: 1; stroke-dasharray: 4 5; }
+      .lane { stroke: #e2e8f0; stroke-width: 1; }
       .arrow { stroke: #1f2937; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
       .title { font-family: Arial, Helvetica, sans-serif; font-size: 23px; font-weight: 700; fill: #0f172a; }
       .section { font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; fill: #0f172a; }
       .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; fill: #0f172a; }
       .text { font-family: Arial, Helvetica, sans-serif; font-size: 13px; fill: #0f172a; }
       .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
-      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #0f172a; }
     </style>
   </defs>
 
   <rect class="bg" x="0" y="0" width="1000" height="560"/>
   <text class="title" x="40" y="44">Mini-batch Training: Sequential Loading vs Asynchronous Prefetching</text>
 
-  <rect class="panel" x="40" y="75" width="920" height="195" rx="10"/>
+  <rect class="panel" x="40" y="75" width="920" height="205" rx="10"/>
   <text class="section" x="65" y="108">Inefficient sequential mini-batches</text>
-  <text class="small" x="65" y="130">Each batch is prepared, moved, and trained before the next batch starts.</text>
+  <text class="small" x="65" y="130">Only one stage runs at a time: prepare, then move, then train.</text>
+  <line class="axis" x1="165" y1="150" x2="910" y2="150"/>
+  <text class="small" x="887" y="139">time</text>
+  <line class="lane" x1="160" y1="181" x2="900" y2="181"/>
+  <line class="lane" x1="160" y1="222" x2="900" y2="222"/>
+  <line class="lane" x1="160" y1="263" x2="900" y2="263"/>
 
-  <line class="axis" x1="165" y1="155" x2="910" y2="155"/>
-  <text class="small" x="887" y="144">time</text>
+  <text class="label" x="70" y="187">Host</text>
+  <rect class="prepare" x="170" y="164" width="90" height="34" rx="5"/>
+  <text class="text" x="192" y="186">Prepare</text>
+  <rect class="prepare" x="460" y="164" width="90" height="34" rx="5"/>
+  <text class="text" x="482" y="186">Prepare</text>
 
-  <text class="label" x="70" y="188">Batch 0</text>
-  <rect class="prepare" x="170" y="170" width="95" height="34" rx="5"/>
-  <text class="text" x="193" y="192">Prepare</text>
-  <rect class="move" x="270" y="170" width="80" height="34" rx="5"/>
-  <text class="text" x="293" y="192">Move</text>
-  <rect class="train" x="355" y="170" width="115" height="34" rx="5"/>
-  <text class="text" x="397" y="192">Train</text>
+  <text class="label" x="70" y="228">Move</text>
+  <rect class="move" x="260" y="205" width="80" height="34" rx="5"/>
+  <text class="text" x="283" y="227">Move</text>
+  <rect class="move" x="550" y="205" width="80" height="34" rx="5"/>
+  <text class="text" x="573" y="227">Move</text>
 
-  <text class="label" x="70" y="232">Batch 1</text>
-  <rect class="prepare" x="480" y="214" width="95" height="34" rx="5"/>
-  <text class="text" x="503" y="236">Prepare</text>
-  <rect class="move" x="580" y="214" width="80" height="34" rx="5"/>
-  <text class="text" x="603" y="236">Move</text>
-  <rect class="train" x="665" y="214" width="115" height="34" rx="5"/>
-  <text class="text" x="707" y="236">Train</text>
+  <text class="label" x="70" y="269">GPU</text>
+  <rect class="idle" x="170" y="246" width="170" height="34" rx="5"/>
+  <text class="text" x="218" y="268">GPU idle</text>
+  <rect class="train" x="340" y="246" width="120" height="34" rx="5"/>
+  <text class="text" x="385" y="268">Train</text>
+  <rect class="idle" x="460" y="246" width="170" height="34" rx="5"/>
+  <text class="text" x="508" y="268">GPU idle</text>
+  <rect class="train" x="630" y="246" width="120" height="34" rx="5"/>
+  <text class="text" x="675" y="268">Train</text>
 
-  <rect class="idle" x="170" y="214" width="180" height="34" rx="5"/>
-  <text class="text" x="219" y="236">GPU idle</text>
-  <rect class="idle" x="480" y="170" width="180" height="34" rx="5"/>
-  <text class="text" x="529" y="192">GPU idle</text>
+  <text class="small" x="180" y="156">Batch 0</text>
+  <text class="small" x="470" y="156">Batch 1</text>
 
-  <line class="dash" x1="470" y1="155" x2="470" y2="255"/>
-  <text class="small" x="805" y="192">host work blocks GPU work</text>
-  <path class="arrow" d="M 795 200 C 745 204, 690 200, 660 188"/>
+  <rect class="panel" x="40" y="315" width="920" height="200" rx="10"/>
+  <text class="section" x="65" y="348">Asynchronous prefetching</text>
+  <text class="small" x="65" y="370">Future batches are prepared and moved while the current batch trains.</text>
+  <line class="axis" x1="165" y1="390" x2="910" y2="390"/>
+  <text class="small" x="887" y="379">time</text>
+  <line class="lane" x1="160" y1="421" x2="900" y2="421"/>
+  <line class="lane" x1="160" y1="462" x2="900" y2="462"/>
+  <line class="lane" x1="160" y1="503" x2="900" y2="503"/>
 
-  <rect class="panel" x="40" y="305" width="920" height="200" rx="10"/>
-  <text class="section" x="65" y="338">Asynchronous prefetching</text>
-  <text class="small" x="65" y="360">Future batches are prepared and transferred while the current batch is training on the device.</text>
+  <text class="label" x="70" y="427">Host</text>
+  <rect class="prepare" x="170" y="404" width="90" height="34" rx="5"/>
+  <text class="text" x="192" y="426">Prepare</text>
+  <rect class="prepare" x="345" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="364" y="426">Prepare</text>
+  <rect class="prepare" x="475" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="494" y="426">Prepare</text>
+  <rect class="prepare" x="605" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="624" y="426">Prepare</text>
 
-  <line class="axis" x1="165" y1="385" x2="910" y2="385"/>
-  <text class="small" x="887" y="374">time</text>
+  <text class="label" x="70" y="468">Move</text>
+  <rect class="move" x="260" y="445" width="80" height="34" rx="5"/>
+  <text class="text" x="283" y="467">Move</text>
+  <rect class="move" x="425" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="434" y="467">Move</text>
+  <rect class="move" x="555" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="564" y="467">Move</text>
+  <rect class="move" x="685" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="694" y="467">Move</text>
 
-  <text class="label" x="70" y="417">Host</text>
-  <rect class="prepare" x="170" y="398" width="95" height="34" rx="5"/>
-  <text class="text" x="193" y="420">Prepare</text>
-  <rect class="prepare" x="355" y="398" width="95" height="34" rx="5"/>
-  <text class="text" x="378" y="420">Prepare</text>
-  <rect class="prepare" x="540" y="398" width="95" height="34" rx="5"/>
-  <text class="text" x="563" y="420">Prepare</text>
+  <text class="label" x="70" y="509">GPU</text>
+  <rect class="train" x="340" y="486" width="130" height="34" rx="5"/>
+  <text class="text" x="390" y="508">Train</text>
+  <rect class="train" x="470" y="486" width="130" height="34" rx="5"/>
+  <text class="text" x="520" y="508">Train</text>
+  <rect class="train" x="600" y="486" width="130" height="34" rx="5"/>
+  <text class="text" x="650" y="508">Train</text>
+  <rect class="train" x="730" y="486" width="130" height="34" rx="5"/>
+  <text class="text" x="780" y="508">Train</text>
 
-  <text class="label" x="70" y="459">Move</text>
-  <rect class="move" x="270" y="440" width="80" height="34" rx="5"/>
-  <text class="text" x="293" y="462">Move</text>
-  <rect class="move" x="455" y="440" width="80" height="34" rx="5"/>
-  <text class="text" x="478" y="462">Move</text>
-  <rect class="move" x="640" y="440" width="80" height="34" rx="5"/>
-  <text class="text" x="663" y="462">Move</text>
+  <path class="arrow" d="M 790 345 C 850 366, 875 420, 865 485"/>
+  <text class="label" x="760" y="335">Higher throughput</text>
+  <text class="small" x="760" y="535">less wasted GPU time</text>
 
-  <text class="label" x="70" y="500">GPU</text>
-  <rect class="train" x="355" y="482" width="115" height="34" rx="5"/>
-  <text class="text" x="397" y="504">Train</text>
-  <rect class="train" x="540" y="482" width="115" height="34" rx="5"/>
-  <text class="text" x="582" y="504">Train</text>
-  <rect class="train" x="725" y="482" width="115" height="34" rx="5"/>
-  <text class="text" x="767" y="504">Train</text>
-
-  <path class="arrow" d="M 265 415 C 292 420, 298 432, 310 440"/>
-  <path class="arrow" d="M 350 457 C 366 468, 378 475, 394 482"/>
-  <path class="arrow" d="M 450 415 C 477 420, 483 432, 495 440"/>
-  <path class="arrow" d="M 535 457 C 551 468, 563 475, 579 482"/>
-  <path class="arrow" d="M 635 415 C 662 420, 668 432, 680 440"/>
-  <path class="arrow" d="M 720 457 C 736 468, 748 475, 764 482"/>
-
-  <path class="arrow" d="M 790 330 C 855 355, 888 409, 876 469"/>
-  <text class="label" x="770" y="315">Higher throughput</text>
-  <text class="small" x="770" y="535">less wasted GPU time</text>
-
-  <rect class="prepare" x="56" y="522" width="16" height="12" rx="2"/>
-  <text class="small" x="78" y="533">Prepare mini-batch on host</text>
-  <rect class="move" x="250" y="522" width="16" height="12" rx="2"/>
-  <text class="small" x="272" y="533">Move with device_put</text>
-  <rect class="train" x="424" y="522" width="16" height="12" rx="2"/>
-  <text class="small" x="446" y="533">Train with jitted step</text>
+  <rect class="prepare" x="56" y="532" width="16" height="12" rx="2"/>
+  <text class="small" x="78" y="543">Prepare on host</text>
+  <rect class="move" x="210" y="532" width="16" height="12" rx="2"/>
+  <text class="small" x="232" y="543">Move with device_put</text>
+  <rect class="train" x="395" y="532" width="16" height="12" rx="2"/>
+  <text class="small" x="417" y="543">Train with jitted step</text>
 </svg>
