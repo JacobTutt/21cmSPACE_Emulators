@@ -8,45 +8,6 @@ The trainer uses a loss function to measure prediction error, automatic
 differentiation to compute gradients of that loss, and an Optax optimizer to
 update the model parameters.
 
-## Dataset Splitting
-
-Before training begins, the prepared simulation data is split into three
-subsets:
-
-- **Training set**: Data used to update the model parameters.
-- **Validation set**: Held-out data used during training to monitor
-  generalization and drive early stopping.
-- **Test set**: A final held-out split used after training to report emulator
-  performance.
-
-This split is handled in the data preparation workflow before the arrays are
-passed into the shared trainer.
-
-```python
-from jax_emu.data_preprocessing import split_simulations
-
-(
-    train_parameters,
-    validation_parameters,
-    test_parameters,
-    train_targets,
-    validation_targets,
-    test_targets,
-) = split_simulations(
-    parameters,
-    targets,
-    train_size=0.6,
-    validation_size=0.2,
-    test_size=0.2,
-    random_state=42,
-)
-```
-
-The split is applied at the simulation level, so each simulation's parameters
-and target array remain paired. Later preprocessing steps can resample, scale,
-and flatten these arrays into the row-wise feature and target matrices used by
-`train_mlp_regressor`.
-
 ## Training Parameters
 
 `train_mlp_regressor` is the shared training entry point. It receives an
@@ -95,6 +56,19 @@ model, history = train_mlp_regressor(
     seed=42,
 )
 ```
+
+## Evaluation Metrics
+
+At the end of every epoch, after all training mini-batches have been used to
+update the network, the trainer records two losses:
+
+| Metric | Meaning |
+| :--- | :--- |
+| **Training loss** | Error on the data used to update the model parameters. |
+| **Validation loss** | Error on held-out data that was not used for parameter updates. |
+
+The training loss shows whether the network is fitting the training set. The
+validation loss shows whether that fit generalises to unseen simulations.
 
 ## Efficient JAX Training
 
