@@ -381,6 +381,53 @@ The returned `PreparedSplit` is the hand-off to training code. It contains:
 | `feature_scaling` | Input scaling metadata to save with the emulator. |
 | `target_scaling` | Optional output scaling metadata to invert predictions. |
 
+## Remembering the Contract
+
+The model weights are not enough for inference. The checkpoint also needs the
+preprocessing contract:
+
+| Metadata | What it remembers |
+| --- | --- |
+| `emulator_spec` | Axis, parameter, and target transforms. |
+| `input_scaling` | Per-feature means, standard deviations, and min/max values. |
+| `target_scaling` | Optional target scaling used after the network output. |
+| `feature_names` | The column order expected by the trained model. |
+
+Training code stores this metadata beside the model weights:
+
+```python
+from jax_emu.utils import CheckpointMetadata, save
+
+metadata = CheckpointMetadata(
+    model_name="my_emulator",
+    package_version="0.1.0",
+    emulator_spec=emulator_spec,
+    input_scaling=prepared.feature_scaling,
+    target_scaling=prepared.target_scaling,
+    training_config={
+        "feature_names": list(prepared.feature_names),
+    },
+)
+
+save(
+    "my_emulator.nenemu",
+    model,
+    train_losses=history.train_losses,
+    val_losses=history.validation_losses,
+    loss="mse",
+    metadata=metadata,
+)
+```
+
+The saved checkpoint is therefore:
+
+```text
+model weights + architecture + preprocessing metadata
+```
+
+That is what lets the inference code apply the same transforms without guessing
+how the model was trained.
+
 ## Training
 
 During training, preprocessing maps physical simulation data into the numerical
@@ -420,5 +467,51 @@ new physical parameters
 The key point is that the network predicts in training space, not directly in
 physical space. The emulator is the network plus the saved transform and
 normalisation metadata.
+
+The inference path loads the model and the remembered preprocessing metadata.
+The metadata is the link between the physical input and the trained network:
+
+```python
+from jax_emu.utils import load
+
+package = load("my_emulator.nenemu")
+
+model = package["model"]
+metadata = package["metadata"]
+spec = metadata.emulator_spec
+
+axis_specs = spec.axes
+parameter_specs = spec.parameters
+expected_feature_order = spec.input_feature_names()
+feature_scaling = metadata.input_scaling
+target_scaling = metadata.target_scaling
+target_transform = spec.target_transform
+target_offset = spec.target_offset
+```
+
+The important point is where each rule comes from. Feature scaling comes from
+`metadata.input_scaling`; the target inverse comes from `metadata.target_scaling`;
+and the physical target transform comes from `metadata.emulator_spec`.
+
+Concrete inference functions then use those objects to build the same feature
+matrix used in training, run the model, and invert the output:
+
+```python
+from emulators_21cmspace.delta21.infer import load_delta21_package, predict_delta21
+
+package = load_delta21_package("delta21_model.nenemu")
+
+delta21 = predict_delta21(
+    package,
+    parameters=physical_parameters,
+    z_values=z_grid,
+    k_values=k_grid,
+)
+```
+
+Inside `predict_delta21`, the saved spec supplies the axis and target transforms,
+`metadata.input_scaling` supplies the feature normalisation, and
+`metadata.target_scaling` supplies the inverse output scaling. The same pattern
+is used by the T21 inference helper.
 
 ![Inference preprocessing flow](assets/preprocessing-inference.svg)
