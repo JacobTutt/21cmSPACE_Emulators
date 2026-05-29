@@ -79,10 +79,6 @@ prepared_parameters = prepare_feature_matrix(
     discard_params=("unused",),
     discrete_params=("alpha",),
 )
-
-print(prepared_parameters.feature_names)
-print(prepared_parameters.values.shape)
-print(prepared_parameters.discrete_values)
 ```
 
 The output stores both the numerical matrix and the feature names. The feature
@@ -253,19 +249,8 @@ prepared = prepare_fixed_grid_training_split(
 )
 ```
 
-The returned object contains arrays and metadata:
-
-```python
-prepared.train_features
-prepared.train_targets
-prepared.validation_features
-prepared.validation_targets
-prepared.test_features
-prepared.test_targets
-prepared.feature_names
-prepared.feature_scaling
-prepared.target_scaling
-```
+The returned object contains the prepared train, validation, and test arrays,
+plus the metadata needed to repeat the same preprocessing during inference.
 
 ## Training
 

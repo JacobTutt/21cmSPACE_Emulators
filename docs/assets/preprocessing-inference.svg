@@ -24,27 +24,27 @@
   <rect class="panel" x="35" y="35" width="930" height="140" rx="10"/>
   <text class="title" x="60" y="68">Inference preprocessing</text>
 
-  <rect class="input" x="60" y="95" width="125" height="54" rx="6"/>
-  <text class="label" x="82" y="118">Physical inputs</text>
+  <rect class="input" x="55" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="80" y="118">Physical input</text>
   <text class="mono" x="84" y="137">new parameters</text>
-  <path class="arrow" d="M 198 122 L 222 122"/>
-  <rect class="transform" x="235" y="95" width="115" height="54" rx="6"/>
-  <text class="label" x="268" y="118">Transform</text>
-  <text class="mono" x="260" y="137">same rules</text>
-  <path class="arrow" d="M 363 122 L 387 122"/>
-  <rect class="scale" x="400" y="95" width="115" height="54" rx="6"/>
-  <text class="label" x="429" y="118">Normalise</text>
-  <text class="mono" x="426" y="137">saved stats</text>
-  <path class="arrow" d="M 528 122 L 552 122"/>
-  <rect class="network" x="565" y="95" width="105" height="54" rx="6"/>
-  <text class="label" x="594" y="118">DenseMLP</text>
-  <text class="mono" x="590" y="137">prediction</text>
-  <path class="arrow" d="M 683 122 L 707 122"/>
-  <rect class="scale" x="720" y="95" width="115" height="54" rx="6"/>
-  <text class="label" x="736" y="118">Inverse scale</text>
-  <text class="mono" x="742" y="137">target stats</text>
-  <path class="arrow" d="M 848 122 L 872 122"/>
-  <rect class="output" x="885" y="95" width="65" height="54" rx="6"/>
-  <text class="label" x="897" y="118">Physical</text>
-  <text class="mono" x="902" y="137">output</text>
+  <path class="arrow" d="M 188 122 L 197 122"/>
+  <rect class="transform" x="205" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="243" y="118">Transform</text>
+  <text class="mono" x="235" y="137">same rules</text>
+  <path class="arrow" d="M 338 122 L 347 122"/>
+  <rect class="scale" x="355" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="389" y="118">Normalise</text>
+  <text class="mono" x="386" y="137">saved stats</text>
+  <path class="arrow" d="M 488 122 L 497 122"/>
+  <rect class="network" x="505" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="544" y="118">DenseMLP</text>
+  <text class="mono" x="540" y="137">prediction</text>
+  <path class="arrow" d="M 638 122 L 647 122"/>
+  <rect class="scale" x="655" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="670" y="118">Inverse scale</text>
+  <text class="mono" x="678" y="137">target stats</text>
+  <path class="arrow" d="M 788 122 L 797 122"/>
+  <rect class="output" x="805" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="833" y="118">Physical output</text>
+  <text class="mono" x="841" y="137">prediction</text>
 </svg>
