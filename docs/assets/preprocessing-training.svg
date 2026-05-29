@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="270" viewBox="0 0 1000 270" role="img" aria-labelledby="title desc">
+  <title id="title">Training preprocessing flow</title>
+  <desc id="desc">Training preprocessing maps physical inputs and physical targets through deterministic transforms and normalisation into the network feature matrix and target rows.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
+    </marker>
+    <style>
+      .bg { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
+      .input { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; }
+      .transform { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
+      .scale { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.5; }
+      .output { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+      .arrow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 19px; font-weight: 700; fill: #0f172a; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; fill: #0f172a; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 11px; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="270"/>
+  <rect class="panel" x="35" y="35" width="930" height="200" rx="10"/>
+  <text class="title" x="60" y="68">Training preprocessing</text>
+
+  <text class="label" x="60" y="122">Inputs</text>
+  <rect class="input" x="130" y="95" width="155" height="54" rx="6"/>
+  <text class="label" x="160" y="118">Physical inputs</text>
+  <text class="mono" x="156" y="137">parameters + axes</text>
+  <path class="arrow" d="M 298 122 L 335 122"/>
+  <rect class="transform" x="350" y="95" width="135" height="54" rx="6"/>
+  <text class="label" x="386" y="118">Transform</text>
+  <text class="mono" x="386" y="137">log / identity</text>
+  <path class="arrow" d="M 498 122 L 535 122"/>
+  <rect class="scale" x="550" y="95" width="135" height="54" rx="6"/>
+  <text class="label" x="590" y="118">Normalise</text>
+  <text class="mono" x="582" y="137">training stats</text>
+  <path class="arrow" d="M 698 122 L 735 122"/>
+  <rect class="output" x="750" y="95" width="160" height="54" rx="6"/>
+  <text class="label" x="788" y="118">Network inputs</text>
+  <text class="mono" x="776" y="137">train_features</text>
+
+  <text class="label" x="60" y="190">Targets</text>
+  <rect class="input" x="130" y="163" width="155" height="54" rx="6"/>
+  <text class="label" x="160" y="186">Physical target</text>
+  <text class="mono" x="164" y="205">simulation y</text>
+  <path class="arrow" d="M 298 190 L 335 190"/>
+  <rect class="transform" x="350" y="163" width="135" height="54" rx="6"/>
+  <text class="label" x="386" y="186">Transform</text>
+  <text class="mono" x="383" y="205">log(y + offset)</text>
+  <path class="arrow" d="M 498 190 L 535 190"/>
+  <rect class="scale" x="550" y="163" width="135" height="54" rx="6"/>
+  <text class="label" x="590" y="186">Normalise</text>
+  <text class="mono" x="576" y="205">target scaling</text>
+  <path class="arrow" d="M 698 190 L 735 190"/>
+  <rect class="output" x="750" y="163" width="160" height="54" rx="6"/>
+  <text class="label" x="785" y="186">Network targets</text>
+  <text class="mono" x="776" y="205">train_targets</text>
+</svg>

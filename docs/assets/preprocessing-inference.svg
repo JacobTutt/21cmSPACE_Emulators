@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="220" viewBox="0 0 1000 220" role="img" aria-labelledby="title desc">
+  <title id="title">Inference preprocessing flow</title>
+  <desc id="desc">Inference preprocessing maps new physical inputs into network inputs, runs the trained DenseMLP, and inverts target normalisation and target transforms to recover a physical prediction.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
+    </marker>
+    <style>
+      .bg { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
+      .input { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; }
+      .transform { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
+      .scale { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.5; }
+      .network { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+      .output { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.5; }
+      .arrow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 19px; font-weight: 700; fill: #0f172a; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10.5px; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="220"/>
+  <rect class="panel" x="35" y="35" width="930" height="140" rx="10"/>
+  <text class="title" x="60" y="68">Inference preprocessing</text>
+
+  <rect class="input" x="60" y="95" width="125" height="54" rx="6"/>
+  <text class="label" x="82" y="118">Physical inputs</text>
+  <text class="mono" x="84" y="137">new parameters</text>
+  <path class="arrow" d="M 198 122 L 222 122"/>
+  <rect class="transform" x="235" y="95" width="115" height="54" rx="6"/>
+  <text class="label" x="268" y="118">Transform</text>
+  <text class="mono" x="260" y="137">same rules</text>
+  <path class="arrow" d="M 363 122 L 387 122"/>
+  <rect class="scale" x="400" y="95" width="115" height="54" rx="6"/>
+  <text class="label" x="429" y="118">Normalise</text>
+  <text class="mono" x="426" y="137">saved stats</text>
+  <path class="arrow" d="M 528 122 L 552 122"/>
+  <rect class="network" x="565" y="95" width="105" height="54" rx="6"/>
+  <text class="label" x="594" y="118">DenseMLP</text>
+  <text class="mono" x="590" y="137">prediction</text>
+  <path class="arrow" d="M 683 122 L 707 122"/>
+  <rect class="scale" x="720" y="95" width="115" height="54" rx="6"/>
+  <text class="label" x="736" y="118">Inverse scale</text>
+  <text class="mono" x="742" y="137">target stats</text>
+  <path class="arrow" d="M 848 122 L 872 122"/>
+  <rect class="output" x="885" y="95" width="65" height="54" rx="6"/>
+  <text class="label" x="897" y="118">Physical</text>
+  <text class="mono" x="902" y="137">output</text>
+</svg>

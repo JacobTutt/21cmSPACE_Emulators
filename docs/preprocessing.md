@@ -28,8 +28,6 @@ heterogeneous columns -> comparable network inputs
 The goal is not to change the science target. The goal is to present the same
 physical problem in a coordinate system that is easier for the optimizer.
 
-![Preprocessing workflow](assets/preprocessing-flow.svg)
-
 ## Workflow
 
 A typical workflow is:
@@ -288,6 +286,8 @@ For a scalar-output emulator, each training row is:
 The trainer only sees these arrays. The original physical units are represented
 by the preprocessing metadata.
 
+![Training preprocessing flow](assets/preprocessing-training.svg)
+
 ## Inference
 
 At inference time, the same metadata maps new physical inputs into the network
@@ -306,3 +306,5 @@ new physical parameters
 The key point is that the network predicts in training space, not directly in
 physical space. The emulator is the network plus the saved transform and
 normalisation metadata.
+
+![Inference preprocessing flow](assets/preprocessing-inference.svg)
