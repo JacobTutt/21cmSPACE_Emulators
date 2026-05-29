@@ -36,29 +36,38 @@
   <line class="lane" x1="160" y1="263" x2="900" y2="263"/>
 
   <text class="label" x="70" y="187">Host</text>
-  <rect class="prepare" x="170" y="164" width="90" height="34" rx="5"/>
-  <text class="text" x="192" y="186">Prepare</text>
-  <rect class="prepare" x="460" y="164" width="90" height="34" rx="5"/>
-  <text class="text" x="482" y="186">Prepare</text>
+  <rect class="prepare" x="170" y="164" width="80" height="34" rx="5"/>
+  <text class="text" x="189" y="186">Prepare</text>
+  <rect class="prepare" x="415" y="164" width="80" height="34" rx="5"/>
+  <text class="text" x="434" y="186">Prepare</text>
+  <rect class="prepare" x="660" y="164" width="80" height="34" rx="5"/>
+  <text class="text" x="679" y="186">Prepare</text>
 
   <text class="label" x="70" y="228">Move</text>
-  <rect class="move" x="260" y="205" width="80" height="34" rx="5"/>
-  <text class="text" x="283" y="227">Move</text>
-  <rect class="move" x="550" y="205" width="80" height="34" rx="5"/>
-  <text class="text" x="573" y="227">Move</text>
+  <rect class="move" x="250" y="205" width="45" height="34" rx="5"/>
+  <text class="text" x="259" y="227">Move</text>
+  <rect class="move" x="495" y="205" width="45" height="34" rx="5"/>
+  <text class="text" x="504" y="227">Move</text>
+  <rect class="move" x="740" y="205" width="45" height="34" rx="5"/>
+  <text class="text" x="749" y="227">Move</text>
 
   <text class="label" x="70" y="269">GPU</text>
-  <rect class="idle" x="170" y="246" width="170" height="34" rx="5"/>
-  <text class="text" x="218" y="268">GPU idle</text>
-  <rect class="train" x="340" y="246" width="120" height="34" rx="5"/>
-  <text class="text" x="385" y="268">Train</text>
-  <rect class="idle" x="460" y="246" width="170" height="34" rx="5"/>
-  <text class="text" x="508" y="268">GPU idle</text>
-  <rect class="train" x="630" y="246" width="120" height="34" rx="5"/>
-  <text class="text" x="675" y="268">Train</text>
+  <rect class="idle" x="170" y="246" width="125" height="34" rx="5"/>
+  <text class="text" x="196" y="268">GPU idle</text>
+  <rect class="train" x="295" y="246" width="120" height="34" rx="5"/>
+  <text class="text" x="340" y="268">Train</text>
+  <rect class="idle" x="415" y="246" width="125" height="34" rx="5"/>
+  <text class="text" x="441" y="268">GPU idle</text>
+  <rect class="train" x="540" y="246" width="120" height="34" rx="5"/>
+  <text class="text" x="585" y="268">Train</text>
+  <rect class="idle" x="660" y="246" width="125" height="34" rx="5"/>
+  <text class="text" x="686" y="268">GPU idle</text>
+  <rect class="train" x="785" y="246" width="120" height="34" rx="5"/>
+  <text class="text" x="830" y="268">Train</text>
 
   <text class="small" x="180" y="156">Batch 0</text>
-  <text class="small" x="470" y="156">Batch 1</text>
+  <text class="small" x="425" y="156">Batch 1</text>
+  <text class="small" x="670" y="156">Batch 2</text>
 
   <rect class="panel" x="40" y="315" width="920" height="200" rx="10"/>
   <text class="section" x="65" y="348">Asynchronous prefetching</text>
@@ -70,43 +79,43 @@
   <line class="lane" x1="160" y1="503" x2="900" y2="503"/>
 
   <text class="label" x="70" y="427">Host</text>
-  <rect class="prepare" x="170" y="404" width="90" height="34" rx="5"/>
-  <text class="text" x="192" y="426">Prepare</text>
-  <rect class="prepare" x="345" y="404" width="80" height="34" rx="5"/>
-  <text class="text" x="364" y="426">Prepare</text>
-  <rect class="prepare" x="475" y="404" width="80" height="34" rx="5"/>
-  <text class="text" x="494" y="426">Prepare</text>
-  <rect class="prepare" x="605" y="404" width="80" height="34" rx="5"/>
-  <text class="text" x="624" y="426">Prepare</text>
+  <rect class="prepare" x="170" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="189" y="426">Prepare</text>
+  <rect class="prepare" x="290" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="309" y="426">Prepare</text>
+  <rect class="prepare" x="410" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="429" y="426">Prepare</text>
+  <rect class="prepare" x="530" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="549" y="426">Prepare</text>
+  <rect class="prepare" x="650" y="404" width="80" height="34" rx="5"/>
+  <text class="text" x="669" y="426">Prepare</text>
 
   <text class="label" x="70" y="468">Move</text>
-  <rect class="move" x="260" y="445" width="80" height="34" rx="5"/>
-  <text class="text" x="283" y="467">Move</text>
-  <rect class="move" x="425" y="445" width="45" height="34" rx="5"/>
-  <text class="text" x="434" y="467">Move</text>
-  <rect class="move" x="555" y="445" width="45" height="34" rx="5"/>
-  <text class="text" x="564" y="467">Move</text>
-  <rect class="move" x="685" y="445" width="45" height="34" rx="5"/>
-  <text class="text" x="694" y="467">Move</text>
+  <rect class="move" x="250" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="259" y="467">Move</text>
+  <rect class="move" x="370" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="379" y="467">Move</text>
+  <rect class="move" x="490" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="499" y="467">Move</text>
+  <rect class="move" x="610" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="619" y="467">Move</text>
+  <rect class="move" x="730" y="445" width="45" height="34" rx="5"/>
+  <text class="text" x="739" y="467">Move</text>
 
   <text class="label" x="70" y="509">GPU</text>
-  <rect class="train" x="340" y="486" width="130" height="34" rx="5"/>
-  <text class="text" x="390" y="508">Train</text>
-  <rect class="train" x="470" y="486" width="130" height="34" rx="5"/>
-  <text class="text" x="520" y="508">Train</text>
-  <rect class="train" x="600" y="486" width="130" height="34" rx="5"/>
-  <text class="text" x="650" y="508">Train</text>
-  <rect class="train" x="730" y="486" width="130" height="34" rx="5"/>
-  <text class="text" x="780" y="508">Train</text>
+  <rect class="train" x="295" y="486" width="120" height="34" rx="5"/>
+  <text class="text" x="340" y="508">Train</text>
+  <rect class="train" x="415" y="486" width="120" height="34" rx="5"/>
+  <text class="text" x="460" y="508">Train</text>
+  <rect class="train" x="535" y="486" width="120" height="34" rx="5"/>
+  <text class="text" x="580" y="508">Train</text>
+  <rect class="train" x="655" y="486" width="120" height="34" rx="5"/>
+  <text class="text" x="700" y="508">Train</text>
+  <rect class="train" x="775" y="486" width="120" height="34" rx="5"/>
+  <text class="text" x="820" y="508">Train</text>
 
   <path class="arrow" d="M 790 345 C 850 366, 875 420, 865 485"/>
   <text class="label" x="760" y="335">Higher throughput</text>
   <text class="small" x="760" y="535">less wasted GPU time</text>
 
-  <rect class="prepare" x="56" y="532" width="16" height="12" rx="2"/>
-  <text class="small" x="78" y="543">Prepare on host</text>
-  <rect class="move" x="210" y="532" width="16" height="12" rx="2"/>
-  <text class="small" x="232" y="543">Move with device_put</text>
-  <rect class="train" x="395" y="532" width="16" height="12" rx="2"/>
-  <text class="small" x="417" y="543">Train with jitted step</text>
 </svg>
