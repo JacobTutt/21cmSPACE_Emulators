@@ -58,9 +58,10 @@ requested spectrum, surface, or grid.
 
 Start here, then move into the stage-specific docs:
 
-- [Architecture](docs/architecture.md): package layout, specs, checkpoints, and inference contracts.
+- [Architecture](docs/architecture.md): tiled scalar-output networks and DenseMLP configuration.
 - [Preprocessing](docs/preprocessing.md): parameter preparation, target transforms, scaling, and tiling.
 - [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
+- [Checkpointing](docs/checkpoint.md): saving model weights, losses, and preprocessing metadata.
 - [Examples](docs/examples.md): worked global 21-cm and power-spectrum workflows.
 
 ## Installation
