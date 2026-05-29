@@ -1,5 +1,7 @@
 # 21cmSPACE JAX Emulators
 
+**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Examples](docs/examples.md)
+
 The repository is designed to be a practical guide for those wanting to build simple JAX emulators
 from 21-cm cosmology simulations and other associated multi-wavelength probes
 for use within JAX-accelerated Bayesian inference frameworks, for example
@@ -116,3 +118,7 @@ python -m pip install -U pip
 # Replace [cpu] with [cuda12] or [cuda13] if using a GPU
 python -m pip install -e ".[cpu,dev]"
 ```
+
+---
+
+**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Examples](docs/examples.md)

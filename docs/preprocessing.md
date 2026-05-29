@@ -1,5 +1,7 @@
 # Preprocessing and Normalisation
 
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
+
 Preprocessing maps physical simulation parameters and targets into the numerical
 space seen by the neural network.
 
@@ -289,3 +291,7 @@ normalisation, and `metadata.target_scaling` supplies the inverse target
 scaling.
 
 ![Inference preprocessing flow](assets/preprocessing-inference.svg)
+
+---
+
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)

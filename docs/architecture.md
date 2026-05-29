@@ -1,5 +1,7 @@
 # Architecture
 
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
+
 The emulator architecture is a simple JAX implementation of the
 scalar-regression idea used by
 [GlobalEmu](https://github.com/htjb/globalemu)
@@ -68,3 +70,7 @@ model = DenseMLP(
     rngs=nnx.Rngs(0),
 )
 ```
+
+---
+
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)

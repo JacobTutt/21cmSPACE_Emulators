@@ -1,5 +1,7 @@
 # Checkpointing
 
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
+
 A trained emulator is more than a set of neural-network weights. To reuse the
 model safely, inference also needs to know how physical inputs were transformed,
 scaled, and ordered before they reached the network.
@@ -179,3 +181,7 @@ delta21 = predict_delta21(
 For repeated inference, prefer `build_delta21_emulator`. It keeps disk I/O and
 metadata validation outside the compiled numerical path and exposes a reusable
 `forward_model` method.
+
+---
+
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)

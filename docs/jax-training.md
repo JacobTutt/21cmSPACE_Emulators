@@ -1,5 +1,7 @@
 # JAX Training
 
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
+
 Once a `DenseMLP` has been initialized, the next step is to train it against
 prepared simulation data. Training updates the network parameters so that the
 model predictions match the target emulator values as closely as possible.
@@ -91,3 +93,7 @@ prefetching, preparation and transfer for later batches overlap with the current
 compiled training step.
 
 ![Mini-batch prefetching comparison](assets/training-prefetch.svg)
+
+---
+
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)

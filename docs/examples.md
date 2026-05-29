@@ -1,5 +1,7 @@
 # Examples
 
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
+
 This page shows how the preprocessing, architecture, training, checkpointing,
 and inference pieces fit together in Python.
 
@@ -853,3 +855,7 @@ The inference helper keeps the same contract as training: `metadata.emulator_spe
 defines the axis and target transforms, `metadata.input_scaling` defines the
 feature scaling, and `metadata.target_scaling` defines the inverse target
 scaling.
+
+---
+
+**Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Examples](examples.md)
