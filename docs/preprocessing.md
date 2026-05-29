@@ -99,8 +99,8 @@ applied before training, the inverse transform is needed after inference.
 ```python
 from jax_emu.data_preprocessing import apply_transform, invert_transform
 
-log_target = apply_transform(target, transform="log10", offset=1e-8)
-physical_target = invert_transform(log_target, transform="log10", offset=1e-8)
+transformed_targets = apply_transform(target, transform="log10", offset=1e-8)
+physical_target = invert_transform(transformed_targets, transform="log10", offset=1e-8)
 ```
 
 `apply_transform` is the forward map into training space. `invert_transform`
@@ -145,48 +145,60 @@ validation, and test.
 Fit preprocessing statistics from the training split only. Reuse them for
 validation, test, and inference.
 
-## Feature Scaling
+## Fixed Grid Resampling
 
-Feature scaling maps each input column into the numerical space seen by the
-network.
-
-| Method | Operation | Typical use |
-| --- | --- | --- |
-| `identity` | `x` | Already suitable values |
-| `zscore` | `(x - mean) / std` | Continuous features |
-| `minmax_zero_to_one` | `(x - min) / (max - min)` | Bounded or discrete features |
-| `minmax_minus_one_to_one` | Scale to `[-1, 1]` | Symmetric bounded features |
+Many simulations store targets on an axis grid such as redshift, frequency, or
+wavenumber. For fixed-grid training, every split is interpolated onto the same
+axis coordinates before flattening.
 
 ```python
-from jax_emu.data_preprocessing import FeatureScaler, FeatureScaling
-
-scaling = (
-    FeatureScaling.from_values("z", train_features[:, 0], "zscore"),
-    FeatureScaling.from_values("log10f_star", train_features[:, 1], "zscore"),
-    FeatureScaling.from_values("alpha", train_features[:, 2], "minmax_zero_to_one"),
+from jax_emu.data_preprocessing import (
+    AxisSpec,
+    build_fixed_axis_grid,
+    resample_targets_to_grid,
+    transformed_axis_configuration,
 )
 
-feature_scaler = FeatureScaler(scaling)
+axis_specs = (
+    AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=200),
+    AxisSpec(name="k", transform="log10", limits=(0.1, 1.0), nsample=20),
+)
 
-scaled_train_features = feature_scaler.transform(train_features)
-scaled_validation_features = feature_scaler.transform(validation_features)
+transformed_axes, transformed_limits = transformed_axis_configuration(
+    axes=(z_axis, k_axis),
+    axis_specs=axis_specs,
+)
+sampled_axes = build_fixed_axis_grid(
+    transformed_axes,
+    transformed_limits,
+    axis_specs,
+)
+
+train_target_grid = resample_targets_to_grid(
+    train_targets,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+validation_target_grid = resample_targets_to_grid(
+    validation_targets,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+test_target_grid = resample_targets_to_grid(
+    test_targets,
+    transformed_axes=transformed_axes,
+    sampled_axes=sampled_axes,
+)
+
+feature_names = (
+    *(axis.feature_name() for axis in axis_specs),
+    *prepared_parameters.feature_names,
+)
 ```
 
-`FeatureScaling.from_values` fits one column rule from the training rows.
-`FeatureScaler` applies the ordered tuple of rules to a full feature matrix.
-The important products are:
-
-| Product | Used for |
-| --- | --- |
-| `scaling` | Metadata saved with the emulator checkpoint. |
-| `feature_scaler` | Object that applies the same rules to any split or inference input. |
-| `scaled_*_features` | Arrays passed directly to the network. |
-
-Scaling metadata is fitted once from training rows:
-
-```text
-training rows -> scaling metadata -> all splits and inference inputs
-```
+The products are aligned target grids and the axis coordinates used by the
+network. `feature_names` records the final feature order: axes first, then
+simulation parameters.
 
 ## Target Scaling
 
@@ -198,8 +210,9 @@ from jax_emu.data_preprocessing import TargetScalingScalar
 
 target_scaling = TargetScalingScalar.from_targets(train_target_grid)
 
-scaled_train_targets = target_scaling.transform_grid(train_target_grid)
-scaled_validation_targets = target_scaling.transform_grid(validation_target_grid)
+scaled_train_target_grid = target_scaling.transform_grid(train_target_grid)
+scaled_validation_target_grid = target_scaling.transform_grid(validation_target_grid)
+scaled_test_target_grid = target_scaling.transform_grid(test_target_grid)
 ```
 
 `TargetScalingScalar.from_targets` fits one global standard deviation from the
@@ -228,14 +241,25 @@ The dense MLP trains on scalar rows. Grid-valued targets are flattened:
 ```
 
 ```python
-from jax_emu.data_preprocessing import tile_spectra, reconstruct_spectra
+from jax_emu.data_preprocessing import flatten_resampled_rows, reconstruct_spectra
 
-features, target_rows, axis_shape = tile_spectra(
+train_features, train_target_rows = flatten_resampled_rows(
     train_parameters,
-    axes=(z_grid, k_grid),
-    targets=scaled_train_targets,
+    scaled_train_target_grid,
+    sampled_axes=sampled_axes,
+)
+validation_features, validation_target_rows = flatten_resampled_rows(
+    validation_parameters,
+    scaled_validation_target_grid,
+    sampled_axes=sampled_axes,
+)
+test_features, test_target_rows = flatten_resampled_rows(
+    test_parameters,
+    scaled_test_target_grid,
+    sampled_axes=sampled_axes,
 )
 
+axis_shape = tuple(len(axis) for axis in sampled_axes)
 predicted_grid = reconstruct_spectra(
     flat_predictions,
     nsamples=len(test_parameters),
@@ -243,18 +267,73 @@ predicted_grid = reconstruct_spectra(
 )
 ```
 
-`tile_spectra` produces the final scalar-regression training product:
+`flatten_resampled_rows` produces the final scalar-regression training product:
 
 ```text
-features:    (n_simulations * n_grid_points, n_axes + n_parameters)
-target_rows: (n_simulations * n_grid_points,)
-axis_shape:  original grid shape needed for reconstruction
+train_features:     (n_simulations * n_grid_points, n_axes + n_parameters)
+train_target_rows:  (n_simulations * n_grid_points,)
+axis_shape:         original grid shape needed for reconstruction
 ```
 
 `reconstruct_spectra` performs the shape inverse after prediction. It folds the
 flat network outputs back into per-simulation grids.
 
 This is a shape transform. It does not change the physical values.
+
+## Feature Scaling
+
+Feature scaling maps each input column into the numerical space seen by the
+network.
+
+| Method | Operation | Typical use |
+| --- | --- | --- |
+| `identity` | `x` | Already suitable values |
+| `zscore` | `(x - mean) / std` | Continuous features |
+| `minmax_zero_to_one` | `(x - min) / (max - min)` | Bounded or discrete features |
+| `minmax_minus_one_to_one` | Scale to `[-1, 1]` | Symmetric bounded features |
+
+```python
+from jax_emu.data_preprocessing import FeatureScaler, FeatureScaling
+
+feature_scale_methods = {
+    "z": "zscore",
+    "log10k": "zscore",
+    "log10f_star": "zscore",
+    "log10f_x": "zscore",
+    "alpha": "minmax_zero_to_one",
+}
+
+scaling = tuple(
+    FeatureScaling.from_values(
+        name,
+        train_features[:, idx],
+        feature_scale_methods[name],
+    )
+    for idx, name in enumerate(feature_names)
+)
+
+feature_scaler = FeatureScaler(scaling)
+
+scaled_train_features = feature_scaler.transform(train_features)
+scaled_validation_features = feature_scaler.transform(validation_features)
+scaled_test_features = feature_scaler.transform(test_features)
+```
+
+`FeatureScaling.from_values` fits one column rule from the training rows.
+`FeatureScaler` applies the ordered tuple of rules to a full feature matrix.
+The important products are:
+
+| Product | Used for |
+| --- | --- |
+| `scaling` | Metadata saved with the emulator checkpoint. |
+| `feature_scaler` | Object that applies the same rules to any split or inference input. |
+| `scaled_*_features` | Arrays passed directly to the network. |
+
+Scaling metadata is fitted once from training rows:
+
+```text
+training rows -> scaling metadata -> all splits and inference inputs
+```
 
 ## Full Preparation Helper
 
@@ -269,15 +348,18 @@ target transform -> split -> resample -> target scale -> flatten -> feature scal
 from jax_emu.data_preprocessing import AxisSpec, prepare_fixed_grid_training_split
 
 prepared = prepare_fixed_grid_training_split(
-    axes=(z_axis,),
+    axes=(z_axis, k_axis),
     axis_specs=(
         AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=200),
+        AxisSpec(name="k", transform="log10", limits=(0.1, 1.0), nsample=20),
     ),
     parameters=prepared_parameters,
     target=target,
     feature_scale_methods={
         "z": "zscore",
+        "log10k": "zscore",
         "log10f_star": "zscore",
+        "log10f_x": "zscore",
         "alpha": "minmax_zero_to_one",
     },
     data_log=False,
