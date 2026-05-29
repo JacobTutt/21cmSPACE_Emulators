@@ -61,12 +61,44 @@ load dataset
 ### Prepare Arrays
 
 ```python
-from emulators_21cmspace.t21.data import prepare_twentyonecmspace_t21_training_split
+from emulators_21cmspace.t21.data import (
+    prepare_twentyonecmspace_t21_parameters,
+    t21_spec,
+)
+from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_t21
+from jax_emu.data_preprocessing import prepare_fixed_grid_training_split
 
-prepared = prepare_twentyonecmspace_t21_training_split(
-    dataset_root,
+product = load_twentyonecmspace_t21(dataset_root)
+prepared_parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
+spec = t21_spec()
+
+feature_scale_methods = {
+    "z": "zscore",
+    "log10fstarII": "zscore",
+    "log10fstarIII": "zscore",
+    "log10Vc": "zscore",
+    "log10fX": "zscore",
+    "alpha": "minmax_zero_to_one",
+    "nu_0": "minmax_zero_to_one",
+    "tau": "zscore",
+    "log10fradio": "zscore",
+    "pop": "minmax_zero_to_one",
+}
+
+prepared = prepare_fixed_grid_training_split(
+    axes=(product.axes.z,),
+    axis_specs=spec.axes,
+    parameters=prepared_parameters,
+    target=product.target,
+    feature_scale_methods=feature_scale_methods,
+    data_log=False,
+    offset=None,
+    train_size=0.6,
+    validation_size=0.2,
+    test_size=0.2,
     random_state=42,
     shuffle_seed=42,
+    standardize_target=True,
 )
 
 print(prepared.feature_names)
@@ -87,6 +119,9 @@ raw T21 grids
 ```
 
 The returned `prepared` object is what the trainer consumes.
+
+The convenience wrapper `prepare_twentyonecmspace_t21_training_split()` runs the
+same code path above with the default `T21` settings.
 
 ### Train And Save
 
@@ -209,13 +244,44 @@ same parameter transforms and feature scaling used during training.
 
 ```python
 from emulators_21cmspace.delta21.data import (
-    prepare_twentyonecmspace_delta21_training_split,
+    delta21_spec,
+    prepare_twentyonecmspace_delta21_parameters,
 )
+from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_delta21
+from jax_emu.data_preprocessing import prepare_fixed_grid_training_split
 
-prepared = prepare_twentyonecmspace_delta21_training_split(
-    dataset_root,
+product = load_twentyonecmspace_delta21(dataset_root)
+prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
+spec = delta21_spec()
+
+feature_scale_methods = {
+    "z": "zscore",
+    "log10k": "zscore",
+    "log10fstarII": "zscore",
+    "log10fstarIII": "zscore",
+    "log10Vc": "zscore",
+    "log10fX": "zscore",
+    "alpha": "minmax_zero_to_one",
+    "nu_0": "minmax_zero_to_one",
+    "tau": "zscore",
+    "log10fradio": "zscore",
+    "pop": "minmax_zero_to_one",
+}
+
+prepared = prepare_fixed_grid_training_split(
+    axes=(product.axes.z, product.axes.k),
+    axis_specs=spec.axes,
+    parameters=prepared_parameters,
+    target=product.target,
+    feature_scale_methods=feature_scale_methods,
+    data_log=True,
+    offset=1e-8,
+    train_size=0.6,
+    validation_size=0.2,
+    test_size=0.2,
     random_state=42,
     shuffle_seed=42,
+    standardize_target=True,
 )
 
 print(prepared.feature_names)
@@ -238,29 +304,89 @@ raw Delta21 grids
 -> scale features and targets
 ```
 
+The convenience wrapper `prepare_twentyonecmspace_delta21_training_split()` runs
+the same code path above with the default `Delta21` settings.
+
 ### Train And Save
 
-For the standard 21cmSPACE power-spectrum workflow, the package provides a
-complete Python helper around the same lower-level pieces:
-
 ```python
-from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
+from dataclasses import asdict
+from pathlib import Path
 
-summary = train_delta21_from_dataset_root(
-    dataset_root,
-    output_path="outputs/delta21_model.nenemu",
-    epochs=10000,
-    batch_size=10000,
-    shuffle_seed=42,
+import jax
+from flax import nnx
+
+from emulators_21cmspace.delta21.data import delta21_spec
+from emulators_21cmspace.delta21.model import delta21_config
+from jax_emu.architectures import DenseMLP
+from jax_emu.training import evaluate_mlp_regressor, train_mlp_regressor
+from jax_emu.utils import CheckpointMetadata, save
+
+config = delta21_config()
+
+model = DenseMLP(
+    in_features=prepared.train_features.shape[1],
+    hidden_features=config.mlp.hidden_dim,
+    hidden_layers=config.mlp.total_hidden_layers,
+    activation=config.mlp.activation,
+    rngs=nnx.Rngs(jax.random.PRNGKey(42)),
 )
 
-print(summary["package_path"])
-print(summary["test_loss"])
-print(summary["feature_names"])
-```
+model, history = train_mlp_regressor(
+    model,
+    prepared.train_features,
+    prepared.train_targets,
+    prepared.validation_features,
+    prepared.validation_targets,
+    epochs=config.training.epochs,
+    batch_size=config.training.batch_size,
+    prefetch_batches=config.training.prefetch_batches,
+    learning_rate=config.optimizer.learning_rate,
+    weight_decay=config.optimizer.weight_decay,
+    seed=42,
+    early_stopping_patience=config.training.early_stopping_patience,
+    early_stopping_min_delta=config.training.early_stopping_min_delta,
+)
 
-This helper prepares the arrays, builds `DenseMLP`, trains it with the shared
-JAX trainer, evaluates the test split, and saves the checkpoint metadata.
+test_loss = evaluate_mlp_regressor(
+    model,
+    prepared.test_features,
+    prepared.test_targets,
+    batch_size=config.training.batch_size,
+    prefetch_batches=config.training.prefetch_batches,
+)
+
+metadata = CheckpointMetadata(
+    model_name="delta21",
+    package_version="0.1.0",
+    emulator_spec=delta21_spec(),
+    input_scaling=prepared.feature_scaling,
+    target_scaling=prepared.target_scaling,
+    training_config={
+        "mlp": asdict(config.mlp),
+        "optimizer": asdict(config.optimizer),
+        "training": asdict(config.training),
+        "feature_names": list(prepared.feature_names),
+    },
+)
+
+Path("outputs").mkdir(exist_ok=True)
+package_path = save(
+    Path("outputs/delta21_model.nenemu"),
+    model,
+    train_losses=history.train_losses,
+    val_losses=history.validation_losses,
+    loss=config.training.loss_name,
+    metadata=metadata,
+    epochs=config.training.epochs,
+    patience=config.training.early_stopping_patience,
+    learning_rate=config.optimizer.learning_rate,
+    weight_decay=config.optimizer.weight_decay,
+)
+
+print(package_path)
+print(test_loss)
+```
 
 The checkpoint stores:
 
