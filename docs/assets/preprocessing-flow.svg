@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1040" height="650" viewBox="0 0 1040 650" role="img" aria-labelledby="title desc">
-  <title id="title">Preprocessing workflow for T21 and Delta21 emulators</title>
-  <desc id="desc">Workflow diagram from raw 21cmSPACE files through deterministic transforms, fixed-grid interpolation, scaling, flattening, and prepared train validation test arrays.</desc>
+  <title id="title">General preprocessing workflow for scalar-output emulators</title>
+  <desc id="desc">Workflow diagram from raw simulation arrays through deterministic transforms, splitting, optional fixed-grid interpolation, scaling, flattening, and prepared train validation test arrays.</desc>
   <defs>
     <style>
       .bg { fill: #f7f9fb; }
@@ -21,31 +21,31 @@
   </defs>
 
   <rect class="bg" x="0" y="0" width="1040" height="650" />
-  <text class="title" x="40" y="42">Deterministic preprocessing and normalisation flow</text>
+  <text class="title" x="40" y="42">Preprocessing and normalisation flow</text>
   <text class="label" x="40" y="68">The same metadata is reused by training, checkpointing, and inference.</text>
 
   <rect class="lane" x="25" y="95" width="990" height="160" />
   <text class="label" x="42" y="120">Raw data and contracts</text>
 
   <rect class="box-blue" x="50" y="145" width="190" height="72" />
-  <text class="text" x="70" y="173">21cmSPACE files</text>
+  <text class="text" x="70" y="173">Raw arrays</text>
   <text class="small" x="70" y="195">axes, parameters, targets</text>
 
   <rect class="box" x="300" y="130" width="190" height="102" />
   <text class="text" x="320" y="158">Load and clean</text>
   <text class="small" x="320" y="180">drop NaN simulations</text>
-  <text class="small" x="320" y="200">convert k to k / h</text>
+  <text class="small" x="320" y="200">keep valid samples</text>
 
   <rect class="box" x="550" y="130" width="190" height="102" />
-  <text class="text" x="570" y="158">EmulatorSpec</text>
+  <text class="text" x="570" y="158">Emulator contract</text>
   <text class="small" x="570" y="180">axis order</text>
   <text class="small" x="570" y="200">parameter order</text>
   <text class="small" x="570" y="220">target transform</text>
 
   <rect class="box" x="800" y="130" width="170" height="102" />
   <text class="text" x="820" y="158">Prepare params</text>
-  <text class="small" x="820" y="180">drop unused cols</text>
-  <text class="small" x="820" y="200">log10 selected</text>
+  <text class="small" x="820" y="180">drop unused columns</text>
+  <text class="small" x="820" y="200">transform selected</text>
   <text class="small" x="820" y="220">record discrete sets</text>
 
   <path class="arrow" d="M240 181 H300" />
@@ -57,8 +57,8 @@
 
   <rect class="box-orange" x="50" y="335" width="190" height="86" />
   <text class="text" x="70" y="362">Target transform</text>
-  <text class="small" x="70" y="384">T21: identity</text>
-  <text class="small" x="70" y="404">Delta21: log10(y + 1e-8)</text>
+  <text class="small" x="70" y="384">identity or log10</text>
+  <text class="small" x="70" y="404">optional positive offset</text>
 
   <rect class="box" x="300" y="335" width="190" height="86" />
   <text class="text" x="320" y="362">Split simulations</text>
@@ -67,13 +67,13 @@
 
   <rect class="box-green" x="550" y="335" width="190" height="86" />
   <text class="text" x="570" y="362">Axis grids</text>
-  <text class="small" x="570" y="384">T21: 200 z</text>
-  <text class="small" x="570" y="404">Delta21: 50 z x 50 log10k</text>
+  <text class="small" x="570" y="384">sample shared axes</text>
+  <text class="small" x="570" y="404">fixed output grid</text>
 
   <rect class="box" x="800" y="335" width="170" height="86" />
   <text class="text" x="820" y="362">Interpolate</text>
-  <text class="small" x="820" y="384">linear interpolation</text>
-  <text class="small" x="820" y="404">shared fixed grid</text>
+  <text class="small" x="820" y="384">optional resampling</text>
+  <text class="small" x="820" y="404">onto shared grid</text>
 
   <path class="arrow" d="M885 232 V270 H145 V335" />
   <path class="arrow" d="M240 378 H300" />
