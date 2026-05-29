@@ -1,84 +1,68 @@
 # Architecture
 
-The emulator architecture is a shared dense MLP with workflow-specific
-configuration. The same network class is used for both the global-signal
-`T21` workflow and the power-spectrum `Delta21` workflow:
+The emulator architecture is a compact JAX/Flax implementation of the
+scalar-regression idea used by
+[GlobalEmu](https://github.com/htjb/globalemu)
+([arXiv:2104.04336](https://arxiv.org/abs/2104.04336)) and
+[AstroEmu](https://astroemu.readthedocs.io/en/latest/tutorial/). Instead of
+training a network to emit a whole spectrum or grid in one pass, independent
+coordinates are included in the input row and the network predicts one scalar
+observable value.
 
-- [`jax_emu/architectures/mlp.py`](../jax_emu/architectures/mlp.py)
-- [`emulators_21cmspace/t21/model.py`](../emulators_21cmspace/t21/model.py)
-- [`emulators_21cmspace/delta21/model.py`](../emulators_21cmspace/delta21/model.py)
-
-The main design choice is that the network is trained as a tiled scalar
-regressor. It predicts one physical target value for one coordinate location
-and one astrophysical parameter vector, rather than predicting a complete
-signal vector in one forward pass.
+The shared dense MLP lives in
+[`jax_emu/architectures/mlp.py`](../jax_emu/architectures/mlp.py). Workflow
+configuration sets the input width, hidden width, depth, activation, and target
+transform, but the conceptual contract is the same across observable families:
 
 ![Tiled scalar-output emulator architecture](assets/network-tiling.svg)
 
-## Tiled Scalar Regression
+## Scalar Regression Contract
 
 The tiling utilities are defined in
 [`jax_emu/data_preprocessing/tiling.py`](../jax_emu/data_preprocessing/tiling.py).
-They flatten each simulation output onto rows of the form:
+They flatten simulation outputs onto rows of the form:
 
 ```text
 [axis coordinates, astrophysical parameters] -> scalar target
 ```
 
-For `T21`, the axis coordinates are just redshift:
+For a one-dimensional observable:
 
 ```text
-[z, theta_1, ..., theta_9] -> T21(z; theta)
+[z, theta_1, ..., theta_n] -> y(z; theta)
 ```
 
-For `Delta21`, the axis coordinates are redshift and wavenumber:
+For a two-dimensional observable:
 
 ```text
-[z, log10(k), theta_1, ..., theta_9] -> Delta21(z, k; theta)
+[z, log10(k), theta_1, ..., theta_n] -> y(z, k; theta)
 ```
 
 The feature order is canonical: axis values first, then astrophysical
 parameters. After inference, the flat predictions are reshaped back onto the
 original spectral grid with `reconstruct_spectra(...)`.
 
-This is the GlobalEmu-style idea used here: the coordinates are part of the
-input, so a single scalar-output MLP learns the continuous map over both
-physical coordinate space and parameter space.
+The important distinction is that the independent coordinates are part of the
+input. A single scalar-output MLP learns the continuous map over coordinate
+space and parameter space, while vectorized calls over the requested coordinate
+grid reconstruct the observable.
 
 | Approach | Input row | Network output | Reconstruction | Main tradeoff |
 | --- | --- | --- | --- | --- |
 | Vector-output emulator | One parameter vector | Full signal vector or grid | Usually none | Output layer is tied to one fixed grid shape. |
-| Tiled scalar-output emulator | Axis coordinate(s) plus one parameter vector | One scalar target value | Required reshape after prediction | More rows, but one architecture works across 1D and 2D spectral grids. |
+| Tiled scalar-output emulator | Axis coordinate(s) plus one parameter vector | One scalar target value | Vectorized call plus reshape | More rows, but one architecture works across 1D and 2D spectral grids. |
 
-## DenseMLP
+## DenseMLP and Configuration
 
-`DenseMLP` is a Flax NNX module. It builds:
-
-```text
-input -> hidden layer(s) with activation -> linear readout
-```
-
-Each hidden layer is an `nnx.Linear` followed by the configured activation.
-The readout layer is linear and does not apply an activation.
-
-The constructor arguments are:
-
-```python
-model = DenseMLP(
-    in_features=10,
-    hidden_features=32,
-    hidden_layers=4,
-    out_features=1,
-    activation="relu",
-    rngs=nnx.Rngs(jax.random.PRNGKey(1)),
-)
-```
-
-## MLPConfig Fields
+`DenseMLP` is a Flax NNX module with hidden linear layers, a configured
+activation, and a linear scalar readout. The readout does not apply an output
+activation, so target-space constraints should be handled by preprocessing and
+inverse transforms.
 
 Workflow configs use `MLPConfig` from
-[`jax_emu/utils/config.py`](../jax_emu/utils/config.py). The config names are
-slightly higher level than the `DenseMLP` constructor.
+[`jax_emu/utils/config.py`](../jax_emu/utils/config.py). The config describes
+the feature width after tiling, the hidden-layer capacity, and the scalar output
+width.
 
 | Field | Meaning | Maps to `DenseMLP` |
 | --- | --- | --- |
@@ -88,33 +72,9 @@ slightly higher level than the `DenseMLP` constructor.
 | `activation` | Non-linearity applied after each hidden linear layer. | `activation` |
 | `output_dim` | Number of output values per input row. Current workflows use scalar regression, so this is `1`. | `out_features`; defaults to `1` in `DenseMLP`. |
 
-The mapping is:
-
-```python
-config = t21_config()
-
-model = DenseMLP(
-    in_features=config.mlp.input_dim,
-    hidden_features=config.mlp.hidden_dim,
-    hidden_layers=config.mlp.total_hidden_layers,
-    out_features=config.mlp.output_dim,
-    activation=config.mlp.activation,
-    rngs=nnx.Rngs(jax.random.PRNGKey(1)),
-)
-```
-
-In the training entrypoints, the actual feature width is taken from the
-prepared arrays:
-
-```python
-model = DenseMLP(
-    in_features=prepared.train_features.shape[1],
-    hidden_features=config.mlp.hidden_dim,
-    hidden_layers=config.mlp.total_hidden_layers,
-    activation=config.mlp.activation,
-    rngs=nnx.Rngs(jax.random.PRNGKey(1)),
-)
-```
+In training entry points, the actual feature width is taken from the prepared
+arrays, so the model follows the tiling contract rather than assuming a fixed
+observable shape.
 
 ## Activation Functions
 
@@ -132,47 +92,13 @@ mapping is:
 would require extending the `ActivationName` literal and `_activation_fn(...)`
 mapping.
 
-## Current Workflow Defaults
+## Package Contract
 
-| Workflow | Input features | Hidden width | Hidden layers | Activation | Output features |
-| --- | ---: | ---: | ---: | --- | ---: |
-| `T21` | `10` (`z` plus 9 parameters) | `32` | `4` | `relu` | `1` |
-| `Delta21` | `11` (`z`, `log10(k)` plus 9 parameters) | `100` | `4` | `tanh` | `1` |
+Saved emulator packages keep the trained parameters together with preprocessing
+metadata, target transforms, axis specifications, and reconstruction metadata.
+That keeps inference tied to the same scaling and tiling assumptions used
+during training.
 
-The defaults are stored in the workflow model modules:
-
-```python
-# emulators_21cmspace/t21/model.py
-MLPConfig(
-    input_dim=10,
-    hidden_dim=32,
-    n_hidden_blocks=3,
-    activation="relu",
-)
-```
-
-This gives:
-
-```text
-10 -> 32 -> 32 -> 32 -> 32 -> 1
-```
-
-```python
-# emulators_21cmspace/delta21/model.py
-MLPConfig(
-    input_dim=11,
-    hidden_dim=100,
-    n_hidden_blocks=3,
-    activation="tanh",
-)
-```
-
-This gives:
-
-```text
-11 -> 100 -> 100 -> 100 -> 100 -> 1
-```
-
-The shared MLP class stays generic. The workflow modules own the default
-scientific capacity and feature width, while preprocessing determines the
-actual tiled feature matrix used for training and inference.
+The shared MLP class stays generic. Workflow modules own scientific defaults
+and observable-specific metadata, while preprocessing determines the actual
+tiled feature matrix used for training and inference.

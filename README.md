@@ -6,9 +6,12 @@ It keeps the path from simulation products to saved emulator packages explicit:
 prepare physical arrays, scale and tile inputs, train a JAX MLP, save a
 `.nenemu` checkpoint, and use that package for inference.
 
-The current implemented workflows target 21cmSPACE-style global-signal and
-power-spectrum emulators. The same infrastructure is intended to support other
-observables used in joint 21-cm and astrophysical inference.
+The design follows the same scalar-regression emulator idea used by
+[AstroEmu](https://astroemu.readthedocs.io/en/latest/tutorial/) and
+[GlobalEmu](https://github.com/htjb/globalemu)
+([arXiv:2104.04336](https://arxiv.org/abs/2104.04336)): combine physical
+parameters with independent coordinates, predict scalar observable values, and
+reconstruct spectra or grids after inference.
 
 ## Repository Layout
 
@@ -32,32 +35,39 @@ observables used in joint 21-cm and astrophysical inference.
     t21/                            (global 21-cm signal emulator)
     delta21/                        (21-cm power-spectrum emulator)
     twentyonecmspace.py             (shared 21cmSPACE constants/helpers)
-  tests/                            (contract, workflow, and CLI smoke tests)
 ```
 
 ## What Can Be Emulated
 
-The implemented entry points cover:
+The emulator contract is intended for observable families that can be expressed
+as values on physical coordinate axes:
 
-- global 21-cm signal, `T21`
-- 21-cm power spectrum, `Delta21`
-
-The emulator contract is also designed for related observables, including UV
-luminosity functions, cosmic X-ray background and radio background constraints
-(`CXB`/`CRB`), star-formation-rate density (`SFRD`), neutral fraction (`xHI`),
-and thermal or radio histories.
+- global 21-cm brightness temperature, `T21(z)`, following the GlobalEmu
+  precedent.
+- 21-cm power spectra, `Delta21(z, k)`, as used in the 21cmSPACE
+  multi-wavelength analyses cited in [references](docs/references.md),
+  including the Pop III constraints paper
+  ([arXiv:2312.08095](https://arxiv.org/abs/2312.08095)).
+- UV luminosity functions, `UVLF` or `Phi(MUV, z)`, highlighted by the Jiten
+  JWST/21-cm synergy paper
+  ([arXiv:2503.21687](https://arxiv.org/abs/2503.21687)).
+- diffuse backgrounds, including cosmic X-ray and radio backgrounds
+  (`CXB`/`CRB`), used in the Jiten and Simon multi-wavelength studies listed in
+  [references](docs/references.md).
+- star-formation and IGM history summaries, including Pop II / Pop III `SFRD`,
+  neutral fraction `xHI`, kinetic temperature `TK`, spin temperature `TS`, and
+  radio background temperature `Trad`, following the Simon discovery-space
+  paper ([arXiv:2508.13761](https://arxiv.org/abs/2508.13761)).
+- compact global-signal summaries such as `T21,min`, trough redshift, and
+  trough frequency, when the target is a scalar derived observable.
 
 ## Model Approach
 
-The default architecture is a dense MLP in JAX/Flax. Its role is deliberately
-simple: map prepared cosmological/astrophysical parameters plus coordinate axes
-such as redshift or wave number to one scalar target value, then reconstruct the
-full observable grid after inference.
-
-This follows the same broad emulator pattern used by GlobalEmu
-([arXiv:2104.04336](https://arxiv.org/abs/2104.04336)): compact feed-forward
-networks trained on simulation grids, with preprocessing and inverse transforms
-treated as part of the saved emulator package.
+The model is a simple JAX/Flax implementation of the GlobalEmu/AstroEmu idea:
+a neural network maps cosmological and astrophysical parameters plus independent
+coordinates, such as redshift `z` and/or wavenumber `k`, to scalar observable
+values. Vectorized inference over the coordinate axes then reconstructs the
+requested spectrum, surface, or grid.
 
 ## Documentation Map
 
@@ -67,7 +77,6 @@ Start here, then move into the stage-specific docs:
 - [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
 - [Preprocessing](docs/preprocessing.md): parameter preparation, target transforms, scaling, and tiling.
 - [Examples](docs/examples.md): index for worked workflows, including global 21-cm and power-spectrum examples.
-- [References](docs/references.md): science background and citation list.
 
 ## Installation
 
@@ -115,15 +124,7 @@ For GPU machines, replace `cpu` with `cuda12` or `cuda13`:
 python -m pip install -e ".[cuda13,dev]"
 ```
 
-## Quick Smoke Tests
-
-Run the Python test suite:
-
-```bash
-python -m pytest -q
-```
-
-Check the installed CLI entry points:
+Optional CLI checks:
 
 ```bash
 21cmspace-t21-train --print-spec
@@ -145,13 +146,3 @@ Training from real 21cmSPACE data starts from a dataset root:
 21cmspace-t21-train --dataset-root /path/to/21cmSPACE --output t21_model.nenemu
 21cmspace-delta21-train --dataset-root /path/to/21cmSPACE --output delta21_model.nenemu
 ```
-
-## References
-
-See [docs/references.md](docs/references.md) for the curated reference list.
-Key arXiv entries for this repository include:
-
-- [2104.04336](https://arxiv.org/abs/2104.04336)
-- [2312.08095](https://arxiv.org/abs/2312.08095)
-- [2503.21687](https://arxiv.org/abs/2503.21687)
-- [2508.13761](https://arxiv.org/abs/2508.13761)
