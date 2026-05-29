@@ -1,27 +1,29 @@
 # Examples
 
-This page shows the installed command-line entrypoints and matching Python APIs
-for the current 21cmSPACE emulator workflows:
+This page shows how the preprocessing, architecture, training, checkpointing,
+and inference pieces fit together in Python.
+
+The current 21cmSPACE examples are:
 
 - global 21-cm brightness temperature, `T21(z)`
 - 21-cm power spectrum, `Delta21(z, k)`
 
 ## Dataset Root
 
-Both workflows expect a 21cmSPACE dataset root containing MATLAB `.mat` files.
-Use a local path placeholder such as:
+Both examples expect a 21cmSPACE dataset root containing the MATLAB `.mat`
+files:
 
-```bash
-DATASET_ROOT=/path/to/21cmspace-data
+```python
+dataset_root = "/path/to/21cmspace-data"
 ```
 
-The loader reads these files from the root:
+The loader reads:
 
 | File | MATLAB key | Used by |
 | --- | --- | --- |
 | `21cmspace_z_mat.mat` | `z21cm` | T21 and Delta21 |
-| `21cmspace_k_mat.mat` | `ks` | T21 loader and Delta21 |
-| `21cmspace_nu_mat.mat` | `nu_keV` | T21 loader and Delta21 loader |
+| `21cmspace_k_mat.mat` | `ks` | Delta21 |
+| `21cmspace_nu_mat.mat` | `nu_keV` | dataset loader metadata |
 | `21cmspace_parameters_mat.mat` | `parameters` | T21 and Delta21 |
 | `21cmspace_T21_mat.mat` | `combined_T21s` | T21 |
 | `21cmspace_Deltak_mat.mat` | `combined_Deltaks` | Delta21 |
@@ -32,256 +34,268 @@ The raw parameter table has 12 columns:
 fstarII, fstarIII, Vc, fX, alpha, nu_0, zeta, tau, fradio, pop, feed, delay
 ```
 
-Inference accepts either that raw 12-column table or the prepared 9-column
-feature table used by the model.
+The emulator uses 9 prepared parameters after dropping `zeta`, `feed`, and
+`delay`.
 
-## What The Example Does
+## The Code Path
 
-Each workflow follows the same structure:
+Each example follows the same route:
 
-1. **Prepare arrays**: load the raw `.mat` files, drop failed simulations, apply
-   the emulator-specific parameter transforms, split the simulations, resample
-   onto a fixed grid, tile into scalar rows, and scale the features.
-2. **Train a model**: pass the prepared arrays to the shared JAX trainer.
-3. **Save a checkpoint**: write the model weights and preprocessing metadata to
-   a `.nenemu` directory.
-4. **Run inference**: load the checkpoint, rebuild the same input features from
-   physical parameters and coordinates, run the model, and invert the output
-   transforms.
+```text
+load dataset
+-> prepare fixed-grid train/validation/test arrays
+-> build DenseMLP
+-> train with train_mlp_regressor
+-> save weights + preprocessing metadata
+-> load checkpoint and predict
+```
 
 ## Global 21-cm Signal: `T21`
 
-The `T21` workflow trains and runs inference with the global brightness
-temperature emulator.
+`T21` is a one-axis emulator:
 
-### Prepare Training Arrays
-
-Inspect the prepared array shapes first:
-
-```bash
-21cmspace-t21-train \
-  --dataset-root /path/to/21cmspace-data \
-  --prepare-only
+```text
+[z, parameters] -> T21(z)
 ```
 
-This runs the loading and preprocessing path without fitting the neural network.
-It is useful for checking the number of scalar rows produced by the fixed
-redshift grid.
+### Prepare Arrays
 
-### Train A Checkpoint
+```python
+from emulators_21cmspace.t21.data import prepare_twentyonecmspace_t21_training_split
 
-Train the model from the same dataset root:
+prepared = prepare_twentyonecmspace_t21_training_split(
+    dataset_root,
+    random_state=42,
+    shuffle_seed=42,
+)
 
-```bash
-21cmspace-t21-train \
-  --dataset-root /path/to/21cmspace-data \
-  --output outputs/t21_model.nenemu \
-  --epochs 10000 \
-  --batch-size 1000 \
-  --shuffle-seed 42
+print(prepared.feature_names)
+print(prepared.train_features.shape)
+print(prepared.train_targets.shape)
 ```
 
-If `--output` is omitted, the checkpoint is written to `t21_model.nenemu`.
-Training also writes a JSON summary beside it.
+This runs the data-loading and preprocessing workflow:
 
-The checkpoint contains:
+```text
+raw T21 grids
+-> drop failed simulations
+-> transform parameters
+-> split simulations
+-> resample onto the fixed z grid
+-> tile into scalar rows
+-> scale features and targets
+```
+
+The returned `prepared` object is what the trainer consumes.
+
+### Train And Save
+
+```python
+from dataclasses import asdict
+from pathlib import Path
+
+import jax
+from flax import nnx
+
+from emulators_21cmspace.t21.data import t21_spec
+from emulators_21cmspace.t21.model import t21_config
+from jax_emu.architectures import DenseMLP
+from jax_emu.training import evaluate_mlp_regressor, train_mlp_regressor
+from jax_emu.utils import CheckpointMetadata, save
+
+config = t21_config()
+
+model = DenseMLP(
+    in_features=prepared.train_features.shape[1],
+    hidden_features=config.mlp.hidden_dim,
+    hidden_layers=config.mlp.total_hidden_layers,
+    activation=config.mlp.activation,
+    rngs=nnx.Rngs(jax.random.PRNGKey(42)),
+)
+
+model, history = train_mlp_regressor(
+    model,
+    prepared.train_features,
+    prepared.train_targets,
+    prepared.validation_features,
+    prepared.validation_targets,
+    epochs=config.training.epochs,
+    batch_size=config.training.batch_size,
+    prefetch_batches=config.training.prefetch_batches,
+    learning_rate=config.optimizer.learning_rate,
+    weight_decay=config.optimizer.weight_decay,
+    seed=42,
+    early_stopping_patience=config.training.early_stopping_patience,
+    early_stopping_min_delta=config.training.early_stopping_min_delta,
+)
+
+test_loss = evaluate_mlp_regressor(
+    model,
+    prepared.test_features,
+    prepared.test_targets,
+    batch_size=config.training.batch_size,
+    prefetch_batches=config.training.prefetch_batches,
+)
+
+metadata = CheckpointMetadata(
+    model_name="t21",
+    package_version="0.1.0",
+    emulator_spec=t21_spec(),
+    input_scaling=prepared.feature_scaling,
+    target_scaling=prepared.target_scaling,
+    training_config={
+        "mlp": asdict(config.mlp),
+        "optimizer": asdict(config.optimizer),
+        "training": asdict(config.training),
+        "feature_names": list(prepared.feature_names),
+    },
+)
+
+Path("outputs").mkdir(exist_ok=True)
+package_path = save(
+    Path("outputs/t21_model.nenemu"),
+    model,
+    train_losses=history.train_losses,
+    val_losses=history.validation_losses,
+    loss=config.training.loss_name,
+    metadata=metadata,
+    epochs=config.training.epochs,
+    patience=config.training.early_stopping_patience,
+    learning_rate=config.optimizer.learning_rate,
+    weight_decay=config.optimizer.weight_decay,
+)
+
+print(package_path)
+print(test_loss)
+```
+
+The checkpoint stores:
 
 ```text
 DenseMLP architecture + trained weights + T21 preprocessing metadata
 ```
 
-### Inference
-
-Describe the saved checkpoint:
-
-```bash
-21cmspace-t21-infer \
-  --package outputs/t21_model.nenemu \
-  --describe
-```
-
-Create small inference input files:
-
-```bash
-python - <<'PY'
-import numpy as np
-
-parameters = np.array([
-    [1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0],
-])
-z = np.linspace(6.0, 27.0, 200)
-
-np.savetxt("example_t21_parameters.txt", parameters)
-np.savetxt("example_t21_z.txt", z)
-PY
-```
-
-Run prediction from the command line:
-
-```bash
-21cmspace-t21-infer \
-  --package outputs/t21_model.nenemu \
-  --parameters-file example_t21_parameters.txt \
-  --z-file example_t21_z.txt \
-  --output outputs/t21_prediction.npz
-```
-
-The output archive contains `t21`, `parameters`, and `z`. The prediction shape
-is `(n_sims, n_z)`.
-
-The same flow can be called from Python:
+### Predict
 
 ```python
 import jax.numpy as jnp
-import numpy as np
 
-from emulators_21cmspace.t21.infer import describe_t21_package, predict_t21
+from emulators_21cmspace.t21.infer import load_t21_package, predict_t21
 
-package = "outputs/t21_model.nenemu"
-print(describe_t21_package(package))
+package = load_t21_package("outputs/t21_model.nenemu")
 
-parameters = jnp.asarray(np.loadtxt("example_t21_parameters.txt"), dtype=jnp.float32)
+physical_parameters = jnp.asarray(
+    [[1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0]],
+    dtype=jnp.float32,
+)
 z = jnp.linspace(6.0, 27.0, 200)
-t21 = predict_t21(package, parameters, z)
+
+t21 = predict_t21(package, physical_parameters, z)
+print(t21.shape)
 ```
 
-### Defaults
-
-Print the live defaults with:
-
-```bash
-21cmspace-t21-train --print-config
-```
-
-| Setting | Value |
-| --- | --- |
-| Input features | `z` plus 9 prepared parameters |
-| Redshift axis | identity transform, limits `(6.0, 27.0)`, `nsample=200` |
-| Target transform | identity |
-| Target scaling | one global training-target standard deviation |
-| MLP | input dim 10, 4 hidden layers, width 32, ReLU, output dim 1 |
-| Training | `epochs=10000`, `batch_size=1000`, `prefetch_batches=2` |
-| Early stopping | enabled, patience `50` |
+The inference helper uses the metadata saved in the checkpoint to apply the
+same parameter transforms and feature scaling used during training.
 
 ## 21-cm Power Spectrum: `Delta21`
 
-The `Delta21` workflow trains and runs inference with the 21-cm power-spectrum
-emulator.
+`Delta21` is a two-axis emulator:
 
-### Prepare Training Arrays
-
-Inspect the prepared array shapes first:
-
-```bash
-21cmspace-delta21-train \
-  --dataset-root /path/to/21cmspace-data \
-  --prepare-only
+```text
+[z, k, parameters] -> Delta21(z, k)
 ```
 
-This loads the power-spectrum grid, transforms the axes, interpolates each
-simulation onto the fixed `(z, k)` grid, and tiles the surface into scalar
-training rows.
+### Prepare Arrays
 
-### Train A Checkpoint
+```python
+from emulators_21cmspace.delta21.data import (
+    prepare_twentyonecmspace_delta21_training_split,
+)
 
-Train the model from the same dataset root:
+prepared = prepare_twentyonecmspace_delta21_training_split(
+    dataset_root,
+    random_state=42,
+    shuffle_seed=42,
+)
 
-```bash
-21cmspace-delta21-train \
-  --dataset-root /path/to/21cmspace-data \
-  --output outputs/delta21_model.nenemu \
-  --epochs 10000 \
-  --batch-size 10000 \
-  --shuffle-seed 42
+print(prepared.feature_names)
+print(prepared.train_features.shape)
+print(prepared.train_targets.shape)
 ```
 
-If `--output` is omitted, the checkpoint is written to
-`delta21_model.nenemu`. Training also writes a JSON summary beside it.
+This runs the same generic preprocessing workflow, but with the `Delta21`
+contract:
 
-The checkpoint contains:
+```text
+raw Delta21 grids
+-> drop failed simulations
+-> transform parameters
+-> log-transform k
+-> log-transform Delta21 with offset 1e-8
+-> split simulations
+-> resample onto the fixed (z, k) grid
+-> tile into scalar rows
+-> scale features and targets
+```
+
+### Train And Save
+
+For the standard 21cmSPACE power-spectrum workflow, the package provides a
+complete Python helper around the same lower-level pieces:
+
+```python
+from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
+
+summary = train_delta21_from_dataset_root(
+    dataset_root,
+    output_path="outputs/delta21_model.nenemu",
+    epochs=10000,
+    batch_size=10000,
+    shuffle_seed=42,
+)
+
+print(summary["package_path"])
+print(summary["test_loss"])
+print(summary["feature_names"])
+```
+
+This helper prepares the arrays, builds `DenseMLP`, trains it with the shared
+JAX trainer, evaluates the test split, and saves the checkpoint metadata.
+
+The checkpoint stores:
 
 ```text
 DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 ```
 
-### Inference
-
-Describe the saved checkpoint:
-
-```bash
-21cmspace-delta21-infer \
-  --package outputs/delta21_model.nenemu \
-  --describe
-```
-
-Create small inference input files:
-
-```bash
-python - <<'PY'
-import numpy as np
-
-little_h = 0.6704
-parameters = np.array([
-    [1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0],
-])
-z = np.linspace(6.0, 27.0, 50)
-k = np.geomspace(3e-2 / little_h, 0.99 / little_h, 50)
-
-np.savetxt("example_delta21_parameters.txt", parameters)
-np.savetxt("example_delta21_z.txt", z)
-np.savetxt("example_delta21_k.txt", k)
-PY
-```
-
-Run prediction from the command line:
-
-```bash
-21cmspace-delta21-infer \
-  --package outputs/delta21_model.nenemu \
-  --parameters-file example_delta21_parameters.txt \
-  --z-file example_delta21_z.txt \
-  --k-file example_delta21_k.txt \
-  --output outputs/delta21_prediction.npz
-```
-
-The output archive contains `delta21`, `parameters`, `z`, and `k`. The
-prediction shape is `(n_sims, n_z, n_k)`.
-
-The same flow can be called from Python:
+### Predict
 
 ```python
 import jax.numpy as jnp
 import numpy as np
 
-from emulators_21cmspace.delta21.infer import (
-    describe_delta21_package,
-    predict_delta21,
+from emulators_21cmspace.delta21.infer import load_delta21_package, predict_delta21
+
+package = load_delta21_package("outputs/delta21_model.nenemu")
+
+physical_parameters = jnp.asarray(
+    [[1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0]],
+    dtype=jnp.float32,
 )
-
-package = "outputs/delta21_model.nenemu"
-print(describe_delta21_package(package))
-
-parameters = jnp.asarray(np.loadtxt("example_delta21_parameters.txt"), dtype=jnp.float32)
 z = jnp.linspace(6.0, 27.0, 50)
 k = jnp.asarray(np.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50), dtype=jnp.float32)
-delta21 = predict_delta21(package, parameters, z, k)
+
+delta21 = predict_delta21(package, physical_parameters, z, k)
+print(delta21.shape)
 ```
 
-### Defaults
+The prediction has shape:
 
-Print the live defaults with:
-
-```bash
-21cmspace-delta21-train --print-config
+```text
+(n_sims, n_z, n_k)
 ```
 
-| Setting | Value |
-| --- | --- |
-| Input features | `z`, `log10k`, plus 9 prepared parameters |
-| Redshift axis | identity transform, limits `(6.0, 27.0)`, `nsample=50` |
-| Wavenumber axis | log10 transform, limits `(3e-2 / 0.6704, 0.99 / 0.6704)`, `nsample=50` |
-| Target transform | `log10(target + 1e-8)` |
-| Target scaling | one global log-space training-target standard deviation |
-| MLP | input dim 11, 4 hidden layers, width 100, tanh, output dim 1 |
-| Training | `epochs=10000`, `batch_size=10000`, `prefetch_batches=2` |
-| Early stopping | enabled, patience `50` |
+The inference helper keeps the same contract as training: `metadata.emulator_spec`
+defines the axis and target transforms, `metadata.input_scaling` defines the
+feature scaling, and `metadata.target_scaling` defines the inverse target
+scaling.
