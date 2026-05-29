@@ -1,43 +1,61 @@
 # Preprocessing and Normalisation
 
-Preprocessing is the step that turns raw simulation outputs into arrays that a
-neural network can train on. It defines the numerical contract between physical
-simulation quantities and the values seen by the emulator.
+Preprocessing turns raw simulation outputs into the arrays used by the neural
+network. It defines the contract between physical quantities and emulator
+inputs/outputs.
 
-For scalar-output emulators, preprocessing usually has two jobs:
+For scalar-output emulators, the core map is:
 
-1. Build the feature matrix that goes into the network.
-2. Transform the target values that the network is trained to predict.
+```text
+physical parameters + coordinates -> network features -> scalar target
+```
 
-The same operations must be available at inference time. A trained emulator is
-only meaningful if physical inputs are transformed into the same feature space
-used during training, and network outputs are transformed back into physical
-units in the correct order.
+The same preprocessing contract must be reused at inference time. Physical
+inputs are transformed before the network, and network outputs are transformed
+back afterwards.
 
 ![Preprocessing workflow](assets/preprocessing-flow.svg)
 
 ## Workflow
 
-A typical emulator preprocessing workflow is:
+A typical workflow is:
 
 1. Load raw simulation parameters, output axes, and target arrays.
-2. Clean the data, for example by removing failed simulations or NaN targets.
+2. Clean failed simulations or NaN targets.
 3. Apply deterministic transforms to selected parameters, axes, or targets.
 4. Split simulations into train, validation, and test sets.
-5. Resample targets onto a shared grid if the emulator needs fixed output axes.
-6. Flatten grid-based targets into scalar regression rows.
+5. Resample targets onto a shared grid when fixed output axes are needed.
+6. Flatten spectra or grids into scalar regression rows.
 7. Compute feature and target scaling from the training split only.
-8. Apply the same scaling rules to validation, test, and inference inputs.
+8. Reuse the same metadata for validation, test, and inference.
 
-The exact transforms depend on the observable. For example, a positive target
-may be easier to emulate in `log10(y + offset)`, while a coordinate or physical
-parameter may be left in its original units.
+In short:
+
+```text
+raw arrays -> clean -> transform -> split -> resample -> flatten -> scale
+```
+
+## Why Transform and Normalise?
+
+Neural networks train more reliably when inputs and targets occupy comparable
+numerical ranges. Physical simulation parameters often span many orders of
+magnitude, so the raw values may be a poor coordinate system for optimisation.
+
+| Operation | Why use it? | Example |
+| --- | --- | --- |
+| `log10` transform | Compresses positive quantities spanning orders of magnitude. | `f_star -> log10f_star` |
+| `log10(y + offset)` | Keeps positive targets finite before taking a logarithm. | power spectrum values |
+| `zscore` normalisation | Centres continuous features and scales by training-set scatter. | redshift or log-parameters |
+| `minmax_zero_to_one` | Maps bounded or discrete values onto a compact range. | discrete model choices |
+| `identity` | Leaves a value unchanged when its physical scale is already suitable. | already-normalised inputs |
 
 ## Parameter Transforms
 
-Raw simulation parameters are often not used directly. Some columns may be
-dropped, some may be log-transformed, and some may be recorded as discrete
-parameters.
+Raw parameter tables often need a small amount of structure:
+
+```text
+drop unused columns -> transform selected columns -> record discrete values
+```
 
 ```python
 from jax_emu.data_preprocessing import prepare_feature_matrix
@@ -55,15 +73,13 @@ print(prepared_parameters.values.shape)
 print(prepared_parameters.discrete_values)
 ```
 
-This produces a numerical parameter matrix plus metadata describing the feature
-names and any discrete values. The feature names matter because they define the
-column order expected by the network and by any saved checkpoint.
+The output stores both the numerical matrix and the feature names. The feature
+order is part of the model contract.
 
 ## Axis and Target Transforms
 
-Transforms move physical values into the coordinate system used for training.
-The same transform must be inverted after inference if the prediction needs to
-be reported in physical units.
+Transforms define the coordinate system used for training. If a transform is
+applied before training, the inverse transform is needed after inference.
 
 ```python
 from jax_emu.data_preprocessing import apply_transform, invert_transform
@@ -72,14 +88,16 @@ log_target = apply_transform(target, transform="log10", offset=1e-8)
 physical_target = invert_transform(log_target, transform="log10", offset=1e-8)
 ```
 
-The transform itself is separate from scaling. A log transform changes the
-coordinate system. Scaling then rescales the transformed values to a numerical
-range that is easier for the network to optimize.
+Transform and normalisation are separate steps:
+
+```text
+physical value -> transform -> normalise -> network
+```
 
 ## Dataset Splitting
 
-Splitting is done at the simulation level before flattening into scalar rows.
-This keeps each simulation's parameters paired with its full target array.
+Split at the simulation level before flattening. This keeps each parameter row
+paired with its full target array.
 
 ```python
 from jax_emu.data_preprocessing import split_simulations
@@ -101,15 +119,20 @@ from jax_emu.data_preprocessing import split_simulations
 )
 ```
 
-After this split, preprocessing statistics should be fitted from the training
-split only. Validation, test, and inference data should reuse the training
-metadata.
+Fit preprocessing statistics from the training split only. Reuse them for
+validation, test, and inference.
 
 ## Feature Scaling
 
 Feature scaling maps each input column into the numerical space seen by the
-network. Common choices are z-score scaling for continuous quantities and
-min-max scaling for discrete or bounded quantities.
+network.
+
+| Method | Operation | Typical use |
+| --- | --- | --- |
+| `identity` | `x` | Already suitable values |
+| `zscore` | `(x - mean) / std` | Continuous features |
+| `minmax_zero_to_one` | `(x - min) / (max - min)` | Bounded or discrete features |
+| `minmax_minus_one_to_one` | Scale to `[-1, 1]` | Symmetric bounded features |
 
 ```python
 from jax_emu.data_preprocessing import FeatureScaler, FeatureScaling
@@ -126,15 +149,16 @@ scaled_train_features = feature_scaler.transform(train_features)
 scaled_validation_features = feature_scaler.transform(validation_features)
 ```
 
-The important rule is that scaling statistics are fitted once from the training
-split and then reused. Recomputing scaling separately for validation, test, or
-inference would change the meaning of the network inputs.
+Scaling metadata is fitted once from training rows:
+
+```text
+training rows -> scaling metadata -> all splits and inference inputs
+```
 
 ## Target Scaling
 
-Targets can also be scaled before training. The current reusable target scaler
-stores one global standard deviation measured from the transformed training
-targets.
+Targets can also be scaled. The reusable target scaler stores one global
+standard deviation measured from transformed training targets.
 
 ```python
 from jax_emu.data_preprocessing import TargetScalingScalar
@@ -145,8 +169,8 @@ scaled_train_targets = target_scaling.transform_grid(train_target_grid)
 scaled_validation_targets = target_scaling.transform_grid(validation_target_grid)
 ```
 
-After inference, the operation is inverted before any physical target transform
-is undone:
+After inference, invert target scaling before inverting the physical target
+transform:
 
 ```python
 predicted_target_grid = target_scaling.inverse_grid(model_output_grid)
@@ -159,8 +183,7 @@ physical_target_grid = invert_transform(
 
 ## Tiling Scalar Rows
 
-The dense MLP is trained on scalar regression rows. If the raw target is a
-spectrum or grid, preprocessing flattens it into rows of the form:
+The dense MLP trains on scalar rows. Grid-valued targets are flattened:
 
 ```text
 [axis coordinates, physical parameters] -> one target value
@@ -182,14 +205,16 @@ predicted_grid = reconstruct_spectra(
 )
 ```
 
-This is the shape transform that connects a grid-valued observable to a
-scalar-output neural network.
+This is a shape transform. It does not change the physical values.
 
 ## Full Preparation Helper
 
-For workflows with fixed output axes, `prepare_fixed_grid_training_split`
-combines the common steps: target transform, simulation split, fixed-grid
-resampling, target scaling, row flattening, feature scaling, and row shuffling.
+For fixed-grid workflows, `prepare_fixed_grid_training_split` combines the
+standard steps:
+
+```text
+target transform -> split -> resample -> target scale -> flatten -> feature scale
+```
 
 ```python
 from jax_emu.data_preprocessing import AxisSpec, prepare_fixed_grid_training_split
@@ -216,7 +241,7 @@ prepared = prepare_fixed_grid_training_split(
 )
 ```
 
-The returned object contains both arrays and metadata:
+The returned object contains arrays and metadata:
 
 ```python
 prepared.train_features
@@ -232,9 +257,8 @@ prepared.target_scaling
 
 ## Training and Inference Contract
 
-The network does not know about physical units by itself. It only sees the
-feature matrix and target values produced by preprocessing. A complete emulator
-therefore needs to save enough metadata to repeat the same transforms later.
+The network does not know physical units. It only sees preprocessed arrays.
+The emulator must therefore save the transform and scaling metadata.
 
 At training time:
 
@@ -258,6 +282,5 @@ new physical parameters
 -> physical prediction
 ```
 
-This is why preprocessing metadata is part of the emulator, not just a setup
-detail. If the transform or scaling contract changes, the trained network is no
-longer being evaluated on the same problem it learned.
+If this contract changes, the trained network is no longer being evaluated on
+the same problem it learned.
