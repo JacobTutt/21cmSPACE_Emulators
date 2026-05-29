@@ -141,19 +141,34 @@ helper can then apply the same forward transforms before the network and the
 same inverse transforms after the network.
 
 ```python
-from emulators_21cmspace.delta21.infer import load_delta21_package, predict_delta21
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_predictor,
+    load_delta21_package,
+)
 
 # The emulator-specific loader validates that the checkpoint metadata is present.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
-# The prediction helper applies the saved preprocessing contract before inference.
+# Build the compiled numerical inference function once.
+predictor = build_delta21_predictor(package)
+
+# Reuse the predictor for repeated calls, for example inside an inference loop.
+delta21 = predictor(physical_parameters, z, k)
+```
+
+For one-off calls, the convenience wrapper can still load and predict in one
+step:
+
+```python
+from emulators_21cmspace.delta21.infer import predict_delta21
+
 delta21 = predict_delta21(
-    package,
+    "outputs/delta21_model.nenemu",
     physical_parameters,
     z,
     k,
 )
 ```
 
-This is why the checkpoint should be treated as the trained emulator package,
-not just a place to store weights.
+For repeated inference, prefer `build_delta21_predictor`. It keeps disk I/O and
+metadata validation outside the compiled numerical path.

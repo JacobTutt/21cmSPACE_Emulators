@@ -12,11 +12,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from pprint import pprint
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import nnx
 
 from jax_emu.data_preprocessing.scaling import FeatureScaling
 from emulators_21cmspace.delta21.data import (
@@ -62,6 +63,13 @@ def load_delta21_package(path: str | Path) -> dict[str, Any]:
     """
     # Use the shared Orbax loading utility.
     package = load(path)
+    return _validate_delta21_package(package)
+
+
+def _validate_delta21_package(package: dict[str, Any]) -> dict[str, Any]:
+    """
+    Validate that a loaded package can be used for Delta21 inference.
+    """
     metadata = package["metadata"]
     # Ensure the checkpoint is not missing required inference metadata.
     if metadata is None:
@@ -77,6 +85,118 @@ def load_delta21_package(path: str | Path) -> dict[str, Any]:
 # Prediction Logic
 # ----------------
 # Core workflow for moving from astrophysical parameters to physical power spectra.
+
+def build_delta21_predictor(
+    package_or_path: str | Path | dict[str, Any],
+) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
+    """
+    Build a reusable JIT-compiled Delta21 prediction function.
+
+    This resolves the checkpoint package and validates the metadata once. The
+    returned function then contains only the numerical inference path: parameter
+    preparation, axis tiling, feature scaling, model evaluation, inverse target
+    scaling, inverse target transform, and grid reconstruction.
+
+    Parameters
+    ----------
+    package_or_path:
+        Either a path to a model package or an already loaded package dictionary.
+
+    Returns
+    -------
+    Callable[[jax.Array, jax.Array, jax.Array], jax.Array]
+        A compiled prediction function with signature
+        ``predict(parameters, z_values, k_values)``.
+    """
+    # Resolve and validate the package outside JIT. File I/O and metadata checks
+    # should happen once before repeated accelerator-side inference calls.
+    package = (
+        load_delta21_package(package_or_path)
+        if isinstance(package_or_path, (str, Path))
+        else _validate_delta21_package(package_or_path)
+    )
+    model = package["model"]
+    metadata = package["metadata"]
+    spec = metadata.emulator_spec
+
+    # Check feature order once before compilation. The compiled function can then
+    # assume that the saved scaling metadata matches the emulator specification.
+    expected_names = spec.input_feature_names()
+    actual_names = tuple(feature.name for feature in metadata.input_scaling)
+    if actual_names != expected_names:
+        raise ValueError(
+            "Saved feature scaling order does not match the emulator spec. "
+            f"Expected {expected_names}, received {actual_names}."
+        )
+
+    axis_transforms = (spec.axes[0].transform, spec.axes[1].transform)
+    target_transform = spec.target_transform
+    target_offset = spec.target_offset
+    input_scaling = metadata.input_scaling
+    target_std = None if metadata.target_scaling is None else metadata.target_scaling.std
+
+    @nnx.jit
+    def _predict(
+        model_instance: Any,
+        parameters: jax.Array,
+        z_values: jax.Array,
+        k_values: jax.Array,
+    ) -> jax.Array:
+        """
+        Run the compiled numerical Delta21 inference path.
+        """
+        # Prepare raw 12-column or already-prepared 9-column parameters.
+        prepared_parameters = _prepare_parameter_values(parameters)
+        # Flatten coordinate arrays so the following meshgrid is always 1D x 1D.
+        z = z_values.ravel()
+        k = k_values.ravel()
+
+        # Generate the evaluation grid for (z, k).
+        zz, kk = jnp.meshgrid(z, k, indexing="ij")
+        # Apply the same coordinate transforms used during training.
+        axis_features = jnp.stack(
+            [
+                _apply_transform_jax(zz.ravel(), axis_transforms[0]),
+                _apply_transform_jax(kk.ravel(), axis_transforms[1]),
+            ],
+            axis=1,
+        )
+
+        # Tile coordinates and parameters into scalar regression rows.
+        repeated_axes = jnp.tile(axis_features, (prepared_parameters.shape[0], 1))
+        repeated_parameters = jnp.repeat(
+            prepared_parameters,
+            repeats=axis_features.shape[0],
+            axis=0,
+        )
+        features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
+
+        # Scale features using training-set statistics and evaluate the model.
+        scaled_features = _scale_features_jax(features, input_scaling)
+        flat_predictions = model_instance(scaled_features).squeeze(-1)
+
+        # Undo target scaling and target transforms to return physical values.
+        if target_std is not None:
+            flat_predictions = flat_predictions * target_std
+        physical_predictions = _invert_transform_jax(
+            flat_predictions,
+            target_transform,
+            offset=target_offset,
+        )
+
+        # Fold the flattened vector back into (nsamples, n_z, n_k).
+        return physical_predictions.reshape(
+            (prepared_parameters.shape[0], z.shape[0], k.shape[0])
+        )
+
+    def predict(parameters: jax.Array, z_values: jax.Array, k_values: jax.Array) -> jax.Array:
+        """
+        Predict Delta21 using the compiled model-specific inference function.
+        """
+        return _predict(model, parameters, z_values, k_values)
+
+    return predict
+
 
 def predict_delta21(
     package_or_path: str | Path | dict[str, Any],
@@ -104,71 +224,10 @@ def predict_delta21(
     jax.Array
         Device array with shape (n_sims, n_z, n_k).
     """
-    # 1. Resolve the model package.
-    package = (
-        load_delta21_package(package_or_path)
-        if isinstance(package_or_path, (str, Path))
-        else package_or_path
-    )
-    metadata = package["metadata"]
-    spec = metadata.emulator_spec
-
-    # 2. Prepare the input features.
-    prepared_parameters = _prepare_parameter_values(parameters)
-    z = z_values.ravel()
-    k = k_values.ravel()
-
-    # Generate the evaluation grid for (z, k).
-    zz, kk = jnp.meshgrid(z, k, indexing="ij")
-    # Apply the same coordinate transforms used during training (e.g. log10k).
-    axis_features = jnp.stack(
-        [
-            _apply_transform_jax(zz.ravel(), spec.axes[0].transform),
-            _apply_transform_jax(kk.ravel(), spec.axes[1].transform),
-        ],
-        axis=1,
-    )
-
-    # Tile coordinates and parameters to create the (n_sims * n_points, n_features) matrix.
-    repeated_axes = jnp.tile(axis_features, (prepared_parameters.shape[0], 1))
-    repeated_parameters = jnp.repeat(
-        prepared_parameters,
-        repeats=axis_features.shape[0],
-        axis=0,
-    )
-    features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
-
-    # 3. Validate feature alignment.
-    # Ensure the columns in our feature matrix match the order expected by the model.
-    expected_names = spec.input_feature_names()
-    actual_names = tuple(feature.name for feature in metadata.input_scaling)
-    if actual_names != expected_names:
-        raise ValueError(
-            "Saved feature scaling order does not match the emulator spec. "
-            f"Expected {expected_names}, received {actual_names}."
-        )
-
-    # 4. Execute the model forward pass.
-    # Scale features using training-set statistics.
-    scaled_features = _scale_features_jax(features, metadata.input_scaling)
-    # Call the JAX model and keep predictions on the device.
-    flat_predictions = package["model"](scaled_features).squeeze(-1)
-
-    # 5. Post-process the predictions.
-    # Invert target scaling if it was applied during training.
-    # New workflow checkpoints use one global scalar, so this is just multiplication.
-    if metadata.target_scaling is not None:
-        flat_predictions = flat_predictions * metadata.target_scaling.std
-    # Invert the physical target transform (e.g. log10 with offset).
-    physical_predictions = _invert_transform_jax(
-        flat_predictions,
-        spec.target_transform,
-        offset=spec.target_offset,
-    )
-
-    # 6. Reconstruct the spectral arrays.
-    # Fold the flattened vector back into (nsamples, n_z, n_k).
-    return physical_predictions.reshape((prepared_parameters.shape[0], z.shape[0], k.shape[0]))
+    # Build the compiled predictor and immediately use it. For repeated calls,
+    # build the predictor once with build_delta21_predictor(...) and reuse it.
+    predictor = build_delta21_predictor(package_or_path)
+    return predictor(parameters, z_values, k_values)
 
 
 # Diagnostics

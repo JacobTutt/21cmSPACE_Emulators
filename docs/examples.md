@@ -801,11 +801,17 @@ DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 # JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
 
-# Delta21 inference helpers load the checkpoint and apply the saved preprocessing contract.
-from emulators_21cmspace.delta21.infer import load_delta21_package, predict_delta21
+# Delta21 inference helpers load the checkpoint and build a compiled predictor.
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_predictor,
+    load_delta21_package,
+)
 
 # Load the trained model and its saved metadata.
 package = load_delta21_package("outputs/delta21_model.nenemu")
+
+# Build the JIT-compiled numerical inference function once.
+predictor = build_delta21_predictor(package)
 
 # Provide one raw 12-column physical parameter row in the original dataset order.
 physical_parameters = jnp.asarray(
@@ -822,7 +828,7 @@ z = jnp.linspace(6.0, 27.0, 50)
 k = jnp.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50, dtype=jnp.float32)
 
 # Predict Delta21 and return an array with shape (n_sims, n_z, n_k).
-delta21 = predict_delta21(package, physical_parameters, z, k)
+delta21 = predictor(physical_parameters, z, k)
 
 # Inspect the prediction shape.
 print(delta21.shape)
