@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1180" height="820" viewBox="0 0 1180 820" role="img" aria-labelledby="title desc">
-  <title id="title">Traditional vector-output emulation compared with tiled scalar-output emulation</title>
-  <desc id="desc">A three-row schematic. The top row shows a traditional emulator mapping physical parameters to a full spectrum. The middle row shows the independent coordinate folded into the input so the network predicts one scalar value. The bottom row shows vectorized calls over a coordinate grid and reshaping back to a spectrum or grid.</desc>
+  <title id="title">Tiled Scalar Output Emulators</title>
+  <desc id="desc">A three-row schematic comparing a traditional vector-output emulator, a scalar-output emulator with the independent coordinate folded into the input, and a batched scalar-output call that reconstructs the full spectrum.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
@@ -9,192 +9,189 @@
       .bg { fill: #ffffff; }
       .band { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
       .input { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; }
-      .coord { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
       .network { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.6; }
       .output { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.5; }
       .matrix { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.5; }
       .axis { stroke: #475569; stroke-width: 1.4; fill: none; }
       .curve { stroke: #dc2626; stroke-width: 2.5; fill: none; }
-      .curve2 { stroke: #2563eb; stroke-width: 2.3; fill: none; }
       .gridline { stroke: #cbd5e1; stroke-width: 1; }
       .arrow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
       .conn { stroke: #64748b; stroke-width: 1.15; opacity: 0.9; }
       .node { fill: #ffffff; stroke: #334155; stroke-width: 1.25; }
       .hidden { fill: #bbf7d0; stroke: #16a34a; stroke-width: 1.25; }
       .outnode { fill: #fecaca; stroke: #dc2626; stroke-width: 1.25; }
-      .title { font-family: Arial, Helvetica, sans-serif; font-size: 23px; font-weight: 700; fill: #0f172a; }
-      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #475569; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: 700; fill: #0f172a; }
       .section { font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; fill: #0f172a; }
-      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #0f172a; }
       .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #0f172a; }
       .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #0f172a; }
       .mono-small { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10.5px; fill: #334155; }
     </style>
   </defs>
 
   <rect class="bg" x="0" y="0" width="1180" height="820"/>
-  <text class="title" x="40" y="40">From vector-output emulators to tiled scalar-output emulators</text>
-  <text class="subtitle" x="40" y="63">The same physical model can be represented by changing what the neural network sees as input and output.</text>
+  <text class="title" x="40" y="48">Tiled Scalar Output Emulators</text>
 
   <!-- Row 1: Traditional vector-output emulator -->
   <rect class="band" x="40" y="90" width="1100" height="205" rx="10"/>
   <text class="section" x="65" y="122">1. Traditional vector-output approach</text>
-  <text class="small" x="65" y="144">Physical variables go in; the network readout emits every redshift or k-bin at once.</text>
+  <text class="small" x="65" y="144">Physical variables go in; the network output layer predicts the full spectrum or grid at once.</text>
 
-  <rect class="input" x="70" y="180" width="175" height="62" rx="7"/>
-  <text class="label" x="94" y="204">physical variables</text>
-  <text class="mono" x="101" y="226">theta_1 ... theta_n</text>
-  <path class="arrow" d="M 260 211 L 365 211"/>
+  <rect class="input" x="70" y="158" width="315" height="112" rx="8"/>
+  <text class="label" x="167" y="196">physical variables</text>
+  <text class="mono" x="153" y="226">[theta_1, ..., theta_n]</text>
+  <path class="arrow" d="M 405 214 L 422 214"/>
 
-  <rect class="network" x="385" y="150" width="300" height="124" rx="10"/>
-  <text class="label" x="503" y="172">network</text>
+  <rect class="network" x="432" y="158" width="315" height="112" rx="8"/>
+  <text class="label" x="559" y="182">Network</text>
   <g>
-    <!-- full adjacent-layer connections -->
-    <line class="conn" x1="430" y1="199" x2="500" y2="187"/>
-    <line class="conn" x1="430" y1="199" x2="500" y2="211"/>
-    <line class="conn" x1="430" y1="199" x2="500" y2="235"/>
-    <line class="conn" x1="430" y1="223" x2="500" y2="187"/>
-    <line class="conn" x1="430" y1="223" x2="500" y2="211"/>
-    <line class="conn" x1="430" y1="223" x2="500" y2="235"/>
-    <line class="conn" x1="500" y1="187" x2="570" y2="181"/>
-    <line class="conn" x1="500" y1="187" x2="570" y2="201"/>
-    <line class="conn" x1="500" y1="187" x2="570" y2="221"/>
-    <line class="conn" x1="500" y1="187" x2="570" y2="241"/>
-    <line class="conn" x1="500" y1="211" x2="570" y2="181"/>
-    <line class="conn" x1="500" y1="211" x2="570" y2="201"/>
-    <line class="conn" x1="500" y1="211" x2="570" y2="221"/>
-    <line class="conn" x1="500" y1="211" x2="570" y2="241"/>
-    <line class="conn" x1="500" y1="235" x2="570" y2="181"/>
-    <line class="conn" x1="500" y1="235" x2="570" y2="201"/>
-    <line class="conn" x1="500" y1="235" x2="570" y2="221"/>
-    <line class="conn" x1="500" y1="235" x2="570" y2="241"/>
-    <line class="conn" x1="570" y1="181" x2="640" y2="181"/>
-    <line class="conn" x1="570" y1="181" x2="640" y2="201"/>
-    <line class="conn" x1="570" y1="181" x2="640" y2="221"/>
-    <line class="conn" x1="570" y1="181" x2="640" y2="241"/>
-    <line class="conn" x1="570" y1="201" x2="640" y2="181"/>
-    <line class="conn" x1="570" y1="201" x2="640" y2="201"/>
-    <line class="conn" x1="570" y1="201" x2="640" y2="221"/>
-    <line class="conn" x1="570" y1="201" x2="640" y2="241"/>
-    <line class="conn" x1="570" y1="221" x2="640" y2="181"/>
-    <line class="conn" x1="570" y1="221" x2="640" y2="201"/>
-    <line class="conn" x1="570" y1="221" x2="640" y2="221"/>
-    <line class="conn" x1="570" y1="221" x2="640" y2="241"/>
-    <line class="conn" x1="570" y1="241" x2="640" y2="181"/>
-    <line class="conn" x1="570" y1="241" x2="640" y2="201"/>
-    <line class="conn" x1="570" y1="241" x2="640" y2="221"/>
-    <line class="conn" x1="570" y1="241" x2="640" y2="241"/>
+    <line class="conn" x1="492" y1="207" x2="570" y2="195"/>
+    <line class="conn" x1="492" y1="207" x2="570" y2="214"/>
+    <line class="conn" x1="492" y1="207" x2="570" y2="233"/>
+    <line class="conn" x1="492" y1="229" x2="570" y2="195"/>
+    <line class="conn" x1="492" y1="229" x2="570" y2="214"/>
+    <line class="conn" x1="492" y1="229" x2="570" y2="233"/>
+    <line class="conn" x1="570" y1="195" x2="650" y2="189"/>
+    <line class="conn" x1="570" y1="195" x2="650" y2="206"/>
+    <line class="conn" x1="570" y1="195" x2="650" y2="223"/>
+    <line class="conn" x1="570" y1="195" x2="650" y2="240"/>
+    <line class="conn" x1="570" y1="214" x2="650" y2="189"/>
+    <line class="conn" x1="570" y1="214" x2="650" y2="206"/>
+    <line class="conn" x1="570" y1="214" x2="650" y2="223"/>
+    <line class="conn" x1="570" y1="214" x2="650" y2="240"/>
+    <line class="conn" x1="570" y1="233" x2="650" y2="189"/>
+    <line class="conn" x1="570" y1="233" x2="650" y2="206"/>
+    <line class="conn" x1="570" y1="233" x2="650" y2="223"/>
+    <line class="conn" x1="570" y1="233" x2="650" y2="240"/>
+    <line class="conn" x1="650" y1="189" x2="712" y2="189"/>
+    <line class="conn" x1="650" y1="189" x2="712" y2="206"/>
+    <line class="conn" x1="650" y1="189" x2="712" y2="223"/>
+    <line class="conn" x1="650" y1="189" x2="712" y2="240"/>
+    <line class="conn" x1="650" y1="206" x2="712" y2="189"/>
+    <line class="conn" x1="650" y1="206" x2="712" y2="206"/>
+    <line class="conn" x1="650" y1="206" x2="712" y2="223"/>
+    <line class="conn" x1="650" y1="206" x2="712" y2="240"/>
+    <line class="conn" x1="650" y1="223" x2="712" y2="189"/>
+    <line class="conn" x1="650" y1="223" x2="712" y2="206"/>
+    <line class="conn" x1="650" y1="223" x2="712" y2="223"/>
+    <line class="conn" x1="650" y1="223" x2="712" y2="240"/>
+    <line class="conn" x1="650" y1="240" x2="712" y2="189"/>
+    <line class="conn" x1="650" y1="240" x2="712" y2="206"/>
+    <line class="conn" x1="650" y1="240" x2="712" y2="223"/>
+    <line class="conn" x1="650" y1="240" x2="712" y2="240"/>
   </g>
-  <circle class="node" cx="430" cy="199" r="7"/>
-  <circle class="node" cx="430" cy="223" r="7"/>
-  <circle class="hidden" cx="500" cy="187" r="7"/>
-  <circle class="hidden" cx="500" cy="211" r="7"/>
-  <circle class="hidden" cx="500" cy="235" r="7"/>
-  <circle class="hidden" cx="570" cy="181" r="7"/>
-  <circle class="hidden" cx="570" cy="201" r="7"/>
-  <circle class="hidden" cx="570" cy="221" r="7"/>
-  <circle class="hidden" cx="570" cy="241" r="7"/>
-  <circle class="outnode" cx="640" cy="181" r="6"/>
-  <circle class="outnode" cx="640" cy="201" r="6"/>
-  <circle class="outnode" cx="640" cy="221" r="6"/>
-  <circle class="outnode" cx="640" cy="241" r="6"/>
+  <circle class="node" cx="492" cy="207" r="7"/>
+  <circle class="node" cx="492" cy="229" r="7"/>
+  <circle class="hidden" cx="570" cy="195" r="7"/>
+  <circle class="hidden" cx="570" cy="214" r="7"/>
+  <circle class="hidden" cx="570" cy="233" r="7"/>
+  <circle class="hidden" cx="650" cy="189" r="7"/>
+  <circle class="hidden" cx="650" cy="206" r="7"/>
+  <circle class="hidden" cx="650" cy="223" r="7"/>
+  <circle class="hidden" cx="650" cy="240" r="7"/>
+  <circle class="outnode" cx="712" cy="189" r="6"/>
+  <circle class="outnode" cx="712" cy="206" r="6"/>
+  <circle class="outnode" cx="712" cy="223" r="6"/>
+  <circle class="outnode" cx="712" cy="240" r="6"/>
+  <path class="arrow" d="M 767 214 L 780 214"/>
 
-  <path class="arrow" d="M 705 211 L 770 211"/>
-  <rect class="output" x="790" y="145" width="310" height="132" rx="8"/>
-  <text class="label" x="818" y="169">full spectrum/grid output</text>
-  <line class="axis" x1="825" y1="244" x2="1060" y2="244"/>
-  <line class="axis" x1="825" y1="244" x2="825" y2="190"/>
-  <path class="curve" d="M 828 230 C 858 208, 895 192, 928 211 C 960 231, 991 204, 1020 205 C 1041 206, 1052 220, 1058 235"/>
-  <circle class="outnode" cx="850" cy="216" r="4"/>
-  <circle class="outnode" cx="884" cy="197" r="4"/>
-  <circle class="outnode" cx="918" cy="206" r="4"/>
-  <circle class="outnode" cx="952" cy="226" r="4"/>
-  <circle class="outnode" cx="986" cy="209" r="4"/>
-  <circle class="outnode" cx="1020" cy="205" r="4"/>
-  <circle class="outnode" cx="1054" cy="225" r="4"/>
-  <text class="mono-small" x="846" y="264">[y(z_1), ..., y(z_m)]</text>
+  <rect class="output" x="790" y="158" width="315" height="112" rx="8"/>
+  <text class="label" x="908" y="182">spectrum/grid</text>
+  <text class="mono-small" x="898" y="202">[y_1, ..., y_m]</text>
+  <line class="axis" x1="850" y1="244" x2="1048" y2="244"/>
+  <line class="axis" x1="850" y1="244" x2="850" y2="212"/>
+  <path class="curve" d="M 854 236 C 884 214, 914 207, 944 224 C 974 242, 1006 216, 1044 232"/>
+  <circle class="outnode" cx="884" cy="222" r="3.8"/>
+  <circle class="outnode" cx="914" cy="207" r="3.8"/>
+  <circle class="outnode" cx="944" cy="224" r="3.8"/>
+  <circle class="outnode" cx="974" cy="242" r="3.8"/>
+  <circle class="outnode" cx="1006" cy="216" r="3.8"/>
 
-  <!-- Row 2: Tiled scalar-output emulator -->
-  <rect class="band" x="40" y="325" width="1100" height="205" rx="10"/>
-  <text class="section" x="65" y="357">2. Fold the independent coordinate into the input</text>
-  <text class="small" x="65" y="379">Each training row asks the same network for one value at one coordinate location.</text>
+  <!-- Row 2: Scalar-output emulator -->
+  <rect class="band" x="40" y="320" width="1100" height="205" rx="10"/>
+  <text class="section" x="65" y="352">2. Fold the independent coordinate into the input</text>
+  <text class="small" x="65" y="374">One row contains the physical variables and one requested coordinate; the network predicts one scalar.</text>
 
-  <rect class="matrix" x="70" y="394" width="315" height="80" rx="8"/>
+  <rect class="matrix" x="70" y="388" width="315" height="112" rx="8"/>
   <text class="label" x="158" y="417">combined model input</text>
-  <text class="mono" x="111" y="443">[z_i, k_i, theta_1, ..., theta_n]</text>
-  <text class="mono-small" x="145" y="462">or [z_i, theta_1, ..., theta_n]</text>
-  <path class="arrow" d="M 405 434 L 510 434"/>
+  <text class="mono" x="111" y="445">[z_i, k_i, theta_1, ..., theta_n]</text>
+  <text class="mono-small" x="145" y="466">or [z_i, theta_1, ..., theta_n]</text>
+  <path class="arrow" d="M 405 444 L 422 444"/>
 
-  <rect class="network" x="530" y="374" width="310" height="120" rx="10"/>
-  <text class="label" x="671" y="397">MLP</text>
+  <rect class="network" x="432" y="388" width="315" height="112" rx="8"/>
+  <text class="label" x="559" y="412">Network</text>
   <g>
-    <line class="conn" x1="585" y1="421" x2="665" y2="409"/>
-    <line class="conn" x1="585" y1="421" x2="665" y2="434"/>
-    <line class="conn" x1="585" y1="421" x2="665" y2="459"/>
-    <line class="conn" x1="585" y1="447" x2="665" y2="409"/>
-    <line class="conn" x1="585" y1="447" x2="665" y2="434"/>
-    <line class="conn" x1="585" y1="447" x2="665" y2="459"/>
-    <line class="conn" x1="665" y1="409" x2="745" y2="434"/>
-    <line class="conn" x1="665" y1="434" x2="745" y2="434"/>
-    <line class="conn" x1="665" y1="459" x2="745" y2="434"/>
+    <line class="conn" x1="492" y1="437" x2="590" y2="425"/>
+    <line class="conn" x1="492" y1="437" x2="590" y2="444"/>
+    <line class="conn" x1="492" y1="437" x2="590" y2="463"/>
+    <line class="conn" x1="492" y1="459" x2="590" y2="425"/>
+    <line class="conn" x1="492" y1="459" x2="590" y2="444"/>
+    <line class="conn" x1="492" y1="459" x2="590" y2="463"/>
+    <line class="conn" x1="590" y1="425" x2="690" y2="444"/>
+    <line class="conn" x1="590" y1="444" x2="690" y2="444"/>
+    <line class="conn" x1="590" y1="463" x2="690" y2="444"/>
   </g>
-  <circle class="node" cx="585" cy="421" r="8"/>
-  <circle class="node" cx="585" cy="447" r="8"/>
-  <circle class="hidden" cx="665" cy="409" r="8"/>
-  <circle class="hidden" cx="665" cy="434" r="8"/>
-  <circle class="hidden" cx="665" cy="459" r="8"/>
-  <circle class="outnode" cx="745" cy="434" r="9"/>
-  <path class="arrow" d="M 860 434 L 965 434"/>
-  <rect class="output" x="985" y="410" width="105" height="50" rx="8"/>
-  <circle class="outnode" cx="1037" cy="429" r="8"/>
-  <text class="mono-small" x="1028" y="453">y_i</text>
+  <circle class="node" cx="492" cy="437" r="8"/>
+  <circle class="node" cx="492" cy="459" r="8"/>
+  <circle class="hidden" cx="590" cy="425" r="8"/>
+  <circle class="hidden" cx="590" cy="444" r="8"/>
+  <circle class="hidden" cx="590" cy="463" r="8"/>
+  <circle class="outnode" cx="690" cy="444" r="9"/>
+  <path class="arrow" d="M 767 444 L 780 444"/>
 
-  <text class="mono" x="70" y="502">f([z_i, k_i, theta]) -> y_i</text>
+  <rect class="output" x="790" y="388" width="315" height="112" rx="8"/>
+  <text class="label" x="930" y="420">scalar</text>
+  <circle class="outnode" cx="948" cy="450" r="11"/>
+  <text class="mono" x="967" y="455">y_i</text>
+  <text class="mono-small" x="873" y="480">f([z_i, k_i, theta]) -> y_i</text>
 
-  <!-- Row 3: Vectorized evaluation -->
-  <rect class="band" x="40" y="560" width="1100" height="215" rx="10"/>
-  <text class="section" x="65" y="592">3. Vectorize the scalar emulator over the requested grid</text>
-  <text class="small" x="65" y="614">Repeat the physical variables over all coordinates, evaluate in one batch, then reshape.</text>
+  <!-- Row 3: Vectorized scalar-output emulator -->
+  <rect class="band" x="40" y="550" width="1100" height="230" rx="10"/>
+  <text class="section" x="65" y="582">3. Vectorize the scalar emulator over the requested grid</text>
+  <text class="small" x="65" y="604">Repeat the physical variables over every coordinate, evaluate the scalar network in a batch, then reshape.</text>
 
-  <rect class="matrix" x="70" y="628" width="335" height="108" rx="8"/>
-  <text class="label" x="157" y="650">batched model input</text>
-  <line class="gridline" x1="98" y1="664" x2="377" y2="664"/>
-  <line class="gridline" x1="98" y1="684" x2="377" y2="684"/>
-  <line class="gridline" x1="98" y1="704" x2="377" y2="704"/>
-  <text class="mono-small" x="106" y="678">[z_1, k_1, theta_1, ..., theta_n]</text>
-  <text class="mono-small" x="106" y="698">[z_2, k_1, theta_1, ..., theta_n]</text>
-  <text class="mono-small" x="106" y="718">[ ... coordinates with repeated theta ... ]</text>
-  <path class="arrow" d="M 425 679 L 520 679"/>
+  <rect class="matrix" x="70" y="618" width="315" height="112" rx="8"/>
+  <text class="label" x="158" y="640">batched model input</text>
+  <line class="gridline" x1="98" y1="654" x2="357" y2="654"/>
+  <line class="gridline" x1="98" y1="674" x2="357" y2="674"/>
+  <line class="gridline" x1="98" y1="694" x2="357" y2="694"/>
+  <text class="mono-small" x="106" y="668">[z_1, k_1, theta_1, ..., theta_n]</text>
+  <text class="mono-small" x="106" y="688">[z_2, k_1, theta_1, ..., theta_n]</text>
+  <text class="mono-small" x="106" y="708">[ ... coordinates with repeated theta ... ]</text>
+  <path class="arrow" d="M 405 674 L 422 674"/>
 
-  <rect class="network" x="540" y="618" width="300" height="122" rx="10"/>
-  <text class="label" x="650" y="641">batched scalar MLP</text>
+  <rect class="network" x="432" y="618" width="315" height="112" rx="8"/>
+  <text class="label" x="518" y="642">Network (batched call)</text>
   <g>
-    <line class="conn" x1="590" y1="670" x2="670" y2="658"/>
-    <line class="conn" x1="590" y1="670" x2="670" y2="683"/>
-    <line class="conn" x1="590" y1="670" x2="670" y2="708"/>
-    <line class="conn" x1="590" y1="696" x2="670" y2="658"/>
-    <line class="conn" x1="590" y1="696" x2="670" y2="683"/>
-    <line class="conn" x1="590" y1="696" x2="670" y2="708"/>
-    <line class="conn" x1="670" y1="658" x2="750" y2="683"/>
-    <line class="conn" x1="670" y1="683" x2="750" y2="683"/>
-    <line class="conn" x1="670" y1="708" x2="750" y2="683"/>
+    <line class="conn" x1="492" y1="667" x2="590" y2="655"/>
+    <line class="conn" x1="492" y1="667" x2="590" y2="674"/>
+    <line class="conn" x1="492" y1="667" x2="590" y2="693"/>
+    <line class="conn" x1="492" y1="689" x2="590" y2="655"/>
+    <line class="conn" x1="492" y1="689" x2="590" y2="674"/>
+    <line class="conn" x1="492" y1="689" x2="590" y2="693"/>
+    <line class="conn" x1="590" y1="655" x2="690" y2="674"/>
+    <line class="conn" x1="590" y1="674" x2="690" y2="674"/>
+    <line class="conn" x1="590" y1="693" x2="690" y2="674"/>
   </g>
-  <circle class="node" cx="590" cy="670" r="8"/>
-  <circle class="node" cx="590" cy="696" r="8"/>
-  <circle class="hidden" cx="670" cy="658" r="8"/>
-  <circle class="hidden" cx="670" cy="683" r="8"/>
-  <circle class="hidden" cx="670" cy="708" r="8"/>
-  <circle class="outnode" cx="750" cy="683" r="9"/>
-  <text class="mono-small" x="628" y="729">vmap / jit over fixed-shape rows</text>
-  <path class="arrow" d="M 860 679 L 930 679"/>
+  <circle class="node" cx="492" cy="667" r="8"/>
+  <circle class="node" cx="492" cy="689" r="8"/>
+  <circle class="hidden" cx="590" cy="655" r="8"/>
+  <circle class="hidden" cx="590" cy="674" r="8"/>
+  <circle class="hidden" cx="590" cy="693" r="8"/>
+  <circle class="outnode" cx="690" cy="674" r="9"/>
+  <text class="mono-small" x="525" y="716">vmap / jit over fixed-shape rows</text>
+  <path class="arrow" d="M 767 674 L 780 674"/>
 
-  <rect class="output" x="950" y="626" width="155" height="106" rx="8"/>
-  <text class="label" x="1003" y="648">reshape</text>
-  <text class="mono-small" x="992" y="669">[y_1, ..., y_m]</text>
-  <line class="axis" x1="982" y1="704" x2="1076" y2="704"/>
-  <line class="axis" x1="982" y1="704" x2="982" y2="676"/>
-  <path class="curve2" d="M 984 696 C 1000 680, 1018 673, 1032 688 C 1048 702, 1062 684, 1075 693"/>
-  <text class="mono-small" x="990" y="724">spectrum/grid</text>
-
-  <text class="small" x="70" y="755">The neural network predicts one scalar per row; vectorization turns many scalar calls into one batched operation.</text>
+  <rect class="output" x="790" y="618" width="315" height="112" rx="8"/>
+  <text class="label" x="908" y="642">spectrum/grid</text>
+  <text class="mono-small" x="898" y="662">[y_1, ..., y_m]</text>
+  <line class="axis" x1="850" y1="704" x2="1048" y2="704"/>
+  <line class="axis" x1="850" y1="704" x2="850" y2="672"/>
+  <path class="curve" d="M 854 696 C 884 674, 914 667, 944 684 C 974 702, 1006 676, 1044 692"/>
+  <circle class="outnode" cx="884" cy="682" r="3.8"/>
+  <circle class="outnode" cx="914" cy="667" r="3.8"/>
+  <circle class="outnode" cx="944" cy="684" r="3.8"/>
+  <circle class="outnode" cx="974" cy="702" r="3.8"/>
+  <circle class="outnode" cx="1006" cy="676" r="3.8"/>
+  <text class="mono-small" x="910" y="722">after reshape</text>
 </svg>
