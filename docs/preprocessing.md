@@ -255,32 +255,40 @@ prepared.feature_scaling
 prepared.target_scaling
 ```
 
-## Training and Inference Contract
+## Training
 
-The network does not know physical units. It only sees preprocessed arrays.
-The emulator must therefore save the transform and scaling metadata.
-
-At training time:
+During training, preprocessing maps physical simulation data into the numerical
+space seen by the network.
 
 ```text
-physical parameters
--> parameter and axis transforms
--> feature scaling
--> DenseMLP
--> scaled target values
+physical inputs -> transforms -> normalisation -> network inputs
+physical targets -> transforms -> normalisation -> network targets
 ```
 
-At inference time:
+For a scalar-output emulator, each training row is:
+
+```text
+[transformed and normalised inputs] -> transformed and normalised scalar target
+```
+
+The trainer only sees these arrays. The original physical units are represented
+by the preprocessing metadata.
+
+## Inference
+
+At inference time, the same metadata maps new physical inputs into the network
+and maps network outputs back to physical units.
 
 ```text
 new physical parameters
--> same parameter and axis transforms
--> same feature scaling
--> DenseMLP prediction
--> inverse target scaling
+-> input transforms
+-> input normalisation
+-> DenseMLP
+-> inverse target normalisation
 -> inverse target transform
 -> physical prediction
 ```
 
-If this contract changes, the trained network is no longer being evaluated on
-the same problem it learned.
+The key point is that the network predicts in training space, not directly in
+physical space. The emulator is the network plus the saved transform and
+normalisation metadata.
