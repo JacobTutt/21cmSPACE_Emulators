@@ -22,6 +22,7 @@
       .callout-small { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #475569; }
       .text { font-family: Arial, Helvetica, sans-serif; font-size: 13px; fill: #0f172a; }
       .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
+      .center { text-anchor: middle; dominant-baseline: central; }
     </style>
   </defs>
 
@@ -39,33 +40,33 @@
 
   <text class="label" x="70" y="187">Host</text>
   <rect class="prepare" x="170" y="164" width="80" height="34" rx="5"/>
-  <text class="text" x="189" y="186">Prepare</text>
+  <text class="text center" x="210" y="181">Prepare</text>
   <rect class="prepare" x="415" y="164" width="80" height="34" rx="5"/>
-  <text class="text" x="434" y="186">Prepare</text>
+  <text class="text center" x="455" y="181">Prepare</text>
   <rect class="prepare" x="660" y="164" width="80" height="34" rx="5"/>
-  <text class="text" x="679" y="186">Prepare</text>
+  <text class="text center" x="700" y="181">Prepare</text>
 
   <text class="label" x="70" y="228">Move</text>
   <rect class="move" x="250" y="205" width="45" height="34" rx="5"/>
-  <text class="text" x="259" y="227">Move</text>
+  <text class="text center" x="272.5" y="222">Move</text>
   <rect class="move" x="495" y="205" width="45" height="34" rx="5"/>
-  <text class="text" x="504" y="227">Move</text>
+  <text class="text center" x="517.5" y="222">Move</text>
   <rect class="move" x="740" y="205" width="45" height="34" rx="5"/>
-  <text class="text" x="749" y="227">Move</text>
+  <text class="text center" x="762.5" y="222">Move</text>
 
   <text class="label" x="70" y="269">GPU</text>
   <rect class="idle" x="170" y="246" width="125" height="34" rx="5"/>
-  <text class="text" x="196" y="268">GPU idle</text>
+  <text class="text center" x="232.5" y="263">GPU idle</text>
   <rect class="train" x="295" y="246" width="120" height="34" rx="5"/>
-  <text class="text" x="340" y="268">Train</text>
+  <text class="text center" x="355" y="263">Train</text>
   <rect class="idle" x="415" y="246" width="125" height="34" rx="5"/>
-  <text class="text" x="441" y="268">GPU idle</text>
+  <text class="text center" x="477.5" y="263">GPU idle</text>
   <rect class="train" x="540" y="246" width="120" height="34" rx="5"/>
-  <text class="text" x="585" y="268">Train</text>
+  <text class="text center" x="600" y="263">Train</text>
   <rect class="idle" x="660" y="246" width="125" height="34" rx="5"/>
-  <text class="text" x="686" y="268">GPU idle</text>
+  <text class="text center" x="722.5" y="263">GPU idle</text>
   <rect class="train" x="785" y="246" width="120" height="34" rx="5"/>
-  <text class="text" x="830" y="268">Train</text>
+  <text class="text center" x="845" y="263">Train</text>
 
   <rect class="panel" x="40" y="370" width="920" height="230" rx="10"/>
   <text class="section" x="65" y="403">Asynchronous prefetching</text>
@@ -78,39 +79,39 @@
 
   <text class="label" x="70" y="482">Host</text>
   <rect class="prepare" x="170" y="459" width="80" height="34" rx="5"/>
-  <text class="text" x="189" y="481">Prepare</text>
+  <text class="text center" x="210" y="476">Prepare</text>
   <rect class="prepare" x="290" y="459" width="80" height="34" rx="5"/>
-  <text class="text" x="309" y="481">Prepare</text>
+  <text class="text center" x="330" y="476">Prepare</text>
   <rect class="prepare" x="410" y="459" width="80" height="34" rx="5"/>
-  <text class="text" x="429" y="481">Prepare</text>
+  <text class="text center" x="450" y="476">Prepare</text>
   <rect class="prepare" x="530" y="459" width="80" height="34" rx="5"/>
-  <text class="text" x="549" y="481">Prepare</text>
+  <text class="text center" x="570" y="476">Prepare</text>
   <rect class="prepare" x="650" y="459" width="80" height="34" rx="5"/>
-  <text class="text" x="669" y="481">Prepare</text>
+  <text class="text center" x="690" y="476">Prepare</text>
 
   <text class="label" x="70" y="523">Move</text>
   <rect class="move" x="250" y="500" width="45" height="34" rx="5"/>
-  <text class="text" x="259" y="522">Move</text>
+  <text class="text center" x="272.5" y="517">Move</text>
   <rect class="move" x="370" y="500" width="45" height="34" rx="5"/>
-  <text class="text" x="379" y="522">Move</text>
+  <text class="text center" x="392.5" y="517">Move</text>
   <rect class="move" x="490" y="500" width="45" height="34" rx="5"/>
-  <text class="text" x="499" y="522">Move</text>
+  <text class="text center" x="512.5" y="517">Move</text>
   <rect class="move" x="610" y="500" width="45" height="34" rx="5"/>
-  <text class="text" x="619" y="522">Move</text>
+  <text class="text center" x="632.5" y="517">Move</text>
   <rect class="move" x="730" y="500" width="45" height="34" rx="5"/>
-  <text class="text" x="739" y="522">Move</text>
+  <text class="text center" x="752.5" y="517">Move</text>
 
   <text class="label" x="70" y="564">GPU</text>
   <rect class="train" x="295" y="541" width="120" height="34" rx="5"/>
-  <text class="text" x="340" y="563">Train</text>
+  <text class="text center" x="355" y="558">Train</text>
   <rect class="train" x="415" y="541" width="120" height="34" rx="5"/>
-  <text class="text" x="460" y="563">Train</text>
+  <text class="text center" x="475" y="558">Train</text>
   <rect class="train" x="535" y="541" width="120" height="34" rx="5"/>
-  <text class="text" x="580" y="563">Train</text>
+  <text class="text center" x="595" y="558">Train</text>
   <rect class="train" x="655" y="541" width="120" height="34" rx="5"/>
-  <text class="text" x="700" y="563">Train</text>
+  <text class="text center" x="715" y="558">Train</text>
   <rect class="train" x="775" y="541" width="120" height="34" rx="5"/>
-  <text class="text" x="820" y="563">Train</text>
+  <text class="text center" x="835" y="558">Train</text>
 
   <line class="arrow" x1="410" y1="315" x2="410" y2="355"/>
   <text class="callout" x="440" y="330">Higher throughput</text>

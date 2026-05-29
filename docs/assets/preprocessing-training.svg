@@ -17,6 +17,7 @@
       .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; fill: #0f172a; }
       .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
       .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 11px; fill: #334155; }
+      .center { text-anchor: middle; }
     </style>
   </defs>
 
@@ -26,35 +27,35 @@
 
   <text class="label" x="60" y="122">Inputs</text>
   <rect class="input" x="130" y="95" width="155" height="54" rx="6"/>
-  <text class="label" x="160" y="118">Physical inputs</text>
-  <text class="mono" x="156" y="137">parameters + axes</text>
+  <text class="label center" x="207.5" y="118">Physical inputs</text>
+  <text class="mono center" x="207.5" y="137">parameters + axes</text>
   <path class="arrow" d="M 298 122 L 317 122"/>
   <rect class="transform" x="330" y="95" width="155" height="54" rx="6"/>
-  <text class="label" x="386" y="118">Transform</text>
-  <text class="mono" x="386" y="137">log / identity</text>
+  <text class="label center" x="407.5" y="118">Transform</text>
+  <text class="mono center" x="407.5" y="137">log / identity</text>
   <path class="arrow" d="M 498 122 L 535 122"/>
   <rect class="scale" x="530" y="95" width="155" height="54" rx="6"/>
-  <text class="label" x="590" y="118">Normalise</text>
-  <text class="mono" x="582" y="137">training stats</text>
+  <text class="label center" x="607.5" y="118">Normalise</text>
+  <text class="mono center" x="607.5" y="137">training stats</text>
   <path class="arrow" d="M 698 122 L 735 122"/>
   <rect class="output" x="730" y="95" width="155" height="54" rx="6"/>
-  <text class="label" x="765" y="118">Network inputs</text>
-  <text class="mono" x="766" y="137">train_features</text>
+  <text class="label center" x="807.5" y="118">Network inputs</text>
+  <text class="mono center" x="807.5" y="137">train_features</text>
 
   <text class="label" x="60" y="190">Targets</text>
   <rect class="input" x="130" y="163" width="155" height="54" rx="6"/>
-  <text class="label" x="160" y="186">Physical target</text>
-  <text class="mono" x="164" y="205">simulation y</text>
+  <text class="label center" x="207.5" y="186">Physical target</text>
+  <text class="mono center" x="207.5" y="205">simulation y</text>
   <path class="arrow" d="M 298 190 L 317 190"/>
   <rect class="transform" x="330" y="163" width="155" height="54" rx="6"/>
-  <text class="label" x="386" y="186">Transform</text>
-  <text class="mono" x="383" y="205">log(y + offset)</text>
+  <text class="label center" x="407.5" y="186">Transform</text>
+  <text class="mono center" x="407.5" y="205">log(y + offset)</text>
   <path class="arrow" d="M 498 190 L 535 190"/>
   <rect class="scale" x="530" y="163" width="155" height="54" rx="6"/>
-  <text class="label" x="590" y="186">Normalise</text>
-  <text class="mono" x="576" y="205">target scaling</text>
+  <text class="label center" x="607.5" y="186">Normalise</text>
+  <text class="mono center" x="607.5" y="205">target scaling</text>
   <path class="arrow" d="M 698 190 L 735 190"/>
   <rect class="output" x="730" y="163" width="155" height="54" rx="6"/>
-  <text class="label" x="762" y="186">Network targets</text>
-  <text class="mono" x="766" y="205">train_targets</text>
+  <text class="label center" x="807.5" y="186">Network targets</text>
+  <text class="mono center" x="807.5" y="205">train_targets</text>
 </svg>
