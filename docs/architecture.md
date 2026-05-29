@@ -1,6 +1,6 @@
 # Architecture
 
-The emulator architecture is a compact JAX/Flax implementation of the
+The emulator architecture is a simple JAX implementation of the
 scalar-regression idea used by
 [GlobalEmu](https://github.com/htjb/globalemu)
 ([arXiv:2104.04336](https://arxiv.org/abs/2104.04336)) and
@@ -9,18 +9,18 @@ training a network to emit a whole spectrum or grid in one pass, independent
 coordinates are included in the input row and the network predicts one scalar
 observable value.
 
-The shared dense MLP lives in
-[`jax_emu/architectures/mlp.py`](../jax_emu/architectures/mlp.py). Workflow
-configuration sets the input width, hidden width, depth, activation, and target
-transform, but the conceptual contract is the same across observable families:
-
 ![Tiled scalar-output emulator architecture](assets/network-tiling.svg)
+
+The figure should be read from top to bottom. The first row shows the
+traditional vector-output emulator, where physical variables map directly to a
+full spectrum. The second row shows the key scalar-output idea: fold the
+independent coordinate, such as redshift `z` or wavenumber `k`, into the input
+and predict one value. The third row shows how vectorized calls over all
+requested coordinates reconstruct the spectrum or grid.
 
 ## Scalar Regression Contract
 
-The tiling utilities are defined in
-[`jax_emu/data_preprocessing/tiling.py`](../jax_emu/data_preprocessing/tiling.py).
-They flatten simulation outputs onto rows of the form:
+The tiling utilities flatten simulation outputs onto rows of the form:
 
 ```text
 [axis coordinates, astrophysical parameters] -> scalar target

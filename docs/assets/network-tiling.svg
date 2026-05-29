@@ -1,87 +1,161 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="520" viewBox="0 0 1040 520" role="img" aria-labelledby="title desc">
-  <title id="title">Vector-output and tiled scalar-output emulator comparison</title>
-  <desc id="desc">Schematic comparing traditional vector-output emulation with tiled scalar-output emulation and vectorized reconstruction.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" role="img" aria-labelledby="title desc">
+  <title id="title">Traditional vector-output emulation compared with tiled scalar-output emulation</title>
+  <desc id="desc">Three-stage schematic: a traditional emulator maps physical parameters to a full spectrum, the scalar-output emulator folds the independent coordinate into the input and predicts one value, and vectorized calls over a coordinate grid reconstruct the full observable.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
     </marker>
     <style>
       .bg { fill: #ffffff; }
-      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
-      .box-blue { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.5; }
-      .box-green { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
-      .box-amber { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
-      .box-red { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.5; }
-      .node { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
-      .hidden { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.2; }
-      .out { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.2; }
-      .line { stroke: #64748b; stroke-width: 1.1; }
-      .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
-      .label { font-family: Arial, Helvetica, sans-serif; font-size: 15px; fill: #0f172a; }
-      .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #334155; }
+      .band { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
+      .input { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; }
+      .coord { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
+      .network { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+      .output { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.5; }
+      .matrix { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.5; }
+      .axis { stroke: #475569; stroke-width: 1.4; fill: none; }
+      .curve { stroke: #dc2626; stroke-width: 2.5; fill: none; }
+      .curve2 { stroke: #2563eb; stroke-width: 2.2; fill: none; }
+      .gridline { stroke: #cbd5e1; stroke-width: 1; }
+      .arrow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .thin { stroke: #64748b; stroke-width: 1.2; fill: none; }
+      .node { fill: #ffffff; stroke: #334155; stroke-width: 1.1; }
+      .hidden { fill: #bbf7d0; stroke: #16a34a; stroke-width: 1.1; }
+      .outnode { fill: #fecaca; stroke: #dc2626; stroke-width: 1.1; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 23px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #475569; }
+      .section { font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; fill: #0f172a; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #0f172a; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
       .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #0f172a; }
-      .title { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; fill: #0f172a; }
-      .section { font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .mono-small { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10.5px; fill: #334155; }
     </style>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="1040" height="520"/>
-  <text class="title" x="40" y="38">Emulator output strategies</text>
-  <text class="small" x="40" y="60">Traditional vector outputs fix the target grid in the readout layer; tiled scalar outputs move coordinates into the input.</text>
+  <rect class="bg" x="0" y="0" width="1180" height="760"/>
+  <text class="title" x="40" y="40">From vector-output emulators to tiled scalar-output emulators</text>
+  <text class="subtitle" x="40" y="63">The same physical model can be represented by changing what the neural network sees as input and output.</text>
 
-  <rect class="panel" x="40" y="92" width="460" height="180" rx="8"/>
-  <text class="section" x="62" y="122">Traditional vector-output emulation</text>
-  <rect class="box-blue" x="62" y="148" width="130" height="44" rx="6"/>
-  <text class="mono" x="80" y="174">theta_1..theta_n</text>
-  <path class="arrow" d="M 200 170 L 260 170"/>
-  <rect class="box-green" x="268" y="138" width="78" height="64" rx="6"/>
-  <text class="mono" x="288" y="166">NN</text>
-  <text class="small" x="282" y="186">readout</text>
-  <path class="arrow" d="M 354 170 L 412 170"/>
-  <rect class="box-red" x="420" y="132" width="58" height="76" rx="6"/>
-  <line class="line" x1="430" y1="146" x2="468" y2="146"/>
-  <line class="line" x1="430" y1="158" x2="468" y2="158"/>
-  <line class="line" x1="430" y1="170" x2="468" y2="170"/>
-  <line class="line" x1="430" y1="182" x2="468" y2="182"/>
-  <line class="line" x1="430" y1="194" x2="468" y2="194"/>
-  <text class="small" x="62" y="232">Physical variables map directly to a full spectrum or grid.</text>
-  <text class="mono" x="62" y="252">f(theta) -> [y_1, ..., y_m]</text>
+  <!-- Row 1: Traditional vector-output emulator -->
+  <rect class="band" x="40" y="90" width="1100" height="185" rx="10"/>
+  <text class="section" x="65" y="122">1. Traditional vector-output approach</text>
+  <text class="small" x="65" y="144">Physical variables go in; the network readout emits every redshift or k-bin at once.</text>
 
-  <rect class="panel" x="540" y="92" width="460" height="180" rx="8"/>
-  <text class="section" x="562" y="122">Tiled scalar-output emulation</text>
-  <rect class="box-amber" x="562" y="142" width="104" height="36" rx="6"/>
-  <text class="mono" x="584" y="165">z, k</text>
-  <rect class="box-blue" x="562" y="190" width="130" height="44" rx="6"/>
-  <text class="mono" x="580" y="216">theta_1..theta_n</text>
-  <path class="arrow" d="M 704 188 L 764 188"/>
-  <rect class="box-green" x="772" y="154" width="78" height="68" rx="6"/>
-  <text class="mono" x="792" y="184">NN</text>
-  <text class="small" x="792" y="204">MLP</text>
-  <path class="arrow" d="M 858 188 L 918 188"/>
-  <rect class="box-red" x="926" y="166" width="50" height="44" rx="6"/>
-  <text class="mono" x="940" y="192">y</text>
-  <text class="small" x="562" y="252">Physical variables plus one coordinate location map to one scalar value.</text>
-  <text class="mono" x="562" y="272">f([z, k, theta]) -> y_hat</text>
+  <rect class="input" x="70" y="170" width="170" height="58" rx="7"/>
+  <text class="label" x="94" y="194">physical variables</text>
+  <text class="mono" x="101" y="215">theta_1 ... theta_n</text>
 
-  <path class="arrow" d="M 330 294 C 430 346, 610 346, 710 294"/>
-  <text class="section" x="392" y="338">Vectorized call and reconstruction</text>
+  <path class="arrow" d="M 255 199 L 340 199"/>
 
-  <rect class="panel" x="130" y="370" width="780" height="110" rx="8"/>
-  <rect class="box-amber" x="160" y="402" width="138" height="42" rx="6"/>
-  <text class="mono" x="177" y="427">coordinate grid</text>
-  <path class="arrow" d="M 310 423 L 382 423"/>
-  <rect class="box-green" x="392" y="394" width="118" height="58" rx="6"/>
-  <text class="mono" x="417" y="419">batched</text>
-  <text class="mono" x="423" y="438">MLP</text>
-  <path class="arrow" d="M 522 423 L 594 423"/>
-  <rect class="box-red" x="604" y="402" width="110" height="42" rx="6"/>
-  <text class="mono" x="624" y="427">flat y_hat</text>
-  <path class="arrow" d="M 726 423 L 798 423"/>
-  <rect class="box-blue" x="808" y="392" width="72" height="62" rx="6"/>
-  <line class="line" x1="820" y1="406" x2="868" y2="406"/>
-  <line class="line" x1="820" y1="419" x2="868" y2="419"/>
-  <line class="line" x1="820" y1="432" x2="868" y2="432"/>
-  <line class="line" x1="820" y1="445" x2="868" y2="445"/>
-  <text class="small" x="805" y="470">spectrum/grid</text>
-  <text class="small" x="160" y="468">Evaluate every requested coordinate row, then reshape predictions onto the physical axes.</text>
+  <rect class="network" x="355" y="152" width="180" height="94" rx="8"/>
+  <text class="label" x="418" y="174">network</text>
+  <circle class="node" cx="390" cy="202" r="6"/>
+  <circle class="node" cx="390" cy="222" r="6"/>
+  <circle class="hidden" cx="445" cy="192" r="6"/>
+  <circle class="hidden" cx="445" cy="212" r="6"/>
+  <circle class="hidden" cx="445" cy="232" r="6"/>
+  <circle class="outnode" cx="500" cy="188" r="5"/>
+  <circle class="outnode" cx="500" cy="202" r="5"/>
+  <circle class="outnode" cx="500" cy="216" r="5"/>
+  <circle class="outnode" cx="500" cy="230" r="5"/>
+  <line class="thin" x1="396" y1="202" x2="439" y2="192"/>
+  <line class="thin" x1="396" y1="222" x2="439" y2="232"/>
+  <line class="thin" x1="451" y1="192" x2="495" y2="188"/>
+  <line class="thin" x1="451" y1="232" x2="495" y2="230"/>
+
+  <path class="arrow" d="M 550 199 L 645 199"/>
+
+  <rect class="output" x="665" y="138" width="420" height="120" rx="8"/>
+  <text class="label" x="688" y="160">full spectrum or grid as the output layer</text>
+  <line class="axis" x1="705" y1="230" x2="1030" y2="230"/>
+  <line class="axis" x1="705" y1="230" x2="705" y2="178"/>
+  <path class="curve" d="M 708 215 C 750 190, 792 178, 835 197 C 884 220, 930 188, 975 190 C 1002 191, 1016 205, 1028 222"/>
+  <circle class="outnode" cx="736" cy="204" r="4"/>
+  <circle class="outnode" cx="782" cy="184" r="4"/>
+  <circle class="outnode" cx="828" cy="194" r="4"/>
+  <circle class="outnode" cx="874" cy="215" r="4"/>
+  <circle class="outnode" cx="920" cy="197" r="4"/>
+  <circle class="outnode" cx="966" cy="190" r="4"/>
+  <circle class="outnode" cx="1012" cy="206" r="4"/>
+  <text class="mono-small" x="740" y="247">[y(z_1), y(z_2), ..., y(z_m)]</text>
+  <text class="small" x="1010" y="246">z</text>
+
+  <!-- Row 2: Tiled scalar-output emulator -->
+  <rect class="band" x="40" y="305" width="1100" height="185" rx="10"/>
+  <text class="section" x="65" y="337">2. Fold the independent coordinate into the input</text>
+  <text class="small" x="65" y="359">Each training row asks the same network for one value at one coordinate location.</text>
+
+  <rect class="input" x="70" y="385" width="170" height="58" rx="7"/>
+  <text class="label" x="94" y="409">physical variables</text>
+  <text class="mono" x="101" y="430">theta_1 ... theta_n</text>
+  <rect class="coord" x="260" y="385" width="135" height="58" rx="7"/>
+  <text class="label" x="283" y="409">coordinate</text>
+  <text class="mono" x="286" y="430">z_i or k_i</text>
+
+  <path class="arrow" d="M 412 414 L 505 414"/>
+
+  <rect class="matrix" x="520" y="376" width="175" height="76" rx="8"/>
+  <text class="label" x="552" y="398">one model row</text>
+  <text class="mono" x="540" y="424">[z_i, k_i, theta]</text>
+  <text class="mono-small" x="544" y="442">or [z_i, theta]</text>
+
+  <path class="arrow" d="M 712 414 L 790 414"/>
+
+  <rect class="network" x="805" y="376" width="130" height="76" rx="8"/>
+  <text class="label" x="839" y="399">MLP</text>
+  <circle class="node" cx="835" cy="425" r="6"/>
+  <circle class="hidden" cx="870" cy="415" r="6"/>
+  <circle class="hidden" cx="870" cy="435" r="6"/>
+  <circle class="outnode" cx="905" cy="425" r="6"/>
+  <line class="thin" x1="841" y1="425" x2="864" y2="415"/>
+  <line class="thin" x1="841" y1="425" x2="864" y2="435"/>
+  <line class="thin" x1="876" y1="415" x2="899" y2="425"/>
+  <line class="thin" x1="876" y1="435" x2="899" y2="425"/>
+
+  <path class="arrow" d="M 950 414 L 1010 414"/>
+
+  <rect class="output" x="1025" y="390" width="70" height="50" rx="8"/>
+  <circle class="outnode" cx="1060" cy="412" r="9"/>
+  <text class="mono" x="1050" y="435">y_i</text>
+
+  <text class="mono" x="70" y="466">f([z_i, k_i, theta]) -> y_i</text>
+
+  <!-- Row 3: Vectorized evaluation -->
+  <rect class="band" x="40" y="520" width="1100" height="200" rx="10"/>
+  <text class="section" x="65" y="552">3. Vectorize the scalar emulator over the requested grid</text>
+  <text class="small" x="65" y="574">At inference, repeat the physical variables over all coordinates, evaluate in one batch, then reshape.</text>
+
+  <rect class="coord" x="70" y="604" width="145" height="68" rx="8"/>
+  <text class="label" x="94" y="626">coordinate grid</text>
+  <text class="mono" x="91" y="648">z_1 ... z_m</text>
+  <text class="mono-small" x="91" y="664">and optional k grid</text>
+
+  <path class="arrow" d="M 230 638 L 305 638"/>
+
+  <rect class="matrix" x="320" y="586" width="245" height="104" rx="8"/>
+  <text class="label" x="372" y="608">tiled input matrix</text>
+  <line class="gridline" x1="342" y1="622" x2="543" y2="622"/>
+  <line class="gridline" x1="342" y1="642" x2="543" y2="642"/>
+  <line class="gridline" x1="342" y1="662" x2="543" y2="662"/>
+  <text class="mono-small" x="348" y="636">[z_1, k_1, theta]</text>
+  <text class="mono-small" x="348" y="656">[z_2, k_1, theta]</text>
+  <text class="mono-small" x="348" y="676">[ ... repeated rows ... ]</text>
+
+  <path class="arrow" d="M 580 638 L 655 638"/>
+
+  <rect class="network" x="670" y="598" width="155" height="80" rx="8"/>
+  <text class="label" x="713" y="622">batched MLP</text>
+  <text class="mono-small" x="704" y="646">vmap / jit call</text>
+  <text class="mono-small" x="705" y="664">fixed-shape rows</text>
+
+  <path class="arrow" d="M 840 638 L 900 638"/>
+
+  <rect class="output" x="915" y="590" width="185" height="98" rx="8"/>
+  <text class="label" x="956" y="612">reconstructed</text>
+  <line class="axis" x1="945" y1="666" x2="1070" y2="666"/>
+  <line class="axis" x1="945" y1="666" x2="945" y2="628"/>
+  <path class="curve2" d="M 948 658 C 970 640, 990 631, 1012 646 C 1035 662, 1050 641, 1068 653"/>
+  <text class="mono-small" x="942" y="684">reshape y_1 ... y_m</text>
+
+  <text class="small" x="70" y="704">The network still predicts one scalar per row; vectorization makes the many scalar calls look like one batched operation.</text>
 </svg>

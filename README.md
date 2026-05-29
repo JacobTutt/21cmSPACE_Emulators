@@ -2,7 +2,8 @@
 
 The repository is designed to be a practical guide for building JAX emulators
 from 21-cm cosmology simulations and other associated multi-wavelength probes
-for use within JAX-accelerated Bayesian inference frameworks.
+for use within JAX-accelerated Bayesian inference frameworks, for example
+[BlackJAX](https://github.com/blackjax-devs/blackjax).
 
 The model design follows the architecture ideas used by
 [AstroEmu](https://astroemu.readthedocs.io/en/latest/tutorial/) and
@@ -64,19 +65,17 @@ Start here, then move into the stage-specific docs:
 
 ## Installation
 
-This project uses JAX, which requires a backend matched to your hardware
-(CPU or NVIDIA GPU). We recommend using `uv` for the fastest setup, but
-standard `pip` is also supported. The JAX project keeps the current backend
-compatibility notes at
-[docs.jax.dev/en/latest/installation.html](https://docs.jax.dev/en/latest/installation.html).
+We recommend using `uv` for the fastest setup, but standard `pip` is also
+supported.
 
 ### Choose Your Backend
+The network architectures use JAX, which requires a backend matched to your
+hardware (CPU or NVIDIA GPU).
 
-Identify which machine you are using to determine which extra to install:
+Identify which machine:
+- `cpu`: laptops or CPU clusters.
+- `cuda12/cuda13`: GPU systems with NVIDIA Accelerators.
 
-- `cpu`: local development on laptops or machines without NVIDIA GPUs.
-- `cuda13`: modern systems with recent NVIDIA drivers.
-- `cuda12`: older clusters or systems running CUDA 12.x.
 
 ### Option A: Using uv (Recommended)
 
@@ -92,11 +91,11 @@ source .venv/bin/activate
 For GPU systems, choose the command that matches your driver stack:
 
 ```bash
-# CUDA 13 (latest)
-uv sync --extra cuda13 --extra dev
-
 # CUDA 12 (older systems)
 uv sync --extra cuda12 --extra dev
+
+# CUDA 13 (latest)
+uv sync --extra cuda13 --extra dev
 
 source .venv/bin/activate
 ```
@@ -113,6 +112,6 @@ source .venv/bin/activate
 python -m pip install -U pip
 
 # 2. Install based on your hardware
-# Replace [cpu] with [cuda13] or [cuda12] if using a GPU
+# Replace [cpu] with [cuda12] or [cuda13] if using a GPU
 python -m pip install -e ".[cpu,dev]"
 ```
