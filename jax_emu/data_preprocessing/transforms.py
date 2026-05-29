@@ -3,7 +3,7 @@ Named transforms used by specs, preprocessing, and inference.
 
 The emulator workflows operate in transformed coordinates for several inputs
 and targets. Examples are log10(k) for a power-spectrum axis and
-log10(Delta21 + 1) for a positive target.
+log10(Delta21 + 1e-8) for a positive target.
 
 Keeping these transforms here makes the training and inference paths use the
 same rules in opposite directions.

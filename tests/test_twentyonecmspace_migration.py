@@ -29,12 +29,12 @@ def test_prepare_twentyonecmspace_delta21_split_matches_expected_shape_rules(tmp
         "log10fradio",
         "pop",
     )
-    assert prepared.train_features.shape == (1200, 11)
-    assert prepared.train_targets.shape == (1200,)
-    assert prepared.validation_features.shape == (400, 11)
-    assert prepared.validation_targets.shape == (400,)
-    assert prepared.test_features.shape == (400, 11)
-    assert prepared.test_targets.shape == (400,)
+    assert prepared.train_features.shape == (7500, 11)
+    assert prepared.train_targets.shape == (7500,)
+    assert prepared.validation_features.shape == (2500, 11)
+    assert prepared.validation_targets.shape == (2500,)
+    assert prepared.test_features.shape == (2500, 11)
+    assert prepared.test_targets.shape == (2500,)
     assert prepared.train_features.dtype == np.float32
     assert prepared.train_targets.dtype == np.float32
     scaling_by_name = {feature.name: feature.method for feature in prepared.feature_scaling}

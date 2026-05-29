@@ -44,9 +44,9 @@ def t21_config() -> T21Config:
     """
     Return the default configuration for the current T21 workflow.
 
-    This configuration follows the later PyTorch scalar-MLP regime more
-    closely: a wider ReLU network and a much larger batch size than the older
-    global-signal-specific setup.
+    This matches the hidden-layer width and activation used by the JWST
+    synergies T21 emulator: four hidden layers of width 32 with ReLU
+    activations.
 
     Returns
     -------
@@ -57,8 +57,8 @@ def t21_config() -> T21Config:
         # Baseline MLP architecture for brightness temperature regression.
         mlp=MLPConfig(
             input_dim=10,
-            hidden_dim=100,
-            n_hidden_blocks=6,
+            hidden_dim=32,
+            n_hidden_blocks=3,
             activation="relu",
         ),
         # Default Adam optimizer settings.
@@ -66,7 +66,7 @@ def t21_config() -> T21Config:
         # Default training loop behavior.
         training=TrainingConfig(
             epochs=10000,
-            batch_size=20000,
+            batch_size=1000,
             save_after_epochs=5,
             terminate_time_seconds=3600 * 2,
             early_stop=True,

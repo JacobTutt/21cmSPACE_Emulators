@@ -1,61 +1,78 @@
 # 21cmSPACE JAX Emulators
 
-`21cmspace-emulators` is a JAX-first codebase for training and packaging 21-cm
-emulators. The current focus is the 21cmSPACE-style emulator workflow used for:
+Welcome. `21cmspace-emulators` is a practical guide and codebase for building
+JAX emulators for 21-cm cosmology simulations and multi-wavelength constraints.
+It keeps the path from simulation products to saved emulator packages explicit:
+prepare physical arrays, scale and tile inputs, train a JAX MLP, save a
+`.nenemu` checkpoint, and use that package for inference.
 
-- `T21`: global 21-cm signal emulation
-- `Delta21`: 21-cm power-spectrum emulation
-
-The motivation for this repository is to keep the scientific emulator contract
-explicit while moving the implementation toward a cleaner JAX interface. The
-code should make it clear how simulation files become training arrays, how the
-network is defined, how training is run, and how a saved emulator checkpoint
-can be loaded later for inference.
+The current implemented workflows target 21cmSPACE-style global-signal and
+power-spectrum emulators. The same infrastructure is intended to support other
+observables used in joint 21-cm and astrophysical inference.
 
 ## Repository Layout
 
 ```text
 21cmspace-emulators/
-  pyproject.toml                         (package metadata and CLI entry points)
-  README.md                              (project overview)
-  docs/                                  (stage-by-stage workflow notes)
-  jax_emu/                               (reusable JAX emulator infrastructure)
-    data_preprocessing/                  (input contracts, transforms, scaling, tiling)
-    architectures/                       (shared network definitions)
-    training/                            (batching, optimization, validation)
-    utils/                               (checkpointing, configs, metrics)
-  emulators_21cmspace/                   (21cmSPACE-specific downstream workflows)
-    delta21/                             (power-spectrum emulator)
-    t21/                                 (global-signal emulator)
-  tests/                                 (contract and workflow smoke tests)
+  README.md                         (top-level guide)
+  pyproject.toml                    (package metadata, dependencies, CLI entry points)
+  docs/                             (detailed workflow documentation)
+    architecture.md                 (model and package architecture)
+    jax-training.md                 (JAX/Flax training workflow)
+    preprocessing.md                (data contracts, transforms, scaling, tiling)
+    examples.md                     (example index)
+    examples/                       (worked emulator examples)
+    references.md                   (science and software references)
+  jax_emu/                          (reusable JAX emulator infrastructure)
+    architectures/                  (shared MLP definitions)
+    data_preprocessing/             (specs, parameter prep, transforms, scaling, tiling)
+    training/                       (training and evaluation loops)
+    utils/                          (configs, checkpoints, metrics)
+  emulators_21cmspace/              (21cmSPACE-specific workflows)
+    t21/                            (global 21-cm signal emulator)
+    delta21/                        (21-cm power-spectrum emulator)
+    twentyonecmspace.py             (shared 21cmSPACE constants/helpers)
+  tests/                            (contract, workflow, and CLI smoke tests)
 ```
 
-## Workflow Walkthrough
+## What Can Be Emulated
 
-The main path through the code is:
+The implemented entry points cover:
 
-```text
-simulation files
--> data loading
--> parameter preparation
--> target transform and fixed-grid resampling
--> feature and target scaling
--> MLP training
--> .nenemu checkpoint directory
--> inference in physical units
-```
+- global 21-cm signal, `T21`
+- 21-cm power spectrum, `Delta21`
 
-The detailed walkthroughs are split by stage:
+The emulator contract is also designed for related observables, including UV
+luminosity functions, cosmic X-ray background and radio background constraints
+(`CXB`/`CRB`), star-formation-rate density (`SFRD`), neutral fraction (`xHI`),
+and thermal or radio histories.
 
-- [Preprocessing](docs/preprocessing.md): how raw arrays become emulator
-  training features and targets.
-- [Network](docs/network.md): how the MLP is defined and called.
-- [Training](docs/training.md): how batches, optimization, checkpoint metadata,
-  and inference reconstruction fit together.
+## Model Approach
+
+The default architecture is a dense MLP in JAX/Flax. Its role is deliberately
+simple: map prepared cosmological/astrophysical parameters plus coordinate axes
+such as redshift or wave number to one scalar target value, then reconstruct the
+full observable grid after inference.
+
+This follows the same broad emulator pattern used by GlobalEmu
+([arXiv:2104.04336](https://arxiv.org/abs/2104.04336)): compact feed-forward
+networks trained on simulation grids, with preprocessing and inverse transforms
+treated as part of the saved emulator package.
+
+## Documentation Map
+
+Start here, then move into the stage-specific docs:
+
+- [Architecture](docs/architecture.md): package layout, specs, checkpoints, and inference contracts.
+- [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
+- [Preprocessing](docs/preprocessing.md): parameter preparation, target transforms, scaling, and tiling.
+- [Examples](docs/examples.md): index for worked workflows, including global 21-cm and power-spectrum examples.
+- [References](docs/references.md): science background and citation list.
 
 ## Installation
 
-From the repository root:
+The project metadata and CLI entry points live in `pyproject.toml`. From the
+repository root, install in editable mode with development test dependencies:
 
 ```bash
 python -m venv .venv
@@ -64,40 +81,51 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]"
 ```
 
-Run the tests:
+With `uv`, the equivalent workflow is:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+```
+
+## Quick Smoke Tests
+
+Run the Python test suite:
 
 ```bash
 python -m pytest -q
 ```
 
-## Command-Line Entry Points
-
-The package exposes four development commands:
+Check the installed CLI entry points:
 
 ```bash
-21cmspace-t21-train
-21cmspace-t21-infer
-21cmspace-delta21-train
-21cmspace-delta21-infer
+21cmspace-t21-train --print-spec
+21cmspace-t21-train --synthetic-smoke --epochs 5 --batch-size 32
+21cmspace-delta21-train --print-spec
+21cmspace-delta21-train --synthetic-smoke --epochs 5 --batch-size 32
 ```
 
-Each training command can print its default spec/config, run a synthetic smoke
-test, or train from a 21cmSPACE dataset root. Each inference command can inspect
-a saved `.nenemu` checkpoint or generate predictions from a checkpoint plus input
-parameter and axis files.
+The inference commands operate on saved `.nenemu` packages:
 
-## Saved Emulator Packages
+```bash
+21cmspace-t21-infer --package t21_model.nenemu --describe
+21cmspace-delta21-infer --package delta21_model.nenemu --describe
+```
 
-Training writes a `.nenemu` checkpoint directory. It stores:
+Training from real 21cmSPACE data starts from a dataset root:
 
-- model architecture settings
-- trained model state through Orbax
-- training and validation losses
-- emulator spec
-- feature scaling metadata
-- target scaling metadata
-- training configuration
+```bash
+21cmspace-t21-train --dataset-root /path/to/21cmSPACE --output t21_model.nenemu
+21cmspace-delta21-train --dataset-root /path/to/21cmSPACE --output delta21_model.nenemu
+```
 
-This metadata is what lets inference rebuild the model inputs, undo target
-standardization, undo physical target transforms, and return predictions in
-physical units.
+## References
+
+See [docs/references.md](docs/references.md) for the curated reference list.
+Key arXiv entries for this repository include:
+
+- [2104.04336](https://arxiv.org/abs/2104.04336)
+- [2312.08095](https://arxiv.org/abs/2312.08095)
+- [2503.21687](https://arxiv.org/abs/2503.21687)
+- [2508.13761](https://arxiv.org/abs/2508.13761)

@@ -46,7 +46,8 @@ def delta21_spec() -> EmulatorSpec:
         family="power_spectrum",
         # The Delta21 emulator operates on a 2D redshift-wavenumber grid.
         axes=(
-            AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=20),
+            # Redshift stays in physical space and is z-score scaled later.
+            AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=50),
             # Wavenumber k is transformed to log10 space for training.
             AxisSpec(
                 name="k",
@@ -56,7 +57,7 @@ def delta21_spec() -> EmulatorSpec:
                     3e-2 / DIMENSIONLESS_HUBBLE_PARAMETER,
                     0.99 / DIMENSIONLESS_HUBBLE_PARAMETER,
                 ),
-                nsample=20,
+                nsample=50,
             ),
         ),
         # Astrophysical parameters identified as having a significant impact on Delta21.
@@ -75,9 +76,9 @@ def delta21_spec() -> EmulatorSpec:
             ParameterSpec(name="fradio", transform="log10"),
             ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
-        # Target power spectrum is trained in log10 space with an offset for stability.
+        # Target power spectrum is trained in log10 space with the JWST synergies offset.
         target_transform="log10",
-        target_offset=1.0,
+        target_offset=1e-8,
     )
 
 
@@ -170,9 +171,9 @@ def prepare_twentyonecmspace_delta21_training_split(
             "log10fradio": "zscore",
             "pop": "minmax_zero_to_one",
         },
-        # Delta21 signals are trained in log10 space with a stability offset.
+        # Delta21 signals are trained in log10 space with the JWST synergies offset.
         data_log=True,
-        offset=1.0,
+        offset=1e-8,
         train_size=0.6,
         validation_size=0.2,
         test_size=0.2,

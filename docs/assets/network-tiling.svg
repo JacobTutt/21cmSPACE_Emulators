@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
+  <title id="title">Tiled scalar-output emulator architecture</title>
+  <desc id="desc">Scientific schematic showing simulation parameters and spectral coordinates tiled into scalar regression rows, passed through a dense MLP, and reconstructed into a full signal grid.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 8; }
+      .accent-a { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.5; rx: 6; }
+      .accent-b { fill: #ecfdf5; stroke: #059669; stroke-width: 1.5; rx: 6; }
+      .accent-c { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; rx: 6; }
+      .node { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
+      .hidden { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.2; }
+      .out { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.2; }
+      .line { stroke: #64748b; stroke-width: 1.1; }
+      .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 15px; fill: #0f172a; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #334155; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #0f172a; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .section { font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="980" height="520"/>
+  <text class="title" x="40" y="38">Tiled scalar-output emulator</text>
+  <text class="small" x="40" y="60">Axis coordinates are appended to astrophysical parameters so the MLP predicts one target value per row.</text>
+
+  <rect class="panel" x="40" y="90" width="250" height="310"/>
+  <text class="section" x="62" y="120">Original simulation output</text>
+  <rect class="accent-a" x="62" y="145" width="96" height="44"/>
+  <text class="mono" x="76" y="171">theta_1..theta_9</text>
+  <rect class="accent-b" x="62" y="212" width="80" height="36"/>
+  <text class="mono" x="84" y="235">z_i</text>
+  <rect class="accent-b" x="158" y="212" width="80" height="36"/>
+  <text class="mono" x="174" y="235">log10 k_j</text>
+  <rect class="accent-c" x="62" y="274" width="176" height="72"/>
+  <text class="mono" x="86" y="304">target grid</text>
+  <text class="mono" x="88" y="325">y(theta, z, k)</text>
+  <text class="small" x="62" y="372">T21 uses z only; Delta21 uses z and k.</text>
+
+  <path class="arrow" d="M 290 245 L 350 245"/>
+
+  <rect class="panel" x="350" y="90" width="250" height="310"/>
+  <text class="section" x="372" y="120">Tiled training rows</text>
+  <rect class="accent-b" x="372" y="145" width="68" height="34"/>
+  <text class="mono" x="392" y="167">z_i</text>
+  <rect class="accent-b" x="448" y="145" width="82" height="34"/>
+  <text class="mono" x="463" y="167">log10 k_j</text>
+  <rect class="accent-a" x="372" y="192" width="158" height="34"/>
+  <text class="mono" x="392" y="214">theta_1..theta_9</text>
+  <rect class="accent-c" x="372" y="247" width="158" height="36"/>
+  <text class="mono" x="386" y="270">scalar y_ij</text>
+  <text class="mono" x="372" y="320">X = [axes, theta]</text>
+  <text class="mono" x="372" y="342">y = one scalar</text>
+  <text class="small" x="372" y="372">Repeat every coordinate for every simulation.</text>
+
+  <path class="arrow" d="M 600 245 L 660 245"/>
+
+  <rect class="panel" x="660" y="90" width="280" height="310"/>
+  <text class="section" x="682" y="120">DenseMLP</text>
+
+  <circle class="node" cx="706" cy="170" r="8"/>
+  <circle class="node" cx="706" cy="205" r="8"/>
+  <circle class="node" cx="706" cy="240" r="8"/>
+  <circle class="node" cx="706" cy="275" r="8"/>
+  <text class="small" x="684" y="318">input</text>
+
+  <circle class="hidden" cx="778" cy="150" r="8"/>
+  <circle class="hidden" cx="778" cy="185" r="8"/>
+  <circle class="hidden" cx="778" cy="220" r="8"/>
+  <circle class="hidden" cx="778" cy="255" r="8"/>
+  <circle class="hidden" cx="778" cy="290" r="8"/>
+  <text class="small" x="742" y="318">hidden layers</text>
+
+  <circle class="hidden" cx="850" cy="150" r="8"/>
+  <circle class="hidden" cx="850" cy="185" r="8"/>
+  <circle class="hidden" cx="850" cy="220" r="8"/>
+  <circle class="hidden" cx="850" cy="255" r="8"/>
+  <circle class="hidden" cx="850" cy="290" r="8"/>
+
+  <circle class="out" cx="908" cy="220" r="10"/>
+  <text class="small" x="884" y="318">scalar</text>
+
+  <path class="line" d="M 714 170 L 770 150"/>
+  <path class="line" d="M 714 170 L 770 185"/>
+  <path class="line" d="M 714 205 L 770 185"/>
+  <path class="line" d="M 714 205 L 770 220"/>
+  <path class="line" d="M 714 240 L 770 220"/>
+  <path class="line" d="M 714 240 L 770 255"/>
+  <path class="line" d="M 714 275 L 770 255"/>
+  <path class="line" d="M 714 275 L 770 290"/>
+  <path class="line" d="M 786 150 L 842 150"/>
+  <path class="line" d="M 786 185 L 842 185"/>
+  <path class="line" d="M 786 220 L 842 220"/>
+  <path class="line" d="M 786 255 L 842 255"/>
+  <path class="line" d="M 786 290 L 842 290"/>
+  <path class="line" d="M 858 150 L 898 220"/>
+  <path class="line" d="M 858 185 L 898 220"/>
+  <path class="line" d="M 858 220 L 898 220"/>
+  <path class="line" d="M 858 255 L 898 220"/>
+  <path class="line" d="M 858 290 L 898 220"/>
+
+  <text class="mono" x="692" y="352">f([axes, theta]) -> y_hat</text>
+  <text class="small" x="692" y="374">Linear readout; no output activation.</text>
+
+  <path class="arrow" d="M 490 400 C 520 455, 735 455, 785 402"/>
+  <text class="small" x="548" y="468">Flat predictions are reshaped back to T21(z) or Delta21(z, k).</text>
+</svg>

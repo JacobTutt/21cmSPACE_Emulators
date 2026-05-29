@@ -47,10 +47,9 @@ def delta21_config() -> Delta21Config:
     """
     Return the default 21cmSPACE `Delta21` architecture and trainer.
 
-    The Delta21 workflow uses four hidden layers of width 100 with ReLU
-    activations. That gives the power-spectrum model enough capacity to learn
-    variation across both redshift and wavenumber while keeping the layout
-    simple to inspect.
+    This matches the hidden-layer width and activation used by the JWST
+    synergies Dsq21 emulator: four hidden layers of width 100 with tanh
+    activations.
 
     Returns
     -------
@@ -64,14 +63,14 @@ def delta21_config() -> Delta21Config:
             input_dim=11,
             hidden_dim=100,
             n_hidden_blocks=3,
-            activation="relu",
+            activation="tanh",
         ),
         # Default Adam optimizer settings.
         optimizer=OptimizerConfig(),
         # Default training loop behavior.
         training=TrainingConfig(
             epochs=10000,
-            batch_size=20000,
+            batch_size=10000,
             save_after_epochs=5,
             terminate_time_seconds=3600 * 2,
             early_stop=True,

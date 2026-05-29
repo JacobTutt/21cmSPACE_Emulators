@@ -128,7 +128,7 @@ def run_synthetic_smoke(
             "pop": "minmax_zero_to_one",
         },
         data_log=True,
-        offset=1.0,
+        offset=1e-8,
         random_state=0,
         shuffle_seed=0,
         # Divide log-space Delta21 targets by one global training-label std.

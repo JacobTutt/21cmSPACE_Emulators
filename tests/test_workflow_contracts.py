@@ -13,13 +13,19 @@ from emulators_21cmspace.t21.model import t21_config
 def test_delta21_spec_matches_expected_feature_contract() -> None:
     spec = delta21_spec()
     assert len(spec.input_feature_names()) == 11
+    assert spec.axes[0].name == "z"
+    assert spec.axes[0].transform == "identity"
+    assert spec.axes[0].nsample == 50
+    assert spec.axes[1].name == "k"
+    assert spec.axes[1].transform == "log10"
+    assert spec.axes[1].nsample == 50
     assert spec.parameters[4].name == "alpha"
     assert spec.parameters[5].name == "nu_0"
     assert spec.parameters[8].name == "pop"
     assert spec.parameters[5].discrete_values[-2:] == (2000.0, 3000.0)
     assert spec.parameters[8].discrete_values == (231.0, 232.0, 233.0)
     assert spec.target_transform == "log10"
-    assert spec.target_offset == 1.0
+    assert spec.target_offset == 1e-8
 
 
 def test_t21_spec_matches_expected_feature_contract() -> None:
@@ -84,14 +90,14 @@ def test_delta21_and_t21_configs_match_current_architecture_choices() -> None:
     assert delta21.mlp.input_dim == 11
     assert delta21.mlp.total_hidden_layers == 4
     assert delta21.mlp.hidden_dim == 100
-    assert delta21.mlp.activation == "relu"
-    assert delta21.training.batch_size == 20000
+    assert delta21.mlp.activation == "tanh"
+    assert delta21.training.batch_size == 10000
 
     assert t21.mlp.input_dim == 10
-    assert t21.mlp.total_hidden_layers == 7
-    assert t21.mlp.hidden_dim == 100
+    assert t21.mlp.total_hidden_layers == 4
+    assert t21.mlp.hidden_dim == 32
     assert t21.mlp.activation == "relu"
-    assert t21.training.batch_size == 20000
+    assert t21.training.batch_size == 1000
     assert t21.training.epochs == 10000
     assert t21.training.early_stop is True
     assert t21.training.early_stopping_patience == 50
