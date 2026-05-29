@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="430" viewBox="0 0 1000 430" role="img" aria-labelledby="title desc">
+  <title id="title">Activation functions</title>
+  <desc id="desc">A plot comparing ReLU, tanh, and GELU activation functions over the input range from negative three to positive three.</desc>
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
+      .axis { stroke: #475569; stroke-width: 1.5; fill: none; }
+      .grid { stroke: #e2e8f0; stroke-width: 1; }
+      .relu { stroke: #dc2626; stroke-width: 3; fill: none; }
+      .tanh { stroke: #2563eb; stroke-width: 3; fill: none; }
+      .gelu { stroke: #16a34a; stroke-width: 3; fill: none; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #0f172a; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #475569; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="430"/>
+  <rect class="panel" x="45" y="35" width="910" height="350" rx="10"/>
+
+  <text class="label" x="80" y="70">Activation functions introduce non-linearity between dense layers.</text>
+  <text class="small" x="80" y="92">The linear readout at the end of DenseMLP does not apply an activation.</text>
+
+  <line class="grid" x1="115" y1="290" x2="760" y2="290"/>
+  <line class="grid" x1="115" y1="230" x2="760" y2="230"/>
+  <line class="grid" x1="115" y1="170" x2="760" y2="170"/>
+  <line class="grid" x1="115" y1="110" x2="760" y2="110"/>
+  <line class="grid" x1="222.5" y1="110" x2="222.5" y2="310"/>
+  <line class="grid" x1="330" y1="110" x2="330" y2="310"/>
+  <line class="grid" x1="437.5" y1="110" x2="437.5" y2="310"/>
+  <line class="grid" x1="545" y1="110" x2="545" y2="310"/>
+  <line class="grid" x1="652.5" y1="110" x2="652.5" y2="310"/>
+
+  <line class="axis" x1="115" y1="230" x2="760" y2="230"/>
+  <line class="axis" x1="437.5" y1="310" x2="437.5" y2="110"/>
+  <text class="small" x="752" y="250">x</text>
+  <text class="small" x="448" y="122">f(x)</text>
+  <text class="small" x="108" y="235">0</text>
+  <text class="small" x="213" y="330">-2</text>
+  <text class="small" x="329" y="330">-1</text>
+  <text class="small" x="434" y="330">0</text>
+  <text class="small" x="541" y="330">1</text>
+  <text class="small" x="648" y="330">2</text>
+
+  <path class="relu" d="M 115 230 L 222.5 230 L 330 230 L 437.5 230 L 545 170 L 652.5 110 L 760 50"/>
+  <path class="tanh" d="M 115 290 C 190 289, 260 285, 330 276 C 380 266, 415 248, 437.5 230 C 460 212, 495 194, 545 184 C 615 175, 685 171, 760 170"/>
+  <path class="gelu" d="M 115 230 C 200 232, 270 234, 330 240 C 372 244, 410 242, 437.5 230 C 470 216, 505 190, 545 166 C 610 128, 690 84, 760 50"/>
+
+  <line class="relu" x1="815" y1="150" x2="865" y2="150"/>
+  <text class="mono" x="878" y="154">relu</text>
+  <line class="tanh" x1="815" y1="190" x2="865" y2="190"/>
+  <text class="mono" x="878" y="194">tanh</text>
+  <line class="gelu" x1="815" y1="230" x2="865" y2="230"/>
+  <text class="mono" x="878" y="234">gelu</text>
+</svg>
