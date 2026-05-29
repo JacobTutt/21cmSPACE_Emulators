@@ -14,6 +14,20 @@ The same preprocessing contract must be reused at inference time. Physical
 inputs are transformed before the network, and network outputs are transformed
 back afterwards.
 
+## Motivation
+
+The network should learn in a numerically well-behaved space, not necessarily
+in the raw physical units. Preprocessing can make the learning problem simpler:
+
+```text
+wide physical ranges -> compact training ranges
+positive skewed values -> log-space values
+heterogeneous columns -> comparable network inputs
+```
+
+The goal is not to change the science target. The goal is to present the same
+physical problem in a coordinate system that is easier for the optimizer.
+
 ![Preprocessing workflow](assets/preprocessing-flow.svg)
 
 ## Workflow
