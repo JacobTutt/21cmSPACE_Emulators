@@ -9,15 +9,29 @@ description = "JAX-native emulators for 21cmSPACE 21-cm inference workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "jax",
-  "flax",
-  "orbax-checkpoint",
-  "optax",
   "numpy",
   "scipy",
 ]
 
 [project.optional-dependencies]
+cpu = [
+  "flax",
+  "jax",
+  "optax",
+  "orbax-checkpoint",
+]
+cuda12 = [
+  "flax",
+  "jax[cuda12]",
+  "optax",
+  "orbax-checkpoint",
+]
+cuda13 = [
+  "flax",
+  "jax[cuda13]",
+  "optax",
+  "orbax-checkpoint",
+]
 dev = [
   "pytest",
 ]

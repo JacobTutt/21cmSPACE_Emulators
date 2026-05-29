@@ -71,22 +71,48 @@ Start here, then move into the stage-specific docs:
 
 ## Installation
 
-The project metadata and CLI entry points live in `pyproject.toml`. From the
-repository root, install in editable mode with development test dependencies:
+The project is managed with `uv` and includes a lock file. The main install
+choice is the JAX backend: CPU-only JAX, CUDA 12 JAX, or CUDA 13 JAX. Choose
+one backend extra for the machine you are using.
+
+CPU-only development install:
+
+```bash
+uv sync --extra cpu --extra dev
+source .venv/bin/activate
+```
+
+NVIDIA GPU install with CUDA 13 packages:
+
+```bash
+uv sync --extra cuda13 --extra dev
+source .venv/bin/activate
+```
+
+NVIDIA GPU install with CUDA 12 packages:
+
+```bash
+uv sync --extra cuda12 --extra dev
+source .venv/bin/activate
+```
+
+Use CUDA 13 when your driver stack supports it; use CUDA 12 for older CUDA 12
+systems. The JAX project keeps the current backend compatibility notes at
+[docs.jax.dev/en/latest/installation.html](https://docs.jax.dev/en/latest/installation.html).
+
+The same extras can be installed with `pip` if you are not using `uv`:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[cpu,dev]"
 ```
 
-With `uv`, the equivalent workflow is:
+For GPU machines, replace `cpu` with `cuda12` or `cuda13`:
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
+python -m pip install -e ".[cuda13,dev]"
 ```
 
 ## Quick Smoke Tests
