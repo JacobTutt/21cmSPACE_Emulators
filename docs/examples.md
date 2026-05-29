@@ -14,6 +14,7 @@ Both examples expect a 21cmSPACE dataset root containing the MATLAB `.mat`
 files:
 
 ```python
+# Path containing the 21cmSPACE .mat files.
 dataset_root = "/path/to/21cmspace-data"
 ```
 
@@ -61,13 +62,19 @@ load dataset
 ### Prepare Arrays
 
 ```python
+# NumPy is used for host-side array manipulation during preprocessing.
 import numpy as np
 
+# T21-specific parameter filtering and emulator specification.
 from emulators_21cmspace.t21.data import (
     prepare_twentyonecmspace_t21_parameters,
     t21_spec,
 )
+
+# Dataset loader for the raw 21cmSPACE global-signal files.
 from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_t21
+
+# Lower-level preprocessing utilities used to build the training arrays.
 from jax_emu.data_preprocessing import (
     PreparedSplit,
     TargetScalingScalar,
@@ -81,34 +88,49 @@ from jax_emu.data_preprocessing import (
     transformed_axis_configuration,
 )
 
+# Load the raw axes, parameter table, and T21 target array from disk.
 product = load_twentyonecmspace_t21(dataset_root)
+
+# Drop unused parameters and apply log10 transforms to selected columns.
 prepared_parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
+
+# Load the model contract: axes, parameter order, and target transform.
 spec = t21_spec()
 
+# Pull out the physical redshift grid read from the dataset.
 z_axis = product.axes.z
+
+# Pull out the raw T21 target grid with shape (n_simulations, n_z).
 raw_t21_targets = product.target
+
+# Store axes as a tuple because the generic preprocessing code supports many axes.
 axes = (z_axis,)
+
+# Store the axis preprocessing settings from the emulator specification.
 axis_specs = spec.axes
 
+# Define how each final input feature should be scaled before entering the MLP.
 feature_scale_methods = {
-    "z": "zscore",
-    "log10fstarII": "zscore",
-    "log10fstarIII": "zscore",
-    "log10Vc": "zscore",
-    "log10fX": "zscore",
-    "alpha": "minmax_zero_to_one",
-    "nu_0": "minmax_zero_to_one",
-    "tau": "zscore",
-    "log10fradio": "zscore",
-    "pop": "minmax_zero_to_one",
+    "z": "zscore",  # Redshift is continuous, so z-score scaling is used.
+    "log10fstarII": "zscore",  # Logged continuous parameter.
+    "log10fstarIII": "zscore",  # Logged continuous parameter.
+    "log10Vc": "zscore",  # Logged continuous parameter.
+    "log10fX": "zscore",  # Logged continuous parameter.
+    "alpha": "minmax_zero_to_one",  # Discrete sampled parameter.
+    "nu_0": "minmax_zero_to_one",  # Discrete sampled parameter.
+    "tau": "zscore",  # Continuous parameter left in linear space.
+    "log10fradio": "zscore",  # Logged continuous parameter.
+    "pop": "minmax_zero_to_one",  # Discrete sampled parameter.
 }
 
+# T21 is trained in linear target space, so this leaves the target unchanged.
 transformed_target = transform_target(
     raw_t21_targets,
     data_log=False,
     offset=None,
 )
 
+# Split simulations before fitting any preprocessing statistics.
 (
     train_parameters,
     validation_parameters,
@@ -117,95 +139,138 @@ transformed_target = transform_target(
     validation_target,
     test_target,
 ) = split_simulations(
-    prepared_parameters.values,
-    transformed_target,
-    train_size=0.6,
-    validation_size=0.2,
-    test_size=0.2,
-    random_state=42,
+    prepared_parameters.values,  # Prepared 9-column parameter matrix.
+    transformed_target,  # Target array in training target space.
+    train_size=0.6,  # Fraction used for gradient updates.
+    validation_size=0.2,  # Fraction used for validation loss.
+    test_size=0.2,  # Fraction kept for final evaluation.
+    random_state=42,  # Seed for reproducible simulation-level splitting.
 )
 
+# Transform the redshift axis and transform the requested interpolation limits.
 transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
+
+# Build the fixed redshift grid used for every simulation.
 sampled_axes = build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
 
+# Build the exact feature order: axis coordinates first, then prepared parameters.
 feature_names = (
     *(axis.feature_name() for axis in axis_specs),
     *prepared_parameters.feature_names,
 )
 
+# Interpolate training targets onto the fixed redshift grid.
 train_target_grid = resample_targets_to_grid(
     train_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
+
+# Interpolate validation targets onto the same fixed redshift grid.
 validation_target_grid = resample_targets_to_grid(
     validation_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
+
+# Interpolate test targets onto the same fixed redshift grid.
 test_target_grid = resample_targets_to_grid(
     test_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
 
+# Fit one global target standard deviation from the training targets only.
 target_scaling = TargetScalingScalar.from_targets(train_target_grid)
+
+# Scale training targets using the training-set target statistic.
 train_target_grid = target_scaling.transform_grid(train_target_grid)
+
+# Reuse the same target scaling for validation targets.
 validation_target_grid = target_scaling.transform_grid(validation_target_grid)
+
+# Reuse the same target scaling for test targets.
 test_target_grid = target_scaling.transform_grid(test_target_grid)
 
+# Flatten the training grids into scalar rows: [z, parameters] -> one T21 value.
 train_features, train_targets = flatten_resampled_rows(
     train_parameters,
     train_target_grid,
     sampled_axes=sampled_axes,
 )
+
+# Flatten the validation grids in the same feature order.
 validation_features, validation_targets = flatten_resampled_rows(
     validation_parameters,
     validation_target_grid,
     sampled_axes=sampled_axes,
 )
+
+# Flatten the test grids in the same feature order.
 test_features, test_targets = flatten_resampled_rows(
     test_parameters,
     test_target_grid,
     sampled_axes=sampled_axes,
 )
 
+# Fit feature scaling statistics from the training rows only.
 feature_scaler = build_feature_scaler(
     train_features,
     feature_names=feature_names,
     method_overrides=feature_scale_methods,
 )
 
+# Scale training inputs into the numerical space expected by the MLP.
 train_features = feature_scaler.transform(train_features).astype(np.float32)
+
+# Reuse the same feature scaler for validation inputs.
 validation_features = feature_scaler.transform(validation_features).astype(np.float32)
+
+# Reuse the same feature scaler for test inputs.
 test_features = feature_scaler.transform(test_features).astype(np.float32)
 
+# Store training targets as float32 arrays for JAX training.
 train_targets = np.asarray(train_targets, dtype=np.float32)
+
+# Store validation targets as float32 arrays for JAX evaluation.
 validation_targets = np.asarray(validation_targets, dtype=np.float32)
+
+# Store test targets as float32 arrays for final evaluation.
 test_targets = np.asarray(test_targets, dtype=np.float32)
 
+# Shuffle training rows so each mini-batch mixes simulations and redshifts.
 train_features, train_targets = shuffle_rows(train_features, train_targets, seed=42)
+
+# Shuffle validation rows in the same paired feature/target way.
 validation_features, validation_targets = shuffle_rows(
     validation_features,
     validation_targets,
     seed=42,
 )
+
+# Shuffle test rows in the same paired feature/target way.
 test_features, test_targets = shuffle_rows(test_features, test_targets, seed=42)
 
+# Bundle arrays and metadata into the object consumed by the trainer.
 prepared = PreparedSplit(
-    feature_names=feature_names,
-    train_features=train_features,
-    train_targets=train_targets,
-    validation_features=validation_features,
-    validation_targets=validation_targets,
-    test_features=test_features,
-    test_targets=test_targets,
-    feature_scaling=feature_scaler.scaling,
-    target_scaling=target_scaling,
+    feature_names=feature_names,  # Names and order of the MLP input columns.
+    train_features=train_features,  # Scaled input rows used for gradient updates.
+    train_targets=train_targets,  # Scaled target values used for gradient updates.
+    validation_features=validation_features,  # Scaled input rows used for validation.
+    validation_targets=validation_targets,  # Scaled target values used for validation.
+    test_features=test_features,  # Scaled input rows kept for final testing.
+    test_targets=test_targets,  # Scaled target values kept for final testing.
+    feature_scaling=feature_scaler.scaling,  # Feature scaling metadata saved later.
+    target_scaling=target_scaling,  # Target scaling metadata saved later.
 )
 
+# Inspect the final feature order that the trained model will expect.
 print(prepared.feature_names)
+
+# Inspect the final training input matrix shape.
 print(prepared.train_features.shape)
+
+# Inspect the final training target vector shape.
 print(prepared.train_targets.shape)
 ```
 
@@ -229,81 +294,107 @@ same code path above with the default `T21` settings.
 ### Train And Save
 
 ```python
+# Convert dataclass configs into dictionaries for checkpoint metadata.
 from dataclasses import asdict
+
+# Use Path objects for checkpoint output paths.
 from pathlib import Path
 
+# JAX provides the random key used to initialize model weights.
 import jax
+
+# Flax NNX provides the module system and random stream wrapper.
 from flax import nnx
 
+# T21 spec is saved so inference can reconstruct the preprocessing contract.
 from emulators_21cmspace.t21.data import t21_spec
+
+# T21 config stores the default architecture and training settings.
 from emulators_21cmspace.t21.model import t21_config
+
+# DenseMLP is the neural network architecture used by the emulator.
 from jax_emu.architectures import DenseMLP
+
+# Shared trainer utilities update the model and evaluate the held-out test set.
 from jax_emu.training import evaluate_mlp_regressor, train_mlp_regressor
+
+# Checkpoint helpers save weights plus preprocessing metadata.
 from jax_emu.utils import CheckpointMetadata, save
 
+# Load the default T21 model, optimizer, and training settings.
 config = t21_config()
 
+# Build the MLP with an input width matching the prepared feature matrix.
 model = DenseMLP(
-    in_features=prepared.train_features.shape[1],
-    hidden_features=config.mlp.hidden_dim,
-    hidden_layers=config.mlp.total_hidden_layers,
-    activation=config.mlp.activation,
-    rngs=nnx.Rngs(jax.random.PRNGKey(42)),
+    in_features=prepared.train_features.shape[1],  # Number of input columns.
+    hidden_features=config.mlp.hidden_dim,  # Width of each hidden layer.
+    hidden_layers=config.mlp.total_hidden_layers,  # Number of hidden layers.
+    activation=config.mlp.activation,  # Non-linear activation after hidden layers.
+    rngs=nnx.Rngs(jax.random.PRNGKey(42)),  # Random stream for weight initialization.
 )
 
+# Train the model and record training/validation loss curves.
 model, history = train_mlp_regressor(
-    model,
-    prepared.train_features,
-    prepared.train_targets,
-    prepared.validation_features,
-    prepared.validation_targets,
-    epochs=config.training.epochs,
-    batch_size=config.training.batch_size,
-    prefetch_batches=config.training.prefetch_batches,
-    learning_rate=config.optimizer.learning_rate,
-    weight_decay=config.optimizer.weight_decay,
-    seed=42,
-    early_stopping_patience=config.training.early_stopping_patience,
-    early_stopping_min_delta=config.training.early_stopping_min_delta,
+    model,  # Live NNX model to update.
+    prepared.train_features,  # Training input rows.
+    prepared.train_targets,  # Training target values.
+    prepared.validation_features,  # Validation input rows.
+    prepared.validation_targets,  # Validation target values.
+    epochs=config.training.epochs,  # Maximum number of full passes over training data.
+    batch_size=config.training.batch_size,  # Number of rows per mini-batch.
+    prefetch_batches=config.training.prefetch_batches,  # Batches queued on device.
+    learning_rate=config.optimizer.learning_rate,  # AdamW update step size.
+    weight_decay=config.optimizer.weight_decay,  # AdamW L2-style regularisation.
+    seed=42,  # Seed used for epoch-level row shuffling.
+    early_stopping_patience=config.training.early_stopping_patience,  # Waiting time.
+    early_stopping_min_delta=config.training.early_stopping_min_delta,  # Improvement size.
 )
 
+# Evaluate the trained model on the test split after training has finished.
 test_loss = evaluate_mlp_regressor(
-    model,
-    prepared.test_features,
-    prepared.test_targets,
-    batch_size=config.training.batch_size,
-    prefetch_batches=config.training.prefetch_batches,
+    model,  # Trained model to evaluate.
+    prepared.test_features,  # Held-out test inputs.
+    prepared.test_targets,  # Held-out test targets.
+    batch_size=config.training.batch_size,  # Number of rows per evaluation batch.
+    prefetch_batches=config.training.prefetch_batches,  # Batches queued on device.
 )
 
+# Package the non-weight information required to reuse the model at inference.
 metadata = CheckpointMetadata(
-    model_name="t21",
-    package_version="0.1.0",
-    emulator_spec=t21_spec(),
-    input_scaling=prepared.feature_scaling,
-    target_scaling=prepared.target_scaling,
-    training_config={
-        "mlp": asdict(config.mlp),
-        "optimizer": asdict(config.optimizer),
-        "training": asdict(config.training),
-        "feature_names": list(prepared.feature_names),
+    model_name="t21",  # Human-readable emulator name.
+    package_version="0.1.0",  # Version label for the saved package format.
+    emulator_spec=t21_spec(),  # Axis, parameter, and target-transform contract.
+    input_scaling=prepared.feature_scaling,  # Feature scaling used before the MLP.
+    target_scaling=prepared.target_scaling,  # Target scaling inverted after the MLP.
+    training_config={  # Training settings kept with the checkpoint.
+        "mlp": asdict(config.mlp),  # Network architecture settings.
+        "optimizer": asdict(config.optimizer),  # Optimizer settings.
+        "training": asdict(config.training),  # Epoch, batch, and stopping settings.
+        "feature_names": list(prepared.feature_names),  # Required input column order.
     },
 )
 
+# Ensure the output directory exists before writing the checkpoint.
 Path("outputs").mkdir(exist_ok=True)
+
+# Save the trained weights, architecture settings, losses, and preprocessing metadata.
 package_path = save(
-    Path("outputs/t21_model.nenemu"),
-    model,
-    train_losses=history.train_losses,
-    val_losses=history.validation_losses,
-    loss=config.training.loss_name,
-    metadata=metadata,
-    epochs=config.training.epochs,
-    patience=config.training.early_stopping_patience,
-    learning_rate=config.optimizer.learning_rate,
-    weight_decay=config.optimizer.weight_decay,
+    Path("outputs/t21_model.nenemu"),  # Output checkpoint path.
+    model,  # Trained NNX model whose state will be saved.
+    train_losses=history.train_losses,  # Training loss curve.
+    val_losses=history.validation_losses,  # Validation loss curve.
+    loss=config.training.loss_name,  # Loss name used during training.
+    metadata=metadata,  # Preprocessing and training metadata.
+    epochs=config.training.epochs,  # Maximum configured epochs.
+    patience=config.training.early_stopping_patience,  # Early-stopping patience.
+    learning_rate=config.optimizer.learning_rate,  # Optimizer learning rate.
+    weight_decay=config.optimizer.weight_decay,  # Optimizer weight decay.
 )
 
+# Print the saved checkpoint path.
 print(package_path)
+
+# Print the final held-out test loss.
 print(test_loss)
 ```
 
@@ -316,19 +407,30 @@ DenseMLP architecture + trained weights + T21 preprocessing metadata
 ### Predict
 
 ```python
+# JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
 
+# T21 inference helpers load the checkpoint and apply the saved preprocessing contract.
 from emulators_21cmspace.t21.infer import load_t21_package, predict_t21
 
+# Load the trained model and its saved metadata.
 package = load_t21_package("outputs/t21_model.nenemu")
 
+# Provide one raw 12-column physical parameter row in the original dataset order.
 physical_parameters = jnp.asarray(
-    [[1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0]],
-    dtype=jnp.float32,
+    [
+        [1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0],
+    ],
+    dtype=jnp.float32,  # Match the float32 dtype used during training.
 )
+
+# Choose the redshift coordinates where the signal should be predicted.
 z = jnp.linspace(6.0, 27.0, 200)
 
+# Predict T21 and return an array with shape (n_sims, n_z).
 t21 = predict_t21(package, physical_parameters, z)
+
+# Inspect the prediction shape.
 print(t21.shape)
 ```
 
@@ -346,13 +448,19 @@ same parameter transforms and feature scaling used during training.
 ### Prepare Arrays
 
 ```python
+# NumPy is used for host-side array manipulation during preprocessing.
 import numpy as np
 
+# Delta21-specific parameter filtering and emulator specification.
 from emulators_21cmspace.delta21.data import (
     delta21_spec,
     prepare_twentyonecmspace_delta21_parameters,
 )
+
+# Dataset loader for the raw 21cmSPACE power-spectrum files.
 from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_delta21
+
+# Lower-level preprocessing utilities used to build the training arrays.
 from jax_emu.data_preprocessing import (
     PreparedSplit,
     TargetScalingScalar,
@@ -366,36 +474,53 @@ from jax_emu.data_preprocessing import (
     transformed_axis_configuration,
 )
 
+# Load the raw axes, parameter table, and Delta21 target array from disk.
 product = load_twentyonecmspace_delta21(dataset_root)
+
+# Drop unused parameters and apply log10 transforms to selected columns.
 prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
+
+# Load the model contract: axes, parameter order, and target transform.
 spec = delta21_spec()
 
+# Pull out the physical redshift grid read from the dataset.
 z_axis = product.axes.z
+
+# Pull out the physical wavenumber grid read from the dataset.
 k_axis = product.axes.k
+
+# Pull out the raw Delta21 target grid with shape (n_simulations, n_z, n_k).
 raw_delta21_targets = product.target
+
+# Store axes as a tuple because Delta21 depends on redshift and wavenumber.
 axes = (z_axis, k_axis)
+
+# Store the axis preprocessing settings from the emulator specification.
 axis_specs = spec.axes
 
+# Define how each final input feature should be scaled before entering the MLP.
 feature_scale_methods = {
-    "z": "zscore",
-    "log10k": "zscore",
-    "log10fstarII": "zscore",
-    "log10fstarIII": "zscore",
-    "log10Vc": "zscore",
-    "log10fX": "zscore",
-    "alpha": "minmax_zero_to_one",
-    "nu_0": "minmax_zero_to_one",
-    "tau": "zscore",
-    "log10fradio": "zscore",
-    "pop": "minmax_zero_to_one",
+    "z": "zscore",  # Redshift is continuous, so z-score scaling is used.
+    "log10k": "zscore",  # Wavenumber is log-transformed then z-score scaled.
+    "log10fstarII": "zscore",  # Logged continuous parameter.
+    "log10fstarIII": "zscore",  # Logged continuous parameter.
+    "log10Vc": "zscore",  # Logged continuous parameter.
+    "log10fX": "zscore",  # Logged continuous parameter.
+    "alpha": "minmax_zero_to_one",  # Discrete sampled parameter.
+    "nu_0": "minmax_zero_to_one",  # Discrete sampled parameter.
+    "tau": "zscore",  # Continuous parameter left in linear space.
+    "log10fradio": "zscore",  # Logged continuous parameter.
+    "pop": "minmax_zero_to_one",  # Discrete sampled parameter.
 }
 
+# Delta21 is trained in log10 target space using the configured positive offset.
 transformed_target = transform_target(
     raw_delta21_targets,
     data_log=True,
     offset=1e-8,
 )
 
+# Split simulations before fitting any preprocessing statistics.
 (
     train_parameters,
     validation_parameters,
@@ -404,95 +529,138 @@ transformed_target = transform_target(
     validation_target,
     test_target,
 ) = split_simulations(
-    prepared_parameters.values,
-    transformed_target,
-    train_size=0.6,
-    validation_size=0.2,
-    test_size=0.2,
-    random_state=42,
+    prepared_parameters.values,  # Prepared 9-column parameter matrix.
+    transformed_target,  # Target array in training target space.
+    train_size=0.6,  # Fraction used for gradient updates.
+    validation_size=0.2,  # Fraction used for validation loss.
+    test_size=0.2,  # Fraction kept for final evaluation.
+    random_state=42,  # Seed for reproducible simulation-level splitting.
 )
 
+# Transform the z and k axes and transform the requested interpolation limits.
 transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
+
+# Build the fixed (z, k) grid used for every simulation.
 sampled_axes = build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
 
+# Build the exact feature order: axis coordinates first, then prepared parameters.
 feature_names = (
     *(axis.feature_name() for axis in axis_specs),
     *prepared_parameters.feature_names,
 )
 
+# Interpolate training targets onto the fixed (z, k) grid.
 train_target_grid = resample_targets_to_grid(
     train_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
+
+# Interpolate validation targets onto the same fixed (z, k) grid.
 validation_target_grid = resample_targets_to_grid(
     validation_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
+
+# Interpolate test targets onto the same fixed (z, k) grid.
 test_target_grid = resample_targets_to_grid(
     test_target,
     transformed_axes=transformed_axes,
     sampled_axes=sampled_axes,
 )
 
+# Fit one global target standard deviation from the training targets only.
 target_scaling = TargetScalingScalar.from_targets(train_target_grid)
+
+# Scale training targets using the training-set target statistic.
 train_target_grid = target_scaling.transform_grid(train_target_grid)
+
+# Reuse the same target scaling for validation targets.
 validation_target_grid = target_scaling.transform_grid(validation_target_grid)
+
+# Reuse the same target scaling for test targets.
 test_target_grid = target_scaling.transform_grid(test_target_grid)
 
+# Flatten the training grids into scalar rows: [z, k, parameters] -> one value.
 train_features, train_targets = flatten_resampled_rows(
     train_parameters,
     train_target_grid,
     sampled_axes=sampled_axes,
 )
+
+# Flatten the validation grids in the same feature order.
 validation_features, validation_targets = flatten_resampled_rows(
     validation_parameters,
     validation_target_grid,
     sampled_axes=sampled_axes,
 )
+
+# Flatten the test grids in the same feature order.
 test_features, test_targets = flatten_resampled_rows(
     test_parameters,
     test_target_grid,
     sampled_axes=sampled_axes,
 )
 
+# Fit feature scaling statistics from the training rows only.
 feature_scaler = build_feature_scaler(
     train_features,
     feature_names=feature_names,
     method_overrides=feature_scale_methods,
 )
 
+# Scale training inputs into the numerical space expected by the MLP.
 train_features = feature_scaler.transform(train_features).astype(np.float32)
+
+# Reuse the same feature scaler for validation inputs.
 validation_features = feature_scaler.transform(validation_features).astype(np.float32)
+
+# Reuse the same feature scaler for test inputs.
 test_features = feature_scaler.transform(test_features).astype(np.float32)
 
+# Store training targets as float32 arrays for JAX training.
 train_targets = np.asarray(train_targets, dtype=np.float32)
+
+# Store validation targets as float32 arrays for JAX evaluation.
 validation_targets = np.asarray(validation_targets, dtype=np.float32)
+
+# Store test targets as float32 arrays for final evaluation.
 test_targets = np.asarray(test_targets, dtype=np.float32)
 
+# Shuffle training rows so each mini-batch mixes simulations and grid points.
 train_features, train_targets = shuffle_rows(train_features, train_targets, seed=42)
+
+# Shuffle validation rows in the same paired feature/target way.
 validation_features, validation_targets = shuffle_rows(
     validation_features,
     validation_targets,
     seed=42,
 )
+
+# Shuffle test rows in the same paired feature/target way.
 test_features, test_targets = shuffle_rows(test_features, test_targets, seed=42)
 
+# Bundle arrays and metadata into the object consumed by the trainer.
 prepared = PreparedSplit(
-    feature_names=feature_names,
-    train_features=train_features,
-    train_targets=train_targets,
-    validation_features=validation_features,
-    validation_targets=validation_targets,
-    test_features=test_features,
-    test_targets=test_targets,
-    feature_scaling=feature_scaler.scaling,
-    target_scaling=target_scaling,
+    feature_names=feature_names,  # Names and order of the MLP input columns.
+    train_features=train_features,  # Scaled input rows used for gradient updates.
+    train_targets=train_targets,  # Scaled target values used for gradient updates.
+    validation_features=validation_features,  # Scaled input rows used for validation.
+    validation_targets=validation_targets,  # Scaled target values used for validation.
+    test_features=test_features,  # Scaled input rows kept for final testing.
+    test_targets=test_targets,  # Scaled target values kept for final testing.
+    feature_scaling=feature_scaler.scaling,  # Feature scaling metadata saved later.
+    target_scaling=target_scaling,  # Target scaling metadata saved later.
 )
 
+# Inspect the final feature order that the trained model will expect.
 print(prepared.feature_names)
+
+# Inspect the final training input matrix shape.
 print(prepared.train_features.shape)
+
+# Inspect the final training target vector shape.
 print(prepared.train_targets.shape)
 ```
 
@@ -517,81 +685,107 @@ the same code path above with the default `Delta21` settings.
 ### Train And Save
 
 ```python
+# Convert dataclass configs into dictionaries for checkpoint metadata.
 from dataclasses import asdict
+
+# Use Path objects for checkpoint output paths.
 from pathlib import Path
 
+# JAX provides the random key used to initialize model weights.
 import jax
+
+# Flax NNX provides the module system and random stream wrapper.
 from flax import nnx
 
+# Delta21 spec is saved so inference can reconstruct the preprocessing contract.
 from emulators_21cmspace.delta21.data import delta21_spec
+
+# Delta21 config stores the default architecture and training settings.
 from emulators_21cmspace.delta21.model import delta21_config
+
+# DenseMLP is the neural network architecture used by the emulator.
 from jax_emu.architectures import DenseMLP
+
+# Shared trainer utilities update the model and evaluate the held-out test set.
 from jax_emu.training import evaluate_mlp_regressor, train_mlp_regressor
+
+# Checkpoint helpers save weights plus preprocessing metadata.
 from jax_emu.utils import CheckpointMetadata, save
 
+# Load the default Delta21 model, optimizer, and training settings.
 config = delta21_config()
 
+# Build the MLP with an input width matching the prepared feature matrix.
 model = DenseMLP(
-    in_features=prepared.train_features.shape[1],
-    hidden_features=config.mlp.hidden_dim,
-    hidden_layers=config.mlp.total_hidden_layers,
-    activation=config.mlp.activation,
-    rngs=nnx.Rngs(jax.random.PRNGKey(42)),
+    in_features=prepared.train_features.shape[1],  # Number of input columns.
+    hidden_features=config.mlp.hidden_dim,  # Width of each hidden layer.
+    hidden_layers=config.mlp.total_hidden_layers,  # Number of hidden layers.
+    activation=config.mlp.activation,  # Non-linear activation after hidden layers.
+    rngs=nnx.Rngs(jax.random.PRNGKey(42)),  # Random stream for weight initialization.
 )
 
+# Train the model and record training/validation loss curves.
 model, history = train_mlp_regressor(
-    model,
-    prepared.train_features,
-    prepared.train_targets,
-    prepared.validation_features,
-    prepared.validation_targets,
-    epochs=config.training.epochs,
-    batch_size=config.training.batch_size,
-    prefetch_batches=config.training.prefetch_batches,
-    learning_rate=config.optimizer.learning_rate,
-    weight_decay=config.optimizer.weight_decay,
-    seed=42,
-    early_stopping_patience=config.training.early_stopping_patience,
-    early_stopping_min_delta=config.training.early_stopping_min_delta,
+    model,  # Live NNX model to update.
+    prepared.train_features,  # Training input rows.
+    prepared.train_targets,  # Training target values.
+    prepared.validation_features,  # Validation input rows.
+    prepared.validation_targets,  # Validation target values.
+    epochs=config.training.epochs,  # Maximum number of full passes over training data.
+    batch_size=config.training.batch_size,  # Number of rows per mini-batch.
+    prefetch_batches=config.training.prefetch_batches,  # Batches queued on device.
+    learning_rate=config.optimizer.learning_rate,  # AdamW update step size.
+    weight_decay=config.optimizer.weight_decay,  # AdamW L2-style regularisation.
+    seed=42,  # Seed used for epoch-level row shuffling.
+    early_stopping_patience=config.training.early_stopping_patience,  # Waiting time.
+    early_stopping_min_delta=config.training.early_stopping_min_delta,  # Improvement size.
 )
 
+# Evaluate the trained model on the test split after training has finished.
 test_loss = evaluate_mlp_regressor(
-    model,
-    prepared.test_features,
-    prepared.test_targets,
-    batch_size=config.training.batch_size,
-    prefetch_batches=config.training.prefetch_batches,
+    model,  # Trained model to evaluate.
+    prepared.test_features,  # Held-out test inputs.
+    prepared.test_targets,  # Held-out test targets.
+    batch_size=config.training.batch_size,  # Number of rows per evaluation batch.
+    prefetch_batches=config.training.prefetch_batches,  # Batches queued on device.
 )
 
+# Package the non-weight information required to reuse the model at inference.
 metadata = CheckpointMetadata(
-    model_name="delta21",
-    package_version="0.1.0",
-    emulator_spec=delta21_spec(),
-    input_scaling=prepared.feature_scaling,
-    target_scaling=prepared.target_scaling,
-    training_config={
-        "mlp": asdict(config.mlp),
-        "optimizer": asdict(config.optimizer),
-        "training": asdict(config.training),
-        "feature_names": list(prepared.feature_names),
+    model_name="delta21",  # Human-readable emulator name.
+    package_version="0.1.0",  # Version label for the saved package format.
+    emulator_spec=delta21_spec(),  # Axis, parameter, and target-transform contract.
+    input_scaling=prepared.feature_scaling,  # Feature scaling used before the MLP.
+    target_scaling=prepared.target_scaling,  # Target scaling inverted after the MLP.
+    training_config={  # Training settings kept with the checkpoint.
+        "mlp": asdict(config.mlp),  # Network architecture settings.
+        "optimizer": asdict(config.optimizer),  # Optimizer settings.
+        "training": asdict(config.training),  # Epoch, batch, and stopping settings.
+        "feature_names": list(prepared.feature_names),  # Required input column order.
     },
 )
 
+# Ensure the output directory exists before writing the checkpoint.
 Path("outputs").mkdir(exist_ok=True)
+
+# Save the trained weights, architecture settings, losses, and preprocessing metadata.
 package_path = save(
-    Path("outputs/delta21_model.nenemu"),
-    model,
-    train_losses=history.train_losses,
-    val_losses=history.validation_losses,
-    loss=config.training.loss_name,
-    metadata=metadata,
-    epochs=config.training.epochs,
-    patience=config.training.early_stopping_patience,
-    learning_rate=config.optimizer.learning_rate,
-    weight_decay=config.optimizer.weight_decay,
+    Path("outputs/delta21_model.nenemu"),  # Output checkpoint path.
+    model,  # Trained NNX model whose state will be saved.
+    train_losses=history.train_losses,  # Training loss curve.
+    val_losses=history.validation_losses,  # Validation loss curve.
+    loss=config.training.loss_name,  # Loss name used during training.
+    metadata=metadata,  # Preprocessing and training metadata.
+    epochs=config.training.epochs,  # Maximum configured epochs.
+    patience=config.training.early_stopping_patience,  # Early-stopping patience.
+    learning_rate=config.optimizer.learning_rate,  # Optimizer learning rate.
+    weight_decay=config.optimizer.weight_decay,  # Optimizer weight decay.
 )
 
+# Print the saved checkpoint path.
 print(package_path)
+
+# Print the final held-out test loss.
 print(test_loss)
 ```
 
@@ -604,21 +798,33 @@ DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 ### Predict
 
 ```python
+# JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
-import numpy as np
 
+# Delta21 inference helpers load the checkpoint and apply the saved preprocessing contract.
 from emulators_21cmspace.delta21.infer import load_delta21_package, predict_delta21
 
+# Load the trained model and its saved metadata.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
+# Provide one raw 12-column physical parameter row in the original dataset order.
 physical_parameters = jnp.asarray(
-    [[1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0]],
-    dtype=jnp.float32,
+    [
+        [1e-2, 1e-3, 16.5, 1e2, 1.3, 500.0, 30.0, 0.055, 1e2, 232.0, 0.0, 0.0],
+    ],
+    dtype=jnp.float32,  # Match the float32 dtype used during training.
 )
-z = jnp.linspace(6.0, 27.0, 50)
-k = jnp.asarray(np.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50), dtype=jnp.float32)
 
+# Choose the redshift coordinates where the power spectrum should be predicted.
+z = jnp.linspace(6.0, 27.0, 50)
+
+# Choose the physical k coordinates using logarithmic spacing in k.
+k = jnp.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50, dtype=jnp.float32)
+
+# Predict Delta21 and return an array with shape (n_sims, n_z, n_k).
 delta21 = predict_delta21(package, physical_parameters, z, k)
+
+# Inspect the prediction shape.
 print(delta21.shape)
 ```
 
