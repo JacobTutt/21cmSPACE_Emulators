@@ -22,6 +22,31 @@ subsets:
 This split is handled in the data preparation workflow before the arrays are
 passed into the shared trainer.
 
+```python
+from jax_emu.data_preprocessing import split_simulations
+
+(
+    train_parameters,
+    validation_parameters,
+    test_parameters,
+    train_targets,
+    validation_targets,
+    test_targets,
+) = split_simulations(
+    parameters,
+    targets,
+    train_size=0.6,
+    validation_size=0.2,
+    test_size=0.2,
+    random_state=42,
+)
+```
+
+The split is applied at the simulation level, so each simulation's parameters
+and target array remain paired. Later preprocessing steps can resample, scale,
+and flatten these arrays into the row-wise feature and target matrices used by
+`train_mlp_regressor`.
+
 ## Training Parameters
 
 `train_mlp_regressor` is the shared training entry point. It receives an
