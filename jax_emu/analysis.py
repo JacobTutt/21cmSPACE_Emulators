@@ -325,14 +325,14 @@ def _summary_int(summary: dict[str, Any] | None, key: str) -> int | None:
 
 def _import_pyplot() -> Any:
     """
-    Import matplotlib lazily so non-plotting code has no plotting dependency.
+    Import matplotlib lazily so non-plotting code avoids pyplot startup cost.
     """
     try:
         import matplotlib.pyplot as plt
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "Plotting loss curves requires matplotlib. Install the plotting extra "
-            "with `python -m pip install -e '.[cpu,plot]'` or include `plot` with "
-            "your chosen JAX backend extra."
+            "Plotting loss curves requires matplotlib, which is a default project "
+            "dependency. Reinstall the package with your chosen JAX backend extra, "
+            "for example `python -m pip install -e '.[cpu]'`."
         ) from exc
     return plt
