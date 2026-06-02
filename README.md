@@ -119,12 +119,6 @@ python -m pip install -U pip
 python -m pip install -e ".[cpu,dev]"
 ```
 
-For plotting-only environments, include the optional plotting extra:
-
-```bash
-python -m pip install -e ".[cpu,plot]"
-```
-
 ---
 
 **Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Examples](docs/examples.md)
