@@ -20,6 +20,9 @@ cpu = [
   "optax",
   "orbax-checkpoint",
 ]
+plot = [
+  "matplotlib",
+]
 cuda12 = [
   "flax",
   "jax[cuda12]",
@@ -33,6 +36,7 @@ cuda13 = [
   "orbax-checkpoint",
 ]
 dev = [
+  "matplotlib",
   "pytest",
 ]
 

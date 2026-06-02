@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import jax
 import jax.numpy as jnp
 
+from jax_emu.analysis import loss_curves_from_history, loss_curves_from_package
 from jax_emu.utils.checkpointing import CheckpointMetadata, load, save
 from jax_emu.data_preprocessing.scaling import (
     FeatureScaler,
@@ -14,6 +17,7 @@ from jax_emu.data_preprocessing.scaling import (
 )
 from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from jax_emu.data_preprocessing.transforms import apply_transform, invert_transform
+from jax_emu.training import TrainingHistory
 from flax import nnx
 
 from jax_emu.architectures.mlp import DenseMLP
@@ -143,3 +147,71 @@ def test_checkpoint_package_round_trip(tmp_path) -> None:
     assert loaded["metadata"].model_name == "t21-test"
     assert loaded["hyperparams"]["hidden_features"] == 8
     assert loaded["metadata"].target_scaling is not None
+
+
+def test_loss_curves_from_history() -> None:
+    history = TrainingHistory(
+        train_losses=[2.0, 1.0],
+        validation_losses=[2.5, 1.5],
+        best_epoch=1,
+        best_validation_loss=1.5,
+    )
+    curves = loss_curves_from_history(history, test_loss=1.25, model_name="demo")
+
+    assert curves.train_losses == [2.0, 1.0]
+    assert curves.validation_losses == [2.5, 1.5]
+    assert curves.test_loss == 1.25
+    assert curves.best_epoch == 1
+    assert curves.best_validation_loss == 1.5
+    assert curves.model_name == "demo"
+
+
+def test_loss_curves_from_package_reads_adjacent_summary(tmp_path) -> None:
+    spec = t21_spec()
+    metadata = CheckpointMetadata(
+        model_name="t21-loss-demo",
+        package_version="0.1.0",
+        emulator_spec=spec,
+        input_scaling=(
+            FeatureScaling.from_values("z", np.array([6.0, 20.0]), "identity"),
+            FeatureScaling.from_values("log10fstarII", np.array([-2.0, -1.0]), "zscore"),
+        ),
+        target_scaling=None,
+        training_config={"epochs": 2},
+    )
+    model = DenseMLP(
+        in_features=len(spec.input_feature_names()),
+        hidden_features=8,
+        hidden_layers=2,
+        rngs=nnx.Rngs(jax.random.PRNGKey(0)),
+    )
+    package_path = save(
+        tmp_path / "loss_demo",
+        model,
+        train_losses=[3.0, 2.0],
+        val_losses=[4.0, 1.5],
+        loss="mse",
+        metadata=metadata,
+        epochs=2,
+        patience=1,
+        learning_rate=1e-3,
+        weight_decay=1e-4,
+    )
+    package_path.with_suffix(".summary.json").write_text(
+        json.dumps(
+            {
+                "test_loss": 1.25,
+                "best_epoch": 1,
+                "best_validation_loss": 1.5,
+            }
+        )
+    )
+
+    curves = loss_curves_from_package(package_path)
+
+    assert curves.train_losses == [3.0, 2.0]
+    assert curves.validation_losses == [4.0, 1.5]
+    assert curves.test_loss == 1.25
+    assert curves.best_epoch == 1
+    assert curves.best_validation_loss == 1.5
+    assert curves.model_name == "t21-loss-demo"

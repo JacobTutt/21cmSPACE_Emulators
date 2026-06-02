@@ -72,6 +72,39 @@ update the network, the trainer records two losses:
 The training loss shows whether the network is fitting the training set. The
 validation loss shows whether that fit generalises to unseen simulations.
 
+## Loss Curve Analysis
+
+The trainer returns a `TrainingHistory` object containing the training and
+validation loss curves. After evaluating the held-out test set, these can be
+plotted directly:
+
+```python
+from jax_emu.analysis import plot_training_history
+
+plot_training_history(
+    history,
+    test_loss=test_loss,
+    model_name="delta21",
+    output_path="outputs/delta21_loss_curves.png",
+)
+```
+
+The same curves are also saved inside the `.nenemu` package. The high-level
+training workflows write an adjacent `.summary.json` file containing the final
+test loss, so a saved run can be inspected later:
+
+```python
+from jax_emu.analysis import plot_package_losses
+
+plot_package_losses(
+    "outputs/delta21_model.nenemu",
+    output_path="outputs/delta21_loss_curves.png",
+)
+```
+
+The plot shows training loss, validation loss, the best validation epoch when
+available, and the held-out test loss in the top-right corner.
+
 ## Efficient JAX Training
 
 The training code is designed for prepared arrays that may be too large to keep
