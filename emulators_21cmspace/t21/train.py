@@ -151,6 +151,9 @@ def run_synthetic_smoke(
         prefetch_batches=prefetch_batches,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
+        learning_rate_schedule=config.optimizer.learning_rate_schedule,
+        learning_rate_final_fraction=config.optimizer.learning_rate_final_fraction,
+        learning_rate_warmup_epochs=config.optimizer.learning_rate_warmup_epochs,
         seed=1,
     )
 
@@ -171,6 +174,9 @@ def train_t21_from_dataset_root(
     epochs: int | None = None,
     batch_size: int | None = None,
     prefetch_batches: int | None = None,
+    learning_rate_schedule: str | None = None,
+    learning_rate_final_fraction: float | None = None,
+    learning_rate_warmup_epochs: int | None = None,
     shuffle_seed: int = 42,
     log_every: int | None = 1,
 ) -> dict[str, Any]:
@@ -185,6 +191,8 @@ def train_t21_from_dataset_root(
         Optional custom path for the saved .nenemu package.
     epochs, batch_size, prefetch_batches:
         Overrides for training hyperparameters.
+    learning_rate_schedule, learning_rate_final_fraction, learning_rate_warmup_epochs:
+        Optional learning-rate scheduler overrides.
     shuffle_seed:
         Random seed for repeatability.
     log_every:
@@ -201,6 +209,21 @@ def train_t21_from_dataset_root(
         shuffle_seed=shuffle_seed,
     )
     config = t21_config()
+    schedule_name = (
+        config.optimizer.learning_rate_schedule
+        if learning_rate_schedule is None
+        else learning_rate_schedule
+    )
+    schedule_final_fraction = (
+        config.optimizer.learning_rate_final_fraction
+        if learning_rate_final_fraction is None
+        else learning_rate_final_fraction
+    )
+    schedule_warmup_epochs = (
+        config.optimizer.learning_rate_warmup_epochs
+        if learning_rate_warmup_epochs is None
+        else learning_rate_warmup_epochs
+    )
 
     # 2. Build the neural network architecture.
     model = DenseMLP(
@@ -220,6 +243,9 @@ def train_t21_from_dataset_root(
         prepared.validation_targets,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
+        learning_rate_schedule=schedule_name,
+        learning_rate_final_fraction=schedule_final_fraction,
+        learning_rate_warmup_epochs=schedule_warmup_epochs,
         batch_size=config.training.batch_size if batch_size is None else batch_size,
         epochs=config.training.epochs if epochs is None else epochs,
         prefetch_batches=(
@@ -281,6 +307,9 @@ def train_t21_from_dataset_root(
         patience=config.training.early_stopping_patience if config.training.early_stop else None,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
+        learning_rate_schedule=schedule_name,
+        learning_rate_final_fraction=schedule_final_fraction,
+        learning_rate_warmup_epochs=schedule_warmup_epochs,
     )
 
     # 6. Generate and return a training summary.
@@ -346,6 +375,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefetch-batches",
         type=int,
         help="Number of mini-batches to keep queued on the JAX device.",
+    )
+    parser.add_argument(
+        "--learning-rate-schedule",
+        choices=["constant", "cosine", "warmup_cosine", "exponential_decay"],
+        help="Learning-rate schedule override.",
+    )
+    parser.add_argument(
+        "--learning-rate-final-fraction",
+        type=float,
+        help="Final learning-rate fraction for decay schedules.",
+    )
+    parser.add_argument(
+        "--learning-rate-warmup-epochs",
+        type=int,
+        help="Warmup epoch count for warmup_cosine.",
     )
     parser.add_argument(
         "--log-every",
@@ -417,6 +461,9 @@ def main() -> None:
             epochs=args.epochs,
             batch_size=args.batch_size,
             prefetch_batches=args.prefetch_batches,
+            learning_rate_schedule=args.learning_rate_schedule,
+            learning_rate_final_fraction=args.learning_rate_final_fraction,
+            learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
             shuffle_seed=args.shuffle_seed,
             log_every=args.log_every,
         )

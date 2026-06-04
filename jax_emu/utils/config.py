@@ -78,11 +78,20 @@ class OptimizerConfig:
         Initial step size for weight updates.
     weight_decay:
         Regularization parameter to prevent overfitting.
+    learning_rate_schedule:
+        Schedule used to change the learning rate during training.
+    learning_rate_final_fraction:
+        Final learning-rate fraction for decay schedules.
+    learning_rate_warmup_epochs:
+        Number of warmup epochs used by the warmup cosine schedule.
     """
 
     optimizer_name: str = "Adam"
     learning_rate: float = 1e-3
     weight_decay: float = 1e-4
+    learning_rate_schedule: str = "constant"
+    learning_rate_final_fraction: float = 0.1
+    learning_rate_warmup_epochs: int = 0
 
 
 # Training Workflow Configuration

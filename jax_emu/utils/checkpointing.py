@@ -276,6 +276,9 @@ def save(
     patience: int | None = None,
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
+    learning_rate_schedule: str = "constant",
+    learning_rate_final_fraction: float = 0.1,
+    learning_rate_warmup_epochs: int = 0,
 ) -> Path:
     """
     Save a trained emulator to an Orbax checkpoint manager directory.
@@ -306,6 +309,12 @@ def save(
         The learning rate used for training.
     weight_decay:
         The weight decay (L2 regularization) parameter used.
+    learning_rate_schedule:
+        The learning-rate schedule used during training.
+    learning_rate_final_fraction:
+        The final learning-rate fraction used by decay schedules.
+    learning_rate_warmup_epochs:
+        The warmup length used by the warmup cosine schedule.
 
     Returns
     -------
@@ -340,6 +349,9 @@ def save(
             "patience": patience,
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
+            "learning_rate_schedule": learning_rate_schedule,
+            "learning_rate_final_fraction": learning_rate_final_fraction,
+            "learning_rate_warmup_epochs": learning_rate_warmup_epochs,
         },
         "loss": loss,
         "train_losses": train_losses,

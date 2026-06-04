@@ -27,6 +27,9 @@ settings:
 | `batch_size` | Number of rows used in each optimizer update. |
 | `learning_rate` | Optimizer step size. |
 | `weight_decay` | AdamW regularization term used to penalize large weights. |
+| `learning_rate_schedule` | Rule used to change the learning rate during training. |
+| `learning_rate_final_fraction` | Final learning-rate fraction for decay schedules. |
+| `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
 ## The Training Step
@@ -55,8 +58,50 @@ model, history = train_mlp_regressor(
     batch_size=1024,
     learning_rate=1e-3,
     weight_decay=1e-4,
+    learning_rate_schedule="warmup_cosine",
+    learning_rate_final_fraction=0.05,
+    learning_rate_warmup_epochs=5,
     seed=42,
 )
+```
+
+## Learning-Rate Schedules
+
+A learning-rate schedule changes the optimizer step size during training. The
+default is `constant`, which keeps the previous behaviour.
+
+| Schedule | Behaviour |
+| :--- | :--- |
+| `constant` | Use the same learning rate for every optimizer step. |
+| `cosine` | Smoothly decay from the initial learning rate to a final fraction. |
+| `warmup_cosine` | Ramp up from zero, then apply cosine decay. |
+| `exponential_decay` | Decay multiplicatively toward the final fraction. |
+
+![Learning-rate scheduler curves](assets/learning-rate-schedules.svg)
+
+Schedules are evaluated per mini-batch update, not only once per epoch:
+
+```python
+from jax_emu.training import build_learning_rate_schedule
+
+schedule = build_learning_rate_schedule(
+    learning_rate=1e-3,
+    schedule_name="cosine",
+    steps_per_epoch=100,
+    epochs=1000,
+    final_fraction=0.05,
+)
+```
+
+The high-level training commands expose the same scheduler settings:
+
+```bash
+21cmspace-delta21-train \
+  --dataset-root /path/to/21cmspace/data \
+  --output outputs/delta21_model.nenemu \
+  --learning-rate-schedule warmup_cosine \
+  --learning-rate-final-fraction 0.05 \
+  --learning-rate-warmup-epochs 5
 ```
 
 ## Evaluation Metrics

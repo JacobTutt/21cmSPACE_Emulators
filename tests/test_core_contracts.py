@@ -17,7 +17,7 @@ from jax_emu.data_preprocessing.scaling import (
 )
 from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from jax_emu.data_preprocessing.transforms import apply_transform, invert_transform
-from jax_emu.training import TrainingHistory
+from jax_emu.training import TrainingHistory, build_learning_rate_schedule
 from flax import nnx
 
 from jax_emu.architectures.mlp import DenseMLP
@@ -215,3 +215,56 @@ def test_loss_curves_from_package_reads_adjacent_summary(tmp_path) -> None:
     assert curves.best_epoch == 1
     assert curves.best_validation_loss == 1.5
     assert curves.model_name == "t21-loss-demo"
+
+
+def test_constant_learning_rate_schedule() -> None:
+    schedule = build_learning_rate_schedule(
+        learning_rate=1e-3,
+        schedule_name="constant",
+        steps_per_epoch=10,
+        epochs=5,
+    )
+
+    assert np.isclose(float(schedule(0)), 1e-3)
+    assert np.isclose(float(schedule(49)), 1e-3)
+
+
+def test_cosine_learning_rate_schedule_reaches_final_fraction() -> None:
+    schedule = build_learning_rate_schedule(
+        learning_rate=1e-3,
+        schedule_name="cosine",
+        steps_per_epoch=10,
+        epochs=5,
+        final_fraction=0.1,
+    )
+
+    assert np.isclose(float(schedule(0)), 1e-3)
+    assert float(schedule(50)) <= 1.1e-4
+
+
+def test_warmup_cosine_learning_rate_schedule_warms_up() -> None:
+    schedule = build_learning_rate_schedule(
+        learning_rate=1e-3,
+        schedule_name="warmup_cosine",
+        steps_per_epoch=10,
+        epochs=5,
+        final_fraction=0.1,
+        warmup_epochs=1,
+    )
+
+    assert np.isclose(float(schedule(0)), 0.0)
+    assert np.isclose(float(schedule(10)), 1e-3)
+    assert float(schedule(50)) <= 1.1e-4
+
+
+def test_exponential_learning_rate_schedule_reaches_final_fraction() -> None:
+    schedule = build_learning_rate_schedule(
+        learning_rate=1e-3,
+        schedule_name="exponential_decay",
+        steps_per_epoch=10,
+        epochs=5,
+        final_fraction=0.1,
+    )
+
+    assert np.isclose(float(schedule(0)), 1e-3)
+    assert np.isclose(float(schedule(49)), 1e-4)

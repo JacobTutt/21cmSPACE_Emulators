@@ -17,6 +17,7 @@ from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -62,6 +63,95 @@ def _preserve_device_array(array: np.ndarray | jax.Array) -> np.ndarray | jax.Ar
     if isinstance(array, jax.Array):
         return array
     return np.asarray(array)
+
+
+# Learning-Rate Schedules
+# -----------------------
+# Builds the step-wise learning-rate rule used by the Optax optimiser.
+
+def _count_steps_per_epoch(n_samples: int, batch_size: int) -> int:
+    """
+    Return the number of fixed-shape mini-batches in one epoch.
+    """
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1.")
+    return max(int(np.ceil(n_samples / batch_size)), 1)
+
+
+def build_learning_rate_schedule(
+    *,
+    learning_rate: float,
+    schedule_name: str = "constant",
+    steps_per_epoch: int,
+    epochs: int,
+    final_fraction: float = 0.1,
+    warmup_epochs: int = 0,
+) -> Callable[[jax.Array], jax.Array]:
+    """
+    Build the learning-rate schedule used by AdamW.
+
+    The returned schedule is evaluated once per optimiser update, so epoch
+    counts are converted into mini-batch step counts before constructing the
+    schedule.
+    """
+    # Basic validation keeps scheduler configuration errors visible at startup.
+    if learning_rate <= 0:
+        raise ValueError("learning_rate must be positive.")
+    if steps_per_epoch < 1:
+        raise ValueError("steps_per_epoch must be at least 1.")
+    if epochs < 1:
+        raise ValueError("epochs must be at least 1.")
+    if final_fraction <= 0 or final_fraction > 1:
+        raise ValueError("final_fraction must be in the interval (0, 1].")
+    if warmup_epochs < 0:
+        raise ValueError("warmup_epochs must be non-negative.")
+
+    # Convert epoch-level settings into step-level values.
+    schedule = schedule_name.lower()
+    total_steps = max(steps_per_epoch * epochs, 1)
+    warmup_steps = min(warmup_epochs * steps_per_epoch, total_steps - 1)
+    end_value = learning_rate * final_fraction
+
+    if schedule == "constant":
+        return optax.constant_schedule(learning_rate)
+
+    if schedule == "cosine":
+        return optax.cosine_decay_schedule(
+            init_value=learning_rate,
+            decay_steps=total_steps,
+            alpha=final_fraction,
+        )
+
+    if schedule == "warmup_cosine":
+        if warmup_steps == 0:
+            return optax.cosine_decay_schedule(
+                init_value=learning_rate,
+                decay_steps=total_steps,
+                alpha=final_fraction,
+            )
+        return optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=learning_rate,
+            warmup_steps=warmup_steps,
+            decay_steps=total_steps,
+            end_value=end_value,
+        )
+
+    if schedule == "exponential_decay":
+
+        def exponential_schedule(step: jax.Array) -> jax.Array:
+            """
+            Decay smoothly from the initial learning rate to the final fraction.
+            """
+            progress = jnp.minimum(step / max(total_steps - 1, 1), 1.0)
+            return learning_rate * final_fraction**progress
+
+        return exponential_schedule
+
+    raise ValueError(
+        "learning_rate_schedule must be one of "
+        "'constant', 'cosine', 'warmup_cosine', or 'exponential_decay'."
+    )
 
 
 # Mini-Batch Transfer
@@ -186,6 +276,9 @@ def train_mlp_regressor(
     *,
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
+    learning_rate_schedule: str = "constant",
+    learning_rate_final_fraction: float = 0.1,
+    learning_rate_warmup_epochs: int = 0,
     batch_size: int = 256,
     epochs: int = 50,
     seed: int = 0,
@@ -208,6 +301,12 @@ def train_mlp_regressor(
         Host target arrays with shape (n_samples,).
     learning_rate, weight_decay:
         Optax AdamW parameters.
+    learning_rate_schedule:
+        Schedule used for the AdamW learning rate.
+    learning_rate_final_fraction:
+        Final learning-rate fraction for decay schedules.
+    learning_rate_warmup_epochs:
+        Warmup length for the warmup cosine schedule.
     batch_size:
         Number of training examples processed per gradient update.
     epochs:
@@ -236,10 +335,21 @@ def train_mlp_regressor(
     # Initialise the random number generator for host-side batch shuffling.
     rng = np.random.default_rng(seed)
 
+    # Build the step-wise learning-rate schedule for the optimiser.
+    steps_per_epoch = _count_steps_per_epoch(len(train_features), batch_size)
+    learning_rate_or_schedule = build_learning_rate_schedule(
+        learning_rate=learning_rate,
+        schedule_name=learning_rate_schedule,
+        steps_per_epoch=steps_per_epoch,
+        epochs=epochs,
+        final_fraction=learning_rate_final_fraction,
+        warmup_epochs=learning_rate_warmup_epochs,
+    )
+
     # Initialise the AdamW optimiser for all trainable NNX parameters.
     optimizer = nnx.Optimizer(
         model,
-        optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay),
+        optax.adamw(learning_rate=learning_rate_or_schedule, weight_decay=weight_decay),
         wrt=nnx.Param,
     )
 
