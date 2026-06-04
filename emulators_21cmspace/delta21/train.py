@@ -32,7 +32,7 @@ from emulators_21cmspace.delta21.data import (
 )
 from emulators_21cmspace.delta21.model import delta21_config
 from jax_emu.utils.checkpointing import CheckpointMetadata, save
-from jax_emu.training.trainer import (
+from jax_emu.training import (
     evaluate_mlp_regressor,
     train_mlp_regressor,
 )

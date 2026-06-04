@@ -48,7 +48,7 @@ For each mini-batch, the trainer runs a compiled JAX/NNX training step:
 ## Code Example
 
 ```python
-from jax_emu.training.trainer import train_mlp_regressor
+from jax_emu.training import train_mlp_regressor
 
 model, history = train_mlp_regressor(
     model,

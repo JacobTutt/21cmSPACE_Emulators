@@ -13,12 +13,10 @@ feature and target arrays. It handles:
 from __future__ import annotations
 
 import copy
-import signal
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +25,8 @@ import optax
 from flax import nnx
 
 from jax_emu.architectures.mlp import DenseMLP
+from jax_emu.training.scheduler import build_learning_rate_schedule, count_steps_per_epoch
+from jax_emu.training.shutdown import GracefulShutdown, time_limit_reached
 
 
 # Training History
@@ -65,224 +65,6 @@ def _preserve_device_array(array: np.ndarray | jax.Array) -> np.ndarray | jax.Ar
     if isinstance(array, jax.Array):
         return array
     return np.asarray(array)
-
-
-# Graceful Shutdown
-# -----------------
-# Lets long Slurm jobs stop cleanly and return to the normal checkpoint save path.
-
-class GracefulShutdown:
-    """
-    Track whether the training loop should stop after the current epoch.
-
-    This is used for Slurm jobs and other long runs. Signal handlers should stay
-    lightweight, so the handler only records that a stop was requested. The
-    training loop checks this flag after each epoch and then exits normally.
-    """
-
-    def __init__(self, *, log_prefix: str) -> None:
-        """
-        Initialise the shutdown tracker.
-
-        Parameters
-        ----------
-        log_prefix:
-            Label used when printing training progress and shutdown messages.
-        """
-        self.log_prefix = log_prefix
-        self.stop_requested = False
-        self.reason: str | None = None
-        self._previous_handlers: dict[int, object] = {}
-
-    def __enter__(self) -> "GracefulShutdown":
-        """
-        Register signal handlers for clean training shutdown.
-        """
-        # Catch the usual Slurm termination signal and Ctrl-C style interrupts.
-        # Some Slurm scripts may also request SIGUSR1 before wall time expires.
-        signal_numbers = [signal.SIGTERM, signal.SIGINT]
-        if hasattr(signal, "SIGUSR1"):
-            signal_numbers.append(signal.SIGUSR1)
-
-        for signal_number in signal_numbers:
-            try:
-                self._previous_handlers[signal_number] = signal.getsignal(signal_number)
-                signal.signal(signal_number, self._handle_signal)
-            except (AttributeError, ValueError):
-                # Signal registration is only valid in the main Python thread.
-                continue
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        """
-        Restore the signal handlers that were active before training.
-        """
-        for signal_number, handler in self._previous_handlers.items():
-            signal.signal(signal_number, handler)
-
-    def _handle_signal(self, signal_number: int, _frame: object) -> None:
-        """
-        Request a clean stop after the current epoch.
-        """
-        self.stop_requested = True
-        self.reason = f"received {signal.Signals(signal_number).name}"
-        print(
-            f"[{self.log_prefix}] {self.reason}; stopping after current epoch.",
-            flush=True,
-        )
-
-
-def _time_limit_reached(
-    *,
-    training_start: float,
-    max_runtime_seconds: float | None,
-    shutdown_margin_seconds: float,
-    epoch_seconds: list[float],
-) -> bool:
-    """
-    Check whether there is enough wall time left for another epoch.
-
-    The check is conservative: it uses the slowest recent epoch and adds a
-    margin for held-out evaluation and checkpoint writing after training returns.
-    """
-    if max_runtime_seconds is None:
-        return False
-    if max_runtime_seconds <= 0:
-        raise ValueError("max_runtime_seconds must be positive when provided.")
-    if shutdown_margin_seconds < 0:
-        raise ValueError("shutdown_margin_seconds must be non-negative.")
-
-    elapsed = perf_counter() - training_start
-    recent_epoch_seconds = epoch_seconds[-3:] if epoch_seconds else [0.0]
-    next_epoch_estimate = max(recent_epoch_seconds)
-    return elapsed + next_epoch_estimate + shutdown_margin_seconds >= max_runtime_seconds
-
-
-# Learning-Rate Schedules
-# -----------------------
-# Builds the step-wise learning-rate rule used by the Optax optimiser.
-
-def _count_steps_per_epoch(n_samples: int, batch_size: int) -> int:
-    """
-    Return the number of fixed-shape mini-batches in one epoch.
-    """
-    if batch_size < 1:
-        raise ValueError("batch_size must be at least 1.")
-    return max(int(np.ceil(n_samples / batch_size)), 1)
-
-
-def build_learning_rate_schedule(
-    *,
-    learning_rate: float,
-    schedule_name: str = "constant",
-    steps_per_epoch: int,
-    epochs: int,
-    final_fraction: float = 0.1,
-    warmup_epochs: int = 0,
-) -> Callable[[jax.Array], jax.Array]:
-    """
-    Build the learning-rate schedule used by AdamW.
-
-    The returned schedule is evaluated once per optimiser update, so epoch
-    counts are converted into mini-batch step counts before constructing the
-    schedule.
-
-    Supported schedules
-    -------------------
-    constant:
-        Uses `learning_rate` for every optimizer update. Ignores
-        `final_fraction` and `warmup_epochs`.
-    cosine:
-        Starts at `learning_rate` and decays smoothly to
-        `learning_rate * final_fraction` over `epochs`.
-    warmup_cosine:
-        Starts at zero, increases to `learning_rate` over `warmup_epochs`,
-        then decays to `learning_rate * final_fraction` over `epochs`.
-    exponential_decay:
-        Starts at `learning_rate` and decays multiplicatively to
-        `learning_rate * final_fraction` over `epochs`.
-
-    Parameters
-    ----------
-    learning_rate:
-        Initial or peak learning rate used by the schedule.
-    schedule_name:
-        Schedule type: `constant`, `cosine`, `warmup_cosine`, or
-        `exponential_decay`.
-    steps_per_epoch:
-        Number of optimizer updates in one training epoch.
-    epochs:
-        Number of epochs over which the schedule is defined.
-    final_fraction:
-        Final learning-rate fraction for decay schedules. For example, `0.05`
-        means the final learning rate is 5 percent of `learning_rate`.
-    warmup_epochs:
-        Number of epochs used to ramp from zero to `learning_rate` for
-        `warmup_cosine`. Ignored by the other schedules.
-
-    Returns
-    -------
-    Callable[[jax.Array], jax.Array]
-        A step-indexed Optax-compatible learning-rate schedule.
-    """
-    # Basic validation keeps scheduler configuration errors visible at startup.
-    if learning_rate <= 0:
-        raise ValueError("learning_rate must be positive.")
-    if steps_per_epoch < 1:
-        raise ValueError("steps_per_epoch must be at least 1.")
-    if epochs < 1:
-        raise ValueError("epochs must be at least 1.")
-    if final_fraction <= 0 or final_fraction > 1:
-        raise ValueError("final_fraction must be in the interval (0, 1].")
-    if warmup_epochs < 0:
-        raise ValueError("warmup_epochs must be non-negative.")
-
-    # Convert epoch-level settings into step-level values.
-    schedule = schedule_name.lower()
-    total_steps = max(steps_per_epoch * epochs, 1)
-    warmup_steps = min(warmup_epochs * steps_per_epoch, total_steps - 1)
-    end_value = learning_rate * final_fraction
-
-    if schedule == "constant":
-        return optax.constant_schedule(learning_rate)
-
-    if schedule == "cosine":
-        return optax.cosine_decay_schedule(
-            init_value=learning_rate,
-            decay_steps=total_steps,
-            alpha=final_fraction,
-        )
-
-    if schedule == "warmup_cosine":
-        if warmup_steps == 0:
-            return optax.cosine_decay_schedule(
-                init_value=learning_rate,
-                decay_steps=total_steps,
-                alpha=final_fraction,
-            )
-        return optax.warmup_cosine_decay_schedule(
-            init_value=0.0,
-            peak_value=learning_rate,
-            warmup_steps=warmup_steps,
-            decay_steps=total_steps,
-            end_value=end_value,
-        )
-
-    if schedule == "exponential_decay":
-
-        def exponential_schedule(step: jax.Array) -> jax.Array:
-            """
-            Decay smoothly from the initial learning rate to the final fraction.
-            """
-            progress = jnp.minimum(step / max(total_steps - 1, 1), 1.0)
-            return learning_rate * final_fraction**progress
-
-        return exponential_schedule
-
-    raise ValueError(
-        "learning_rate_schedule must be one of "
-        "'constant', 'cosine', 'warmup_cosine', or 'exponential_decay'."
-    )
 
 
 # Mini-Batch Transfer
@@ -480,7 +262,7 @@ def train_mlp_regressor(
     rng = np.random.default_rng(seed)
 
     # Build the step-wise learning-rate schedule for the optimiser.
-    steps_per_epoch = _count_steps_per_epoch(len(train_features), batch_size)
+    steps_per_epoch = count_steps_per_epoch(len(train_features), batch_size)
     learning_rate_or_schedule = build_learning_rate_schedule(
         learning_rate=learning_rate,
         schedule_name=learning_rate_schedule,
@@ -632,7 +414,7 @@ def train_mlp_regressor(
                 break
 
             # Stop if the next epoch may leave too little time to evaluate and save.
-            if _time_limit_reached(
+            if time_limit_reached(
                 training_start=training_start,
                 max_runtime_seconds=max_runtime_seconds,
                 shutdown_margin_seconds=shutdown_margin_seconds,

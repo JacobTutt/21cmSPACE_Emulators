@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from jax_emu.training.trainer import TrainingHistory
+    from jax_emu.training import TrainingHistory
 
 
 __all__ = [
