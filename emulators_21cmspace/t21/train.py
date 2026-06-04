@@ -177,6 +177,8 @@ def train_t21_from_dataset_root(
     learning_rate_schedule: str | None = None,
     learning_rate_final_fraction: float | None = None,
     learning_rate_warmup_epochs: int | None = None,
+    max_runtime_seconds: float | None = None,
+    shutdown_margin_seconds: float | None = None,
     shuffle_seed: int = 42,
     log_every: int | None = 1,
 ) -> dict[str, Any]:
@@ -205,6 +207,10 @@ def train_t21_from_dataset_root(
     learning_rate_warmup_epochs:
         Optional number of warmup epochs for `warmup_cosine`. Ignored by the
         other schedules.
+    max_runtime_seconds:
+        Optional wall-clock training budget for graceful shutdown.
+    shutdown_margin_seconds:
+        Optional time reserved for test evaluation and model saving.
     shuffle_seed:
         Random seed for repeatability.
     log_every:
@@ -270,6 +276,16 @@ def train_t21_from_dataset_root(
             config.training.early_stopping_patience if config.training.early_stop else None
         ),
         early_stopping_min_delta=config.training.early_stopping_min_delta,
+        max_runtime_seconds=(
+            config.training.terminate_time_seconds
+            if max_runtime_seconds is None
+            else max_runtime_seconds
+        ),
+        shutdown_margin_seconds=(
+            config.training.shutdown_margin_seconds
+            if shutdown_margin_seconds is None
+            else shutdown_margin_seconds
+        ),
         log_every=log_every,
         log_prefix="t21",
     )
@@ -305,6 +321,16 @@ def train_t21_from_dataset_root(
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
             "shuffle_seed": shuffle_seed,
+            "max_runtime_seconds": (
+                config.training.terminate_time_seconds
+                if max_runtime_seconds is None
+                else max_runtime_seconds
+            ),
+            "shutdown_margin_seconds": (
+                config.training.shutdown_margin_seconds
+                if shutdown_margin_seconds is None
+                else shutdown_margin_seconds
+            ),
         },
     )
     # Write the weights and config to disk.
@@ -339,6 +365,17 @@ def train_t21_from_dataset_root(
         "final_validation_loss": history.validation_losses[-1],
         "best_epoch": history.best_epoch,
         "best_validation_loss": history.best_validation_loss,
+        "training_stop_reason": history.stopped_reason,
+        "max_runtime_seconds": (
+            config.training.terminate_time_seconds
+            if max_runtime_seconds is None
+            else max_runtime_seconds
+        ),
+        "shutdown_margin_seconds": (
+            config.training.shutdown_margin_seconds
+            if shutdown_margin_seconds is None
+            else shutdown_margin_seconds
+        ),
         "test_loss": test_loss,
         "trained_model_type": type(model).__name__,
     }
@@ -402,6 +439,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--learning-rate-warmup-epochs",
         type=int,
         help="Warmup epoch count for warmup_cosine only.",
+    )
+    parser.add_argument(
+        "--max-runtime-seconds",
+        type=float,
+        help="Stop cleanly when the training wall-clock budget is nearly exhausted.",
+    )
+    parser.add_argument(
+        "--shutdown-margin-seconds",
+        type=float,
+        help="Seconds reserved after training for test evaluation and checkpoint saving.",
     )
     parser.add_argument(
         "--log-every",
@@ -476,6 +523,8 @@ def main() -> None:
             learning_rate_schedule=args.learning_rate_schedule,
             learning_rate_final_fraction=args.learning_rate_final_fraction,
             learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
+            max_runtime_seconds=args.max_runtime_seconds,
+            shutdown_margin_seconds=args.shutdown_margin_seconds,
             shuffle_seed=args.shuffle_seed,
             log_every=args.log_every,
         )

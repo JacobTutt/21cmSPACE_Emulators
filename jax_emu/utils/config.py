@@ -119,7 +119,9 @@ class TrainingConfig:
     save_after_epochs:
         Frequency (in epochs) at which checkpoints are written to disk.
     terminate_time_seconds:
-        Hard time limit for training before forced termination.
+        Optional wall-clock training budget used for graceful shutdown.
+    shutdown_margin_seconds:
+        Time reserved at the end of a timed run for evaluation and saving.
     profiling:
         Whether to enable performance profiling.
     prefetch_batches:
@@ -136,7 +138,8 @@ class TrainingConfig:
     batch_size: int
     loss_name: str = "MSELoss"
     save_after_epochs: int = 5
-    terminate_time_seconds: int = 3600 * 2
+    terminate_time_seconds: int | None = None
+    shutdown_margin_seconds: int = 600
     profiling: bool = False
     prefetch_batches: int = 2
     early_stop: bool = False

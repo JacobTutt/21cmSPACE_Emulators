@@ -30,6 +30,8 @@ settings:
 | `learning_rate_schedule` | Schedule name: `constant`, `cosine`, `warmup_cosine`, or `exponential_decay`. |
 | `learning_rate_final_fraction` | Final fraction for decay schedules. `0.05` means final rate = `learning_rate * 0.05`. |
 | `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`; ignored by the other schedules. |
+| `max_runtime_seconds` | Optional wall-clock training budget for graceful shutdown on long jobs. |
+| `shutdown_margin_seconds` | Time reserved after training for test evaluation and checkpoint saving. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
 ## The Training Step
@@ -163,6 +165,38 @@ plot_package_losses(
 
 The plot shows training loss, validation loss, the best validation epoch when
 available, and the held-out test loss in the top-right corner.
+
+## Slurm Wall Time
+
+The high-level workflows save the `.nenemu` package after the trainer returns.
+For Slurm jobs, the trainer can therefore stop early when the wall-clock budget
+is nearly exhausted:
+
+```bash
+21cmspace-t21-train \
+  --dataset-root /path/to/21cmspace/data \
+  --output outputs/t21_model.nenemu \
+  --max-runtime-seconds 27000 \
+  --shutdown-margin-seconds 900
+```
+
+The trainer checks this after every epoch:
+
+```text
+elapsed time + estimated next epoch + shutdown margin >= max runtime
+-> stop training cleanly
+-> evaluate the test set
+-> save the checkpoint package
+```
+
+For Slurm scripts, also request an early signal before the wall limit:
+
+```bash
+#SBATCH --signal=B:TERM@900
+```
+
+This gives Python a chance to catch `SIGTERM`, finish the current epoch, and
+return to the normal save path. A hard kill cannot be handled safely.
 
 ## Efficient JAX Training
 

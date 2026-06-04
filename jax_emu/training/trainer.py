@@ -13,6 +13,7 @@ feature and target arrays. It handles:
 from __future__ import annotations
 
 import copy
+import signal
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ class TrainingHistory:
     validation_losses: list[float]
     best_epoch: int | None = None
     best_validation_loss: float | None = None
+    stopped_reason: str | None = None
 
 
 def clone_model_state(model: DenseMLP) -> nnx.State:
@@ -63,6 +65,97 @@ def _preserve_device_array(array: np.ndarray | jax.Array) -> np.ndarray | jax.Ar
     if isinstance(array, jax.Array):
         return array
     return np.asarray(array)
+
+
+# Graceful Shutdown
+# -----------------
+# Lets long Slurm jobs stop cleanly and return to the normal checkpoint save path.
+
+class GracefulShutdown:
+    """
+    Track whether the training loop should stop after the current epoch.
+
+    This is used for Slurm jobs and other long runs. Signal handlers should stay
+    lightweight, so the handler only records that a stop was requested. The
+    training loop checks this flag after each epoch and then exits normally.
+    """
+
+    def __init__(self, *, log_prefix: str) -> None:
+        """
+        Initialise the shutdown tracker.
+
+        Parameters
+        ----------
+        log_prefix:
+            Label used when printing training progress and shutdown messages.
+        """
+        self.log_prefix = log_prefix
+        self.stop_requested = False
+        self.reason: str | None = None
+        self._previous_handlers: dict[int, object] = {}
+
+    def __enter__(self) -> "GracefulShutdown":
+        """
+        Register signal handlers for clean training shutdown.
+        """
+        # Catch the usual Slurm termination signal and Ctrl-C style interrupts.
+        # Some Slurm scripts may also request SIGUSR1 before wall time expires.
+        signal_numbers = [signal.SIGTERM, signal.SIGINT]
+        if hasattr(signal, "SIGUSR1"):
+            signal_numbers.append(signal.SIGUSR1)
+
+        for signal_number in signal_numbers:
+            try:
+                self._previous_handlers[signal_number] = signal.getsignal(signal_number)
+                signal.signal(signal_number, self._handle_signal)
+            except (AttributeError, ValueError):
+                # Signal registration is only valid in the main Python thread.
+                continue
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        """
+        Restore the signal handlers that were active before training.
+        """
+        for signal_number, handler in self._previous_handlers.items():
+            signal.signal(signal_number, handler)
+
+    def _handle_signal(self, signal_number: int, _frame: object) -> None:
+        """
+        Request a clean stop after the current epoch.
+        """
+        self.stop_requested = True
+        self.reason = f"received {signal.Signals(signal_number).name}"
+        print(
+            f"[{self.log_prefix}] {self.reason}; stopping after current epoch.",
+            flush=True,
+        )
+
+
+def _time_limit_reached(
+    *,
+    training_start: float,
+    max_runtime_seconds: float | None,
+    shutdown_margin_seconds: float,
+    epoch_seconds: list[float],
+) -> bool:
+    """
+    Check whether there is enough wall time left for another epoch.
+
+    The check is conservative: it uses the slowest recent epoch and adds a
+    margin for held-out evaluation and checkpoint writing after training returns.
+    """
+    if max_runtime_seconds is None:
+        return False
+    if max_runtime_seconds <= 0:
+        raise ValueError("max_runtime_seconds must be positive when provided.")
+    if shutdown_margin_seconds < 0:
+        raise ValueError("shutdown_margin_seconds must be non-negative.")
+
+    elapsed = perf_counter() - training_start
+    recent_epoch_seconds = epoch_seconds[-3:] if epoch_seconds else [0.0]
+    next_epoch_estimate = max(recent_epoch_seconds)
+    return elapsed + next_epoch_estimate + shutdown_margin_seconds >= max_runtime_seconds
 
 
 # Learning-Rate Schedules
@@ -323,6 +416,8 @@ def train_mlp_regressor(
     early_stopping_patience: int | None = None,
     early_stopping_min_delta: float = 0.0,
     prefetch_batches: int = 2,
+    max_runtime_seconds: float | None = None,
+    shutdown_margin_seconds: float = 600.0,
     log_every: int | None = 1,
     log_prefix: str = "train_mlp_regressor",
 ) -> tuple[DenseMLP, TrainingHistory]:
@@ -362,6 +457,12 @@ def train_mlp_regressor(
         Minimum validation-loss decrease counted as an improvement.
     prefetch_batches:
         Number of mini-batches to keep queued on the JAX device.
+    max_runtime_seconds:
+        Optional wall-clock training budget. After each epoch, the trainer
+        checks whether another epoch is likely to fit inside this budget.
+    shutdown_margin_seconds:
+        Time reserved at the end of a timed run for test evaluation and model
+        saving after the training loop returns.
 
     Returns
     -------
@@ -444,84 +545,112 @@ def train_mlp_regressor(
     best_epoch: int | None = None
     best_state: nnx.State | None = None
     epochs_without_improvement = 0
+    epoch_seconds: list[float] = []
+    stopped_reason: str | None = None
+    training_start = perf_counter()
 
     # Main training loop.
-    for epoch in range(epochs):
-        epoch_start = perf_counter()
-        train_squared_error: list[jax.Array] = []
-        train_example_count = 0
-        # Within each epoch, the training set is reshuffeled and sliced into mini-batches.
-        # Each training step is then performed on each mini-batch
-        for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
-            train_features,
-            train_targets,
-            batch_size,
-            shuffle=True,
-            rng=rng,
-            prefetch_batches=prefetch_batches,
-        ):
-            # Train (update) the model on the mini-batch
-            loss = train_step(model, optimizer, batch_features, batch_targets, batch_mask)
-            train_squared_error.append(loss * real_examples)
-            train_example_count += real_examples
-        if not train_squared_error:
-            raise ValueError("Training data produced no mini-batches.")
-        train_loss = float(np.asarray(jax.device_get(train_squared_error), dtype=np.float64).sum())
-        train_loss /= max(train_example_count, 1)
-
-        # Evaluate on validation dataset after all model updates for this epoch are done.
-        validation_squared_error: list[jax.Array] = []
-        validation_example_count = 0
-        for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
-            validation_features,
-            validation_targets,
-            batch_size,
-            shuffle=False,
-            prefetch_batches=prefetch_batches,
-        ):
-            # Evaluate the model on the mini-batch without updating weights.
-            loss = eval_step(model, batch_features, batch_targets, batch_mask)
-            validation_squared_error.append(loss)
-            validation_example_count += real_examples
-        if not validation_squared_error:
-            raise ValueError("Validation data produced no mini-batches.")
-        validation_loss = float(
-            np.asarray(jax.device_get(validation_squared_error), dtype=np.float64).sum()
-        )
-        validation_loss /= max(validation_example_count, 1)
-
-        train_losses.append(train_loss)
-        validation_losses.append(validation_loss)
-
-        # Track the best validation state for early stopping.
-        if validation_loss < best_validation_loss - early_stopping_min_delta:
-            best_validation_loss = validation_loss
-            best_epoch = epoch
-            best_state = clone_model_state(model)
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-
-        # Optionally print progress.
-        if log_every is not None and ((epoch + 1) % log_every == 0):
-            message = (
-                f"[{log_prefix}] epoch={epoch + 1}/{epochs} "
-                f"train_loss={train_loss:.6e} val_loss={validation_loss:.6e}"
+    with GracefulShutdown(log_prefix=log_prefix) as shutdown:
+        for epoch in range(epochs):
+            epoch_start = perf_counter()
+            train_squared_error: list[jax.Array] = []
+            train_example_count = 0
+            # Within each epoch, the training set is reshuffeled and sliced into mini-batches.
+            # Each training step is then performed on each mini-batch
+            for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
+                train_features,
+                train_targets,
+                batch_size,
+                shuffle=True,
+                rng=rng,
+                prefetch_batches=prefetch_batches,
+            ):
+                # Train (update) the model on the mini-batch
+                loss = train_step(model, optimizer, batch_features, batch_targets, batch_mask)
+                train_squared_error.append(loss * real_examples)
+                train_example_count += real_examples
+            if not train_squared_error:
+                raise ValueError("Training data produced no mini-batches.")
+            train_loss = float(
+                np.asarray(jax.device_get(train_squared_error), dtype=np.float64).sum()
             )
-            if best_epoch is not None and best_validation_loss < float("inf"):
-                message += (
-                    f" best_epoch={best_epoch + 1} "
-                    f"best_val_loss={best_validation_loss:.6e}"
-                )
-            message += f" epoch_seconds={perf_counter() - epoch_start:.2f}"
-            print(message, flush=True)
+            train_loss /= max(train_example_count, 1)
 
-        # Stop if validation loss has not improved for the requested patience.
-        if (
-            early_stopping_patience is not None
-            and epochs_without_improvement >= early_stopping_patience
-        ):
-            break
+            # Evaluate on validation dataset after all model updates for this epoch are done.
+            validation_squared_error: list[jax.Array] = []
+            validation_example_count = 0
+            for batch_features, batch_targets, batch_mask, real_examples in _iter_device_batches(
+                validation_features,
+                validation_targets,
+                batch_size,
+                shuffle=False,
+                prefetch_batches=prefetch_batches,
+            ):
+                # Evaluate the model on the mini-batch without updating weights.
+                loss = eval_step(model, batch_features, batch_targets, batch_mask)
+                validation_squared_error.append(loss)
+                validation_example_count += real_examples
+            if not validation_squared_error:
+                raise ValueError("Validation data produced no mini-batches.")
+            validation_loss = float(
+                np.asarray(jax.device_get(validation_squared_error), dtype=np.float64).sum()
+            )
+            validation_loss /= max(validation_example_count, 1)
+
+            train_losses.append(train_loss)
+            validation_losses.append(validation_loss)
+
+            # Track the best validation state for early stopping.
+            if validation_loss < best_validation_loss - early_stopping_min_delta:
+                best_validation_loss = validation_loss
+                best_epoch = epoch
+                best_state = clone_model_state(model)
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+
+            elapsed_epoch_seconds = perf_counter() - epoch_start
+            epoch_seconds.append(elapsed_epoch_seconds)
+
+            # Optionally print progress.
+            if log_every is not None and ((epoch + 1) % log_every == 0):
+                message = (
+                    f"[{log_prefix}] epoch={epoch + 1}/{epochs} "
+                    f"train_loss={train_loss:.6e} val_loss={validation_loss:.6e}"
+                )
+                if best_epoch is not None and best_validation_loss < float("inf"):
+                    message += (
+                        f" best_epoch={best_epoch + 1} "
+                        f"best_val_loss={best_validation_loss:.6e}"
+                    )
+                message += f" epoch_seconds={elapsed_epoch_seconds:.2f}"
+                print(message, flush=True)
+
+            # Stop if Slurm or the user has requested a clean shutdown.
+            if shutdown.stop_requested:
+                stopped_reason = shutdown.reason
+                break
+
+            # Stop if the next epoch may leave too little time to evaluate and save.
+            if _time_limit_reached(
+                training_start=training_start,
+                max_runtime_seconds=max_runtime_seconds,
+                shutdown_margin_seconds=shutdown_margin_seconds,
+                epoch_seconds=epoch_seconds,
+            ):
+                stopped_reason = (
+                    "wall-time budget reached before another full epoch could be run safely"
+                )
+                print(f"[{log_prefix}] {stopped_reason}.", flush=True)
+                break
+
+            # Stop if validation loss has not improved for the requested patience.
+            if (
+                early_stopping_patience is not None
+                and epochs_without_improvement >= early_stopping_patience
+            ):
+                stopped_reason = "early stopping patience reached"
+                break
 
     # Restore the best validation state if one was recorded.
     if best_state is not None:
@@ -532,6 +661,7 @@ def train_mlp_regressor(
         validation_losses=validation_losses,
         best_epoch=best_epoch,
         best_validation_loss=None if best_epoch is None else best_validation_loss,
+        stopped_reason=stopped_reason,
     )
 
 
