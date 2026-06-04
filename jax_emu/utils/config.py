@@ -79,11 +79,16 @@ class OptimizerConfig:
     weight_decay:
         Regularization parameter to prevent overfitting.
     learning_rate_schedule:
-        Schedule used to change the learning rate during training.
+        Schedule used to change the learning rate during training. Supported
+        values are `constant`, `cosine`, `warmup_cosine`, and
+        `exponential_decay`.
     learning_rate_final_fraction:
-        Final learning-rate fraction for decay schedules.
+        Final learning-rate fraction for decay schedules. For example, `0.05`
+        decays to 5 percent of the initial learning rate. Ignored by
+        `constant`.
     learning_rate_warmup_epochs:
-        Number of warmup epochs used by the warmup cosine schedule.
+        Number of warmup epochs used by `warmup_cosine`. Ignored by
+        `constant`, `cosine`, and `exponential_decay`.
     """
 
     optimizer_name: str = "Adam"

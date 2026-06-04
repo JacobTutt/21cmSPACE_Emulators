@@ -25,11 +25,11 @@ settings:
 | `validation_targets` | 1D array of ground-truth scalar values for the validation set. |
 | `epochs` | The number of complete passes through the training dataset. |
 | `batch_size` | Number of rows used in each optimizer update. |
-| `learning_rate` | Optimizer step size. |
+| `learning_rate` | Initial or peak optimizer step size. |
 | `weight_decay` | AdamW regularization term used to penalize large weights. |
-| `learning_rate_schedule` | Rule used to change the learning rate during training. |
-| `learning_rate_final_fraction` | Final learning-rate fraction for decay schedules. |
-| `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`. |
+| `learning_rate_schedule` | Schedule name: `constant`, `cosine`, `warmup_cosine`, or `exponential_decay`. |
+| `learning_rate_final_fraction` | Final fraction for decay schedules. `0.05` means final rate = `learning_rate * 0.05`. |
+| `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`; ignored by the other schedules. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
 ## The Training Step
@@ -68,18 +68,29 @@ model, history = train_mlp_regressor(
 ## Learning-Rate Schedules
 
 A learning-rate schedule changes the optimizer step size during training. The
-default is `constant`, which keeps the previous behaviour.
+default is `constant`, which keeps the same step size throughout training.
 
 | Schedule | Behaviour |
 | :--- | :--- |
-| `constant` | Use the same learning rate for every optimizer step. |
-| `cosine` | Smoothly decay from the initial learning rate to a final fraction. |
-| `warmup_cosine` | Ramp up from zero, then apply cosine decay. |
-| `exponential_decay` | Decay multiplicatively toward the final fraction. |
+| `constant` | Use `learning_rate` for every optimizer step. |
+| `cosine` | Smoothly decay from `learning_rate` to `learning_rate * learning_rate_final_fraction`. |
+| `warmup_cosine` | Ramp from zero to `learning_rate`, then apply cosine decay to the final fraction. |
+| `exponential_decay` | Multiplicatively decay from `learning_rate` to the final fraction. |
+
+The scheduler parameters are:
+
+| Parameter | Used by | Meaning |
+| :--- | :--- | :--- |
+| `learning_rate` | all schedules | Initial rate for `constant`, `cosine`, and `exponential_decay`; peak rate for `warmup_cosine`. |
+| `learning_rate_final_fraction` | `cosine`, `warmup_cosine`, `exponential_decay` | Final rate as a fraction of `learning_rate`. Ignored by `constant`. |
+| `learning_rate_warmup_epochs` | `warmup_cosine` | Number of epochs used to ramp from zero to `learning_rate`. |
+| `epochs` | decay schedules | Schedule horizon. A 10,000 epoch run decays more slowly than a 1,000 epoch run. |
 
 ![Learning-rate scheduler curves](assets/learning-rate-schedules.svg)
 
-Schedules are evaluated per mini-batch update, not only once per epoch:
+Schedules are evaluated per mini-batch update, not only once per epoch. The
+trainer converts `epochs` and `steps_per_epoch` into a total number of optimizer
+steps:
 
 ```python
 from jax_emu.training import build_learning_rate_schedule
@@ -92,6 +103,9 @@ schedule = build_learning_rate_schedule(
     final_fraction=0.05,
 )
 ```
+
+The current `exponential_decay` schedule is defined by the final fraction over
+the full schedule horizon. It does not use a separate half-life parameter.
 
 The high-level training commands expose the same scheduler settings:
 

@@ -306,15 +306,19 @@ def save(
     patience:
         The early stopping patience setting used.
     learning_rate:
-        The learning rate used for training.
+        The initial or peak learning rate used for training.
     weight_decay:
         The weight decay (L2 regularization) parameter used.
     learning_rate_schedule:
-        The learning-rate schedule used during training.
+        The learning-rate schedule used during training. Supported values are
+        `constant`, `cosine`, `warmup_cosine`, and `exponential_decay`.
     learning_rate_final_fraction:
-        The final learning-rate fraction used by decay schedules.
+        The final learning-rate fraction used by `cosine`, `warmup_cosine`,
+        and `exponential_decay`. For example, `0.05` means the final learning
+        rate was `learning_rate * 0.05`. Ignored by `constant`.
     learning_rate_warmup_epochs:
-        The warmup length used by the warmup cosine schedule.
+        The number of epochs used to ramp from zero to `learning_rate` for
+        `warmup_cosine`. Ignored by the other schedules.
 
     Returns
     -------

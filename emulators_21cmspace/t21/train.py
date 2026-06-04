@@ -189,10 +189,22 @@ def train_t21_from_dataset_root(
         Path to the 21cmSPACE dataset.
     output_path:
         Optional custom path for the saved .nenemu package.
-    epochs, batch_size, prefetch_batches:
-        Overrides for training hyperparameters.
-    learning_rate_schedule, learning_rate_final_fraction, learning_rate_warmup_epochs:
-        Optional learning-rate scheduler overrides.
+    epochs:
+        Optional override for the number of training epochs. This also defines
+        the horizon for decay-based learning-rate schedules.
+    batch_size:
+        Optional override for the number of rows used in each optimizer update.
+    prefetch_batches:
+        Optional override for the number of mini-batches queued on the device.
+    learning_rate_schedule:
+        Optional schedule override. Supported values are `constant`, `cosine`,
+        `warmup_cosine`, and `exponential_decay`.
+    learning_rate_final_fraction:
+        Optional final learning-rate fraction for `cosine`, `warmup_cosine`,
+        and `exponential_decay`. Ignored by `constant`.
+    learning_rate_warmup_epochs:
+        Optional number of warmup epochs for `warmup_cosine`. Ignored by the
+        other schedules.
     shuffle_seed:
         Random seed for repeatability.
     log_every:
@@ -384,12 +396,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--learning-rate-final-fraction",
         type=float,
-        help="Final learning-rate fraction for decay schedules.",
+        help="Final learning-rate fraction for cosine, warmup_cosine, and exponential_decay.",
     )
     parser.add_argument(
         "--learning-rate-warmup-epochs",
         type=int,
-        help="Warmup epoch count for warmup_cosine.",
+        help="Warmup epoch count for warmup_cosine only.",
     )
     parser.add_argument(
         "--log-every",

@@ -93,6 +93,44 @@ def build_learning_rate_schedule(
     The returned schedule is evaluated once per optimiser update, so epoch
     counts are converted into mini-batch step counts before constructing the
     schedule.
+
+    Supported schedules
+    -------------------
+    constant:
+        Uses `learning_rate` for every optimizer update. Ignores
+        `final_fraction` and `warmup_epochs`.
+    cosine:
+        Starts at `learning_rate` and decays smoothly to
+        `learning_rate * final_fraction` over `epochs`.
+    warmup_cosine:
+        Starts at zero, increases to `learning_rate` over `warmup_epochs`,
+        then decays to `learning_rate * final_fraction` over `epochs`.
+    exponential_decay:
+        Starts at `learning_rate` and decays multiplicatively to
+        `learning_rate * final_fraction` over `epochs`.
+
+    Parameters
+    ----------
+    learning_rate:
+        Initial or peak learning rate used by the schedule.
+    schedule_name:
+        Schedule type: `constant`, `cosine`, `warmup_cosine`, or
+        `exponential_decay`.
+    steps_per_epoch:
+        Number of optimizer updates in one training epoch.
+    epochs:
+        Number of epochs over which the schedule is defined.
+    final_fraction:
+        Final learning-rate fraction for decay schedules. For example, `0.05`
+        means the final learning rate is 5 percent of `learning_rate`.
+    warmup_epochs:
+        Number of epochs used to ramp from zero to `learning_rate` for
+        `warmup_cosine`. Ignored by the other schedules.
+
+    Returns
+    -------
+    Callable[[jax.Array], jax.Array]
+        A step-indexed Optax-compatible learning-rate schedule.
     """
     # Basic validation keeps scheduler configuration errors visible at startup.
     if learning_rate <= 0:
@@ -302,15 +340,20 @@ def train_mlp_regressor(
     learning_rate, weight_decay:
         Optax AdamW parameters.
     learning_rate_schedule:
-        Schedule used for the AdamW learning rate.
+        Schedule used for the AdamW learning rate. Supported values are
+        `constant`, `cosine`, `warmup_cosine`, and `exponential_decay`.
     learning_rate_final_fraction:
-        Final learning-rate fraction for decay schedules.
+        Final learning-rate fraction for `cosine`, `warmup_cosine`, and
+        `exponential_decay`. For example, `0.05` means the schedule ends at
+        `learning_rate * 0.05`. Ignored by `constant`.
     learning_rate_warmup_epochs:
-        Warmup length for the warmup cosine schedule.
+        Number of epochs used to ramp from zero to `learning_rate` for
+        `warmup_cosine`. Ignored by the other schedules.
     batch_size:
         Number of training examples processed per gradient update.
     epochs:
-        Number of passes over the training set.
+        Number of passes over the training set. This is also the schedule
+        horizon used by the decay schedules.
     seed:
         Random seed for batch shuffling.
     early_stopping_patience:
