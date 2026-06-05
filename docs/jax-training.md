@@ -195,9 +195,8 @@ available, and the held-out test loss in the top-right corner.
 
 ## Slurm Wall Time
 
-The high-level workflows save the `.nenemu` package after the trainer returns.
-For Slurm jobs, the trainer can therefore stop early when the wall-clock budget
-is nearly exhausted:
+For long Slurm jobs, pass a wall-clock budget to the trainer so it can stop
+cleanly before the allocation ends:
 
 ```bash
 21cmspace-t21-train \
@@ -207,29 +206,16 @@ is nearly exhausted:
   --shutdown-margin-seconds 900
 ```
 
-The trainer checks this after every epoch:
-
-```text
-elapsed time + estimated next epoch + shutdown margin >= max runtime
--> stop training cleanly
--> evaluate the test set
--> save the checkpoint package
-```
-
-For Slurm scripts, request a non-fatal warning signal before the wall limit:
+The trainer checks the budget after each epoch. If another full epoch is likely
+to run too close to the limit, training stops and the normal save path is used.
+In Slurm scripts, also request a warning signal before the wall limit:
 
 ```bash
 #SBATCH --signal=USR1@900
 ```
 
-This gives Python a chance to catch `SIGUSR1`, finish the current epoch, and
-return to the normal save path. Avoid `B:TERM@900`: that can terminate the batch
-shell before Python has a chance to stop cleanly. A hard kill cannot be handled
-safely.
-
-The model package is saved before the held-out test evaluation. This means a
-cleanly stopped Slurm job should still leave a loadable `.nenemu` package even
-if the later test-loss calculation is interrupted.
+The `.nenemu` package is saved before the held-out test evaluation, so a clean
+shutdown should still leave a loadable model package.
 
 ## Efficient JAX Training
 

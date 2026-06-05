@@ -202,47 +202,6 @@ def train_mlp_regressor(
     )
 
     @nnx.jit
-    def train_step(
-        model_instance: DenseMLP,
-        optimizer_instance: nnx.Optimizer,
-        batch_features: jnp.ndarray,
-        batch_targets: jnp.ndarray,
-        batch_mask: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """
-        Run one compiled optimiser step on a device mini-batch.
-        """
-
-        def loss_fn(current_model: DenseMLP) -> jnp.ndarray:
-            """
-            Predict the mini-batch and return the mean squared error.
-            """
-            preds = current_model(batch_features).squeeze(-1)
-            squared_error = jnp.square(preds - batch_targets) * batch_mask
-            return jnp.sum(squared_error) / jnp.maximum(jnp.sum(batch_mask), 1.0)
-
-        # Compute the loss and gradients for current model parameters on this mini-batch.
-        loss, grads = nnx.value_and_grad(loss_fn)(model_instance)
-
-        # Use the optimizer to update the live NNX model in place.
-        optimizer_instance.update(model_instance, grads)
-        return loss
-
-    @nnx.jit
-    def eval_step(
-        model_instance: DenseMLP,
-        batch_features: jnp.ndarray,
-        batch_targets: jnp.ndarray,
-        batch_mask: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """
-        Run one compiled validation step on a device mini-batch.
-        """
-        preds = model_instance(batch_features).squeeze(-1)
-        squared_error = jnp.square(preds - batch_targets) * batch_mask
-        return jnp.sum(squared_error)
-
-    @nnx.jit
     def train_block_step(
         model_instance: DenseMLP,
         optimizer_instance: nnx.Optimizer,
@@ -336,7 +295,7 @@ def train_mlp_regressor(
         batch_starts: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
-        Train one full epoch by scanning over device-resident row indices.
+        Train one full epoch by scanning over GPU-memory row indices.
         """
 
         @nnx.scan(
@@ -385,53 +344,6 @@ def train_mlp_regressor(
         return jnp.sum(squared_errors), jnp.sum(example_counts)
 
     @nnx.jit
-    def eval_epoch_scan_step(
-        model_instance: DenseMLP,
-        features: jnp.ndarray,
-        targets: jnp.ndarray,
-        indices: jnp.ndarray,
-        batch_starts: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Evaluate one full epoch by scanning over device-resident row indices.
-        """
-
-        @nnx.scan(
-            in_axes=(None, None, None, None, 0),
-            out_axes=0,
-        )
-        def scan_step(
-            current_model: DenseMLP,
-            full_features: jnp.ndarray,
-            full_targets: jnp.ndarray,
-            row_indices: jnp.ndarray,
-            start: jnp.ndarray,
-        ) -> tuple[jnp.ndarray, jnp.ndarray]:
-            """
-            Gather one mini-batch by index and evaluate it.
-            """
-            row_positions = start + jnp.arange(batch_size, dtype=start.dtype)
-            valid = row_positions < len(full_features)
-            safe_positions = jnp.minimum(row_positions, len(full_features) - 1)
-            batch_index = row_indices[safe_positions]
-            batch_features = full_features[batch_index]
-            batch_targets = full_targets[batch_index]
-            batch_mask = valid.astype(jnp.float32)
-
-            preds = current_model(batch_features).squeeze(-1)
-            squared_error = jnp.square(preds - batch_targets) * batch_mask
-            return jnp.sum(squared_error), jnp.sum(batch_mask)
-
-        squared_errors, example_counts = scan_step(
-            model_instance,
-            features,
-            targets,
-            indices,
-            batch_starts,
-        )
-        return jnp.sum(squared_errors), jnp.sum(example_counts)
-
-    @nnx.jit
     def eval_full_dataset_step(
         model_instance: DenseMLP,
         features: jnp.ndarray,
@@ -462,7 +374,7 @@ def train_mlp_regressor(
             train_squared_error: list[jax.Array] = []
             train_example_count = 0
             # Within each epoch, the training set is reshuffled and sliced into
-            # mini-batches. In device-memory mode, this happens inside one
+            # mini-batches. In gpu_memory mode, this happens inside one
             # compiled scan over the full shuffled epoch.
             if resolved_data_device_mode == "gpu_memory":
                 train_index_key = jax.random.PRNGKey(
@@ -534,20 +446,44 @@ def train_mlp_regressor(
                         )
                     )
                 else:
-                    # Host-memory training keeps validation arrays on the host.
-                    # Transfer them only on validation epochs, then evaluate the
-                    # whole validation set in one compiled device call.
-                    device_validation_features, device_validation_targets = move_arrays_to_device(
+                    # CPU-memory validation uses the same block size and
+                    # prefetch depth as CPU-memory training. This keeps the
+                    # validation pass from requiring the whole validation set
+                    # to fit on the device.
+                    validation_squared_error: list[jax.Array] = []
+                    validation_example_count = 0
+                    for (
+                        block_features,
+                        block_targets,
+                        block_mask,
+                        real_examples,
+                    ) in iter_device_batch_blocks(
                         validation_features,
                         validation_targets,
-                    )
-                    validation_loss = float(
-                        eval_full_dataset_step(
+                        batch_size,
+                        shuffle=False,
+                        rng=rng,
+                        prefetch_batches=prefetch_batches,
+                        data_device_mode=resolved_data_device_mode,
+                        batches_per_block=batches_per_block,
+                    ):
+                        squared_error, example_count = eval_block_step(
                             model,
-                            device_validation_features,
-                            device_validation_targets,
+                            block_features,
+                            block_targets,
+                            block_mask,
                         )
+                        validation_squared_error.append(squared_error)
+                        validation_example_count += real_examples
+                    if not validation_squared_error:
+                        raise ValueError("Validation data produced no mini-batches.")
+                    validation_loss = float(
+                        np.asarray(
+                            jax.device_get(validation_squared_error),
+                            dtype=np.float64,
+                        ).sum()
                     )
+                    validation_loss /= max(validation_example_count, 1)
 
                 validation_epochs.append(epoch)
 
