@@ -34,6 +34,7 @@ settings:
 | `shutdown_margin_seconds` | Time reserved after training for test evaluation and checkpoint saving. |
 | `data_device_mode` | Memory mode: `cpu_memory`, `gpu_memory`, or `auto`. |
 | `batches_per_block` | Number of mini-batches grouped into one scanned host-memory training call. |
+| `prefetch_batches` | Number of CPU-memory blocks queued ahead on the JAX device. |
 | `validation_every_epochs` | Number of epochs between validation passes. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
@@ -68,6 +69,7 @@ model, history = train_mlp_regressor(
     learning_rate_warmup_epochs=5,
     data_device_mode="cpu_memory",
     batches_per_block=8,
+    prefetch_batches=2,
     validation_every_epochs=1,
     seed=42,
 )
@@ -284,8 +286,19 @@ model, history = train_mlp_regressor(
 ```
 
 `batches_per_block` controls how many mini-batches are grouped into one scanned
-device call. `prefetch_batches` controls how many of those blocks are kept
-queued ahead of the training loop.
+device call. `prefetch_batches` controls how many of those scanned blocks are
+kept queued ahead on the JAX device.
+
+For example:
+
+```text
+batches_per_block = 16
+prefetch_batches = 4
+
+queued ahead = 4 blocks
+             = 4 x 16 mini-batches
+             = 64 mini-batches
+```
 
 `prefetch_batches` only changes the `cpu_memory` path. In `gpu_memory`
 mode there is no host-side queue because the arrays are already staged on the
