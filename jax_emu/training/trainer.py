@@ -23,7 +23,11 @@ import optax
 from flax import nnx
 
 from jax_emu.architectures.mlp import DenseMLP
-from jax_emu.training.dataloader import iter_device_batches
+from jax_emu.training.dataloader import (
+    iter_device_batches,
+    move_arrays_to_device,
+    resolve_data_device_mode,
+)
 from jax_emu.training.scheduler import build_learning_rate_schedule, count_steps_per_epoch
 from jax_emu.training.shutdown import GracefulShutdown, time_limit_reached
 
@@ -124,8 +128,8 @@ def train_mlp_regressor(
     data_device_mode:
         Mini-batch loading mode. `host_prefetch` streams host mini-batches to
         the device. `device_resident` copies full arrays to the device once and
-        slices mini-batches there. `auto` uses `device_resident` only when the
-        input arrays are already JAX arrays.
+        slices mini-batches there. `auto` uses `device_resident` when the input
+        arrays are already JAX arrays.
     max_runtime_seconds:
         Optional wall-clock training budget. After each epoch, the trainer
         checks whether another epoch is likely to fit inside this budget.
@@ -138,6 +142,28 @@ def train_mlp_regressor(
     DenseMLP, TrainingHistory
         The trained model and training history.
     """
+    # Resolve the data-loading path before training starts. In device-resident
+    # mode, move all training and validation arrays to the device once. The
+    # epoch dataloader then slices from these JAX arrays without repeating the
+    # full-array transfer.
+    resolved_data_device_mode = resolve_data_device_mode(
+        train_features,
+        train_targets,
+        data_device_mode,
+    )
+    if resolved_data_device_mode == "device_resident":
+        (
+            train_features,
+            train_targets,
+            validation_features,
+            validation_targets,
+        ) = move_arrays_to_device(
+            train_features,
+            train_targets,
+            validation_features,
+            validation_targets,
+        )
+
     # Initialise the random number generator for host-side batch shuffling.
     rng = np.random.default_rng(seed)
 
@@ -226,7 +252,7 @@ def train_mlp_regressor(
                 shuffle=True,
                 rng=rng,
                 prefetch_batches=prefetch_batches,
-                data_device_mode=data_device_mode,
+                data_device_mode=resolved_data_device_mode,
             ):
                 # Train (update) the model on the mini-batch
                 loss = train_step(model, optimizer, batch_features, batch_targets, batch_mask)
@@ -248,7 +274,7 @@ def train_mlp_regressor(
                 batch_size,
                 shuffle=False,
                 prefetch_batches=prefetch_batches,
-                data_device_mode=data_device_mode,
+                data_device_mode=resolved_data_device_mode,
             ):
                 # Evaluate the model on the mini-batch without updating weights.
                 loss = eval_step(model, batch_features, batch_targets, batch_mask)
@@ -363,8 +389,8 @@ def evaluate_mlp_regressor(
     data_device_mode:
         Mini-batch loading mode. `host_prefetch` streams host mini-batches to
         the device. `device_resident` copies full arrays to the device once and
-        slices mini-batches there. `auto` uses `device_resident` only when the
-        input arrays are already JAX arrays.
+        slices mini-batches there. `auto` uses `device_resident` when the input
+        arrays are already JAX arrays.
 
     Returns
     -------
@@ -386,6 +412,13 @@ def evaluate_mlp_regressor(
         squared_error = jnp.square(preds - batch_targets) * batch_mask
         return jnp.sum(squared_error)
 
+    # Resolve the data-loading path before evaluation starts. In
+    # device-resident mode, move evaluation arrays to the device once and then
+    # slice every mini-batch from those device arrays.
+    resolved_data_device_mode = resolve_data_device_mode(features, targets, data_device_mode)
+    if resolved_data_device_mode == "device_resident":
+        features, targets = move_arrays_to_device(features, targets)
+
     # Evaluate every mini-batch and accumulate losses on device.
     squared_error: list[jax.Array] = []
     example_count = 0
@@ -395,7 +428,7 @@ def evaluate_mlp_regressor(
         batch_size,
         shuffle=False,
         prefetch_batches=prefetch_batches,
-        data_device_mode=data_device_mode,
+        data_device_mode=resolved_data_device_mode,
     ):
         loss = eval_step(model, batch_features, batch_targets, batch_mask)
         squared_error.append(loss)

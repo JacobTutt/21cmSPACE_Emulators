@@ -2,7 +2,9 @@
 
 from jax_emu.training.dataloader import (
     iter_device_batches,
+    move_arrays_to_device,
     normalise_data_device_mode,
+    resolve_data_device_mode,
 )
 from jax_emu.training.scheduler import (
     build_learning_rate_schedule,
@@ -20,6 +22,8 @@ __all__ = [
     "count_steps_per_epoch",
     "evaluate_mlp_regressor",
     "iter_device_batches",
+    "move_arrays_to_device",
     "normalise_data_device_mode",
+    "resolve_data_device_mode",
     "train_mlp_regressor",
 ]

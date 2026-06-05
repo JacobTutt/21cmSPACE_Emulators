@@ -43,6 +43,50 @@ def normalise_data_device_mode(mode: str) -> DataDeviceMode:
     return mode  # type: ignore[return-value]
 
 
+def resolve_data_device_mode(
+    features: np.ndarray | jax.Array,
+    targets: np.ndarray | jax.Array,
+    mode: str,
+) -> Literal["host_prefetch", "device_resident"]:
+    """
+    Resolve `auto` into a concrete mini-batch loading mode.
+
+    Parameters
+    ----------
+    features, targets:
+        Prepared arrays passed to the dataloader.
+    mode:
+        Requested loading mode.
+
+    Returns
+    -------
+    Literal["host_prefetch", "device_resident"]
+        Concrete loading mode used by the dataloader.
+    """
+    resolved_mode = normalise_data_device_mode(mode)
+    if resolved_mode == "auto":
+        return (
+            "device_resident"
+            if isinstance(features, jax.Array) and isinstance(targets, jax.Array)
+            else "host_prefetch"
+        )
+    return resolved_mode
+
+
+def move_arrays_to_device(
+    *arrays: np.ndarray | jax.Array,
+) -> tuple[jax.Array, ...]:
+    """
+    Move prepared arrays to the active JAX device once.
+
+    This is used by `device_resident` training before the epoch loop starts.
+    The dataloader can then slice mini-batches from arrays that are already on
+    the device, instead of repeating device placement inside each epoch.
+    """
+    # device_put is asynchronous. The returned objects are JAX device arrays.
+    return tuple(jax.device_put(array) for array in arrays)
+
+
 def iter_device_batches(
     features: np.ndarray | jax.Array,
     targets: np.ndarray | jax.Array,
@@ -73,9 +117,9 @@ def iter_device_batches(
         `host_prefetch` mode.
     data_device_mode:
         `host_prefetch` keeps arrays on the host and queues mini-batches to the
-        device. `device_resident` copies the full arrays to the device once and
-        slices mini-batches there. `auto` uses `device_resident` only when both
-        inputs are already JAX arrays.
+        device. `device_resident` expects arrays that have already been moved
+        to the device and slices mini-batches there. `auto` uses
+        `device_resident` only when both inputs are already JAX arrays.
 
     Yields
     ------
@@ -83,13 +127,7 @@ def iter_device_batches(
         Device feature batch, device target batch, device mask batch, and the
         number of real examples before padding.
     """
-    mode = normalise_data_device_mode(data_device_mode)
-    if mode == "auto":
-        mode = (
-            "device_resident"
-            if isinstance(features, jax.Array) and isinstance(targets, jax.Array)
-            else "host_prefetch"
-        )
+    mode = resolve_data_device_mode(features, targets, data_device_mode)
 
     if mode == "device_resident":
         yield from _iter_device_resident_batches(
@@ -197,29 +235,31 @@ def _iter_device_resident_batches(
     rng: np.random.Generator | None,
 ) -> Iterator[tuple[jax.Array, jax.Array, jax.Array, int]]:
     """
-    Copy full arrays to the device once and slice mini-batches on device.
+    Slice mini-batches from arrays that already live on the JAX device.
     """
-    # Put the full prepared arrays on the active JAX device.
-    device_features = jax.device_put(features)
-    device_targets = jax.device_put(targets)
-    _validate_arrays(device_features, device_targets, batch_size)
+    if not isinstance(features, jax.Array) or not isinstance(targets, jax.Array):
+        raise ValueError(
+            "device_resident batching expects JAX arrays that have already been "
+            "moved to the device."
+        )
+    _validate_arrays(features, targets, batch_size)
 
     # Build device-side row indices and optionally shuffle them for this epoch.
-    indices = jnp.arange(len(device_features))
+    indices = jnp.arange(len(features))
     if shuffle:
         seed = 0 if rng is None else int(rng.integers(0, np.iinfo(np.uint32).max))
         indices = jax.random.permutation(jax.random.PRNGKey(seed), indices)
 
     # Slice each mini-batch directly from the device-resident arrays.
-    for start in range(0, len(device_features), batch_size):
-        real_examples = min(batch_size, len(device_features) - start)
+    for start in range(0, len(features), batch_size):
+        real_examples = min(batch_size, len(features) - start)
         batch_index = indices[start : start + batch_size]
         batch_index = _pad_jax_index(batch_index, batch_size)
         batch_mask = (jnp.arange(batch_size) < real_examples).astype(jnp.float32)
 
         yield (
-            device_features[batch_index],
-            device_targets[batch_index],
+            features[batch_index],
+            targets[batch_index],
             batch_mask,
             real_examples,
         )

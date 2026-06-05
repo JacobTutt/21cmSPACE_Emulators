@@ -214,7 +214,7 @@ The right choice depends on dataset size.
 | Mode | Use when | What happens |
 | :--- | :--- | :--- |
 | `host_prefetch` | The prepared arrays are too large to keep fully on GPU. | Arrays stay in host memory. The dataloader slices mini-batches and queues a few ahead with `jax.device_put`. |
-| `device_resident` | The prepared arrays fit comfortably on GPU. | Full train/validation/test arrays are copied to the device once. Mini-batches are then sliced on device. |
+| `device_resident` | The prepared arrays fit comfortably on GPU. | Train/validation arrays are copied to the device once before the epoch loop. Evaluation arrays are copied once before evaluation. Mini-batches are then sliced on device. |
 | `auto` | You are calling the trainer directly and may pass either NumPy or JAX arrays. | JAX arrays use `device_resident`; NumPy arrays use `host_prefetch`. |
 
 For large simulation suites, the usual workflow is host-to-device streaming:
@@ -251,7 +251,8 @@ The high-level CLIs expose the same option:
 ```
 
 `prefetch_batches` only changes the `host_prefetch` path. In `device_resident`
-mode there is no host-side queue because the arrays are already on the device.
+mode there is no host-side queue because the arrays have already been staged on
+the device before mini-batch iteration starts.
 
 ### Training Pipeline Flow
 
