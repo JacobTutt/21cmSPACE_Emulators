@@ -32,6 +32,7 @@ settings:
 | `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`; ignored by the other schedules. |
 | `max_runtime_seconds` | Optional wall-clock training budget for graceful shutdown on long jobs. |
 | `shutdown_margin_seconds` | Time reserved after training for test evaluation and checkpoint saving. |
+| `data_device_mode` | Where batches are loaded from: `host_prefetch`, `device_resident`, or `auto`. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
 ## The Training Step
@@ -63,6 +64,7 @@ model, history = train_mlp_regressor(
     learning_rate_schedule="warmup_cosine",
     learning_rate_final_fraction=0.05,
     learning_rate_warmup_epochs=5,
+    data_device_mode="host_prefetch",
     seed=42,
 )
 ```
@@ -206,9 +208,16 @@ if the later test-loss calculation is interrupted.
 
 ## Efficient JAX Training
 
-The training code is designed for prepared arrays that may be too large to keep
-fully resident in GPU memory. The usual workflow is therefore host-to-device
-streaming:
+The training code supports two ways of feeding mini-batches to the accelerator.
+The right choice depends on dataset size.
+
+| Mode | Use when | What happens |
+| :--- | :--- | :--- |
+| `host_prefetch` | The prepared arrays are too large to keep fully on GPU. | Arrays stay in host memory. The dataloader slices mini-batches and queues a few ahead with `jax.device_put`. |
+| `device_resident` | The prepared arrays fit comfortably on GPU. | Full train/validation/test arrays are copied to the device once. Mini-batches are then sliced on device. |
+| `auto` | You are calling the trainer directly and may pass either NumPy or JAX arrays. | JAX arrays use `device_resident`; NumPy arrays use `host_prefetch`. |
+
+For large simulation suites, the usual workflow is host-to-device streaming:
 
 1. **Store arrays on the host**: Prepared feature and target arrays can remain
    in system memory.
@@ -216,6 +225,33 @@ streaming:
    transferred to the JAX device.
 3. **Prefetch future batches**: While the device trains on one batch, the next
    batches can be prepared and queued with `jax.device_put`.
+
+For small datasets, remove the repeated host-to-device transfer:
+
+```python
+model, history = train_mlp_regressor(
+    model,
+    train_features,
+    train_targets,
+    validation_features,
+    validation_targets,
+    batch_size=1024,
+    epochs=1000,
+    data_device_mode="device_resident",
+)
+```
+
+The high-level CLIs expose the same option:
+
+```bash
+21cmspace-t21-train \
+  --dataset-root /path/to/21cmspace/data \
+  --output outputs/t21_model.nenemu \
+  --data-device-mode device_resident
+```
+
+`prefetch_batches` only changes the `host_prefetch` path. In `device_resident`
+mode there is no host-side queue because the arrays are already on the device.
 
 ### Training Pipeline Flow
 

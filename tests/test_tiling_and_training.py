@@ -87,6 +87,36 @@ def test_training_accepts_device_arrays_without_epoch_logging() -> None:
     assert len(history.validation_losses) == 3
 
 
+def test_training_device_resident_mode_accepts_numpy_arrays() -> None:
+    rng = np.random.default_rng(5)
+    features = rng.normal(size=(80, 2)).astype(np.float32)
+    targets = (0.5 * features[:, 0] + features[:, 1]).astype(np.float32)
+
+    model = DenseMLP(
+        in_features=features.shape[1],
+        hidden_features=8,
+        hidden_layers=1,
+        rngs=nnx.Rngs(jax.random.PRNGKey(5)),
+    )
+    _, history = train_mlp_regressor(
+        model,
+        features,
+        targets,
+        features[:20],
+        targets[:20],
+        epochs=3,
+        batch_size=16,
+        learning_rate=1e-3,
+        weight_decay=0.0,
+        data_device_mode="device_resident",
+        seed=5,
+        log_every=None,
+    )
+
+    assert len(history.train_losses) == 3
+    assert len(history.validation_losses) == 3
+
+
 def test_early_stopping_records_and_restores_best_epoch() -> None:
     rng = np.random.default_rng(4)
     train_features = rng.normal(size=(32, 2))

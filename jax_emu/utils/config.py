@@ -126,6 +126,10 @@ class TrainingConfig:
         Whether to enable performance profiling.
     prefetch_batches:
         Number of mini-batches to keep queued on the device.
+    data_device_mode:
+        Where training arrays live during mini-batch loading. `host_prefetch`
+        streams batches from host memory. `device_resident` copies the full
+        arrays to the device once and slices mini-batches there.
     early_stop:
         Whether to enable early stopping based on validation loss.
     early_stopping_patience:
@@ -142,6 +146,7 @@ class TrainingConfig:
     shutdown_margin_seconds: int = 600
     profiling: bool = False
     prefetch_batches: int = 2
+    data_device_mode: str = "host_prefetch"
     early_stop: bool = False
     early_stopping_patience: int | None = None
     early_stopping_min_delta: float = 0.0

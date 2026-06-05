@@ -45,6 +45,7 @@ def run_synthetic_smoke(
     epochs: int = 20,
     batch_size: int = 64,
     prefetch_batches: int = 2,
+    data_device_mode: str = "host_prefetch",
 ) -> dict[str, float]:
     """
     Run a synthetic end-to-end smoke training exercise.
@@ -61,6 +62,8 @@ def run_synthetic_smoke(
         Number of samples per mini-batch.
     prefetch_batches:
         Number of batches to queue on the JAX device.
+    data_device_mode:
+        Mini-batch loading mode used by the shared trainer.
 
     Returns
     -------
@@ -149,6 +152,7 @@ def run_synthetic_smoke(
         epochs=epochs,
         batch_size=batch_size,
         prefetch_batches=prefetch_batches,
+        data_device_mode=data_device_mode,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
         learning_rate_schedule=config.optimizer.learning_rate_schedule,
@@ -174,6 +178,7 @@ def train_t21_from_dataset_root(
     epochs: int | None = None,
     batch_size: int | None = None,
     prefetch_batches: int | None = None,
+    data_device_mode: str | None = None,
     learning_rate_schedule: str | None = None,
     learning_rate_final_fraction: float | None = None,
     learning_rate_warmup_epochs: int | None = None,
@@ -198,6 +203,9 @@ def train_t21_from_dataset_root(
         Optional override for the number of rows used in each optimizer update.
     prefetch_batches:
         Optional override for the number of mini-batches queued on the device.
+    data_device_mode:
+        Optional override for mini-batch loading. Use `host_prefetch` for
+        large arrays and `device_resident` for small arrays that fit on GPU.
     learning_rate_schedule:
         Optional schedule override. Supported values are `constant`, `cosine`,
         `warmup_cosine`, and `exponential_decay`.
@@ -242,6 +250,9 @@ def train_t21_from_dataset_root(
         if learning_rate_warmup_epochs is None
         else learning_rate_warmup_epochs
     )
+    batch_loading_mode = (
+        config.training.data_device_mode if data_device_mode is None else data_device_mode
+    )
 
     # 2. Build the neural network architecture.
     model = DenseMLP(
@@ -271,6 +282,7 @@ def train_t21_from_dataset_root(
             if prefetch_batches is None
             else prefetch_batches
         ),
+        data_device_mode=batch_loading_mode,
         seed=shuffle_seed,
         early_stopping_patience=(
             config.training.early_stopping_patience if config.training.early_stop else None
@@ -310,6 +322,7 @@ def train_t21_from_dataset_root(
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
             "shuffle_seed": shuffle_seed,
+            "data_device_mode": batch_loading_mode,
             "max_runtime_seconds": (
                 config.training.terminate_time_seconds
                 if max_runtime_seconds is None
@@ -350,6 +363,7 @@ def train_t21_from_dataset_root(
             if prefetch_batches is None
             else prefetch_batches
         ),
+        data_device_mode=batch_loading_mode,
     )
 
     # 6. Generate and return a training summary.
@@ -368,6 +382,7 @@ def train_t21_from_dataset_root(
         "best_epoch": history.best_epoch,
         "best_validation_loss": history.best_validation_loss,
         "training_stop_reason": history.stopped_reason,
+        "data_device_mode": batch_loading_mode,
         "max_runtime_seconds": (
             config.training.terminate_time_seconds
             if max_runtime_seconds is None
@@ -426,6 +441,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefetch-batches",
         type=int,
         help="Number of mini-batches to keep queued on the JAX device.",
+    )
+    parser.add_argument(
+        "--data-device-mode",
+        choices=["auto", "host_prefetch", "device_resident"],
+        help="Mini-batch loading mode for training and evaluation.",
     )
     parser.add_argument(
         "--learning-rate-schedule",
@@ -492,6 +512,11 @@ def main() -> None:
             epochs=epochs,
             batch_size=batch_size,
             prefetch_batches=prefetch_batches,
+            data_device_mode=(
+                t21_config().training.data_device_mode
+                if args.data_device_mode is None
+                else args.data_device_mode
+            ),
         )
         pprint(result)
         return
@@ -522,6 +547,7 @@ def main() -> None:
             epochs=args.epochs,
             batch_size=args.batch_size,
             prefetch_batches=args.prefetch_batches,
+            data_device_mode=args.data_device_mode,
             learning_rate_schedule=args.learning_rate_schedule,
             learning_rate_final_fraction=args.learning_rate_final_fraction,
             learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
