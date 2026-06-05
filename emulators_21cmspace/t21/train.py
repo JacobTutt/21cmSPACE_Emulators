@@ -44,8 +44,7 @@ def run_synthetic_smoke(
     *,
     epochs: int = 20,
     batch_size: int = 64,
-    prefetch_batches: int = 2,
-    data_device_mode: str = "host_prefetch",
+    validation_every_epochs: int = 1,
 ) -> dict[str, float]:
     """
     Run a synthetic end-to-end smoke training exercise.
@@ -60,10 +59,8 @@ def run_synthetic_smoke(
         Number of training epochs for the smoke test.
     batch_size:
         Number of samples per mini-batch.
-    prefetch_batches:
-        Number of batches to queue on the JAX device.
-    data_device_mode:
-        Mini-batch loading mode used by the shared trainer.
+    validation_every_epochs:
+        Number of epochs between validation passes.
 
     Returns
     -------
@@ -151,8 +148,8 @@ def run_synthetic_smoke(
         prepared.validation_targets,
         epochs=epochs,
         batch_size=batch_size,
-        prefetch_batches=prefetch_batches,
-        data_device_mode=data_device_mode,
+        data_device_mode=config.training.data_device_mode,
+        validation_every_epochs=validation_every_epochs,
         learning_rate=config.optimizer.learning_rate,
         weight_decay=config.optimizer.weight_decay,
         learning_rate_schedule=config.optimizer.learning_rate_schedule,
@@ -163,7 +160,7 @@ def run_synthetic_smoke(
 
     return {
         "final_train_loss": history.train_losses[-1],
-        "final_validation_loss": history.validation_losses[-1],
+        "final_validation_loss": _latest_finite(history.validation_losses),
     }
 
 
@@ -177,8 +174,7 @@ def train_t21_from_dataset_root(
     output_path: str | Path | None = None,
     epochs: int | None = None,
     batch_size: int | None = None,
-    prefetch_batches: int | None = None,
-    data_device_mode: str | None = None,
+    validation_every_epochs: int | None = None,
     learning_rate_schedule: str | None = None,
     learning_rate_final_fraction: float | None = None,
     learning_rate_warmup_epochs: int | None = None,
@@ -201,11 +197,8 @@ def train_t21_from_dataset_root(
         the horizon for decay-based learning-rate schedules.
     batch_size:
         Optional override for the number of rows used in each optimizer update.
-    prefetch_batches:
-        Optional override for the number of mini-batches queued on the device.
-    data_device_mode:
-        Optional override for mini-batch loading. Use `host_prefetch` for
-        large arrays and `device_resident` for small arrays that fit on GPU.
+    validation_every_epochs:
+        Optional override for the number of epochs between validation passes.
     learning_rate_schedule:
         Optional schedule override. Supported values are `constant`, `cosine`,
         `warmup_cosine`, and `exponential_decay`.
@@ -250,8 +243,10 @@ def train_t21_from_dataset_root(
         if learning_rate_warmup_epochs is None
         else learning_rate_warmup_epochs
     )
-    batch_loading_mode = (
-        config.training.data_device_mode if data_device_mode is None else data_device_mode
+    validation_interval = (
+        config.training.validation_every_epochs
+        if validation_every_epochs is None
+        else validation_every_epochs
     )
 
     # 2. Build the neural network architecture.
@@ -277,12 +272,9 @@ def train_t21_from_dataset_root(
         learning_rate_warmup_epochs=schedule_warmup_epochs,
         batch_size=config.training.batch_size if batch_size is None else batch_size,
         epochs=config.training.epochs if epochs is None else epochs,
-        prefetch_batches=(
-            config.training.prefetch_batches
-            if prefetch_batches is None
-            else prefetch_batches
-        ),
-        data_device_mode=batch_loading_mode,
+        data_device_mode=config.training.data_device_mode,
+        batches_per_block=config.training.batches_per_block,
+        validation_every_epochs=validation_interval,
         seed=shuffle_seed,
         early_stopping_patience=(
             config.training.early_stopping_patience if config.training.early_stop else None
@@ -322,7 +314,9 @@ def train_t21_from_dataset_root(
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
             "shuffle_seed": shuffle_seed,
-            "data_device_mode": batch_loading_mode,
+            "data_device_mode": config.training.data_device_mode,
+            "batches_per_block": config.training.batches_per_block,
+            "validation_every_epochs": validation_interval,
             "max_runtime_seconds": (
                 config.training.terminate_time_seconds
                 if max_runtime_seconds is None
@@ -358,12 +352,8 @@ def train_t21_from_dataset_root(
         prepared.test_features,
         prepared.test_targets,
         batch_size=config.training.batch_size if batch_size is None else batch_size,
-        prefetch_batches=(
-            config.training.prefetch_batches
-            if prefetch_batches is None
-            else prefetch_batches
-        ),
-        data_device_mode=batch_loading_mode,
+        prefetch_batches=config.training.prefetch_batches,
+        data_device_mode=config.training.data_device_mode,
     )
 
     # 6. Generate and return a training summary.
@@ -382,7 +372,9 @@ def train_t21_from_dataset_root(
         "best_epoch": history.best_epoch,
         "best_validation_loss": history.best_validation_loss,
         "training_stop_reason": history.stopped_reason,
-        "data_device_mode": batch_loading_mode,
+        "data_device_mode": config.training.data_device_mode,
+        "batches_per_block": config.training.batches_per_block,
+        "validation_every_epochs": validation_interval,
         "max_runtime_seconds": (
             config.training.terminate_time_seconds
             if max_runtime_seconds is None
@@ -438,14 +430,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
     parser.add_argument(
-        "--prefetch-batches",
+        "--validation-every-epochs",
         type=int,
-        help="Number of mini-batches to keep queued on the JAX device.",
-    )
-    parser.add_argument(
-        "--data-device-mode",
-        choices=["auto", "host_prefetch", "device_resident"],
-        help="Mini-batch loading mode for training and evaluation.",
+        help="Number of epochs between validation passes.",
     )
     parser.add_argument(
         "--learning-rate-schedule",
@@ -503,19 +490,13 @@ def main() -> None:
     if args.synthetic_smoke:
         epochs = 20 if args.epochs is None else args.epochs
         batch_size = 64 if args.batch_size is None else args.batch_size
-        prefetch_batches = (
-            t21_config().training.prefetch_batches
-            if args.prefetch_batches is None
-            else args.prefetch_batches
-        )
         result = run_synthetic_smoke(
             epochs=epochs,
             batch_size=batch_size,
-            prefetch_batches=prefetch_batches,
-            data_device_mode=(
-                t21_config().training.data_device_mode
-                if args.data_device_mode is None
-                else args.data_device_mode
+            validation_every_epochs=(
+                t21_config().training.validation_every_epochs
+                if args.validation_every_epochs is None
+                else args.validation_every_epochs
             ),
         )
         pprint(result)
@@ -546,8 +527,7 @@ def main() -> None:
             output_path=args.output,
             epochs=args.epochs,
             batch_size=args.batch_size,
-            prefetch_batches=args.prefetch_batches,
-            data_device_mode=args.data_device_mode,
+            validation_every_epochs=args.validation_every_epochs,
             learning_rate_schedule=args.learning_rate_schedule,
             learning_rate_final_fraction=args.learning_rate_final_fraction,
             learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
@@ -581,3 +561,11 @@ def _write_training_summary(summary_path: Path, summary: dict[str, Any]) -> None
     """Write a human-readable JSON summary beside a saved model checkpoint."""
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, indent=2))
+
+
+def _latest_finite(values: list[float]) -> float | None:
+    """Return the most recent finite value in a loss curve."""
+    for value in reversed(values):
+        if np.isfinite(value):
+            return float(value)
+    return None

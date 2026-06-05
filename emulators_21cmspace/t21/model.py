@@ -68,6 +68,7 @@ def t21_config() -> T21Config:
             epochs=10000,
             batch_size=1000,
             save_after_epochs=5,
+            data_device_mode="gpu_memory",
             terminate_time_seconds=3600 * 2,
             early_stop=True,
             early_stopping_patience=50,

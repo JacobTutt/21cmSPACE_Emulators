@@ -87,7 +87,7 @@ def test_training_accepts_device_arrays_without_epoch_logging() -> None:
     assert len(history.validation_losses) == 3
 
 
-def test_training_device_resident_mode_accepts_numpy_arrays() -> None:
+def test_training_gpu_memory_mode_accepts_numpy_arrays() -> None:
     rng = np.random.default_rng(5)
     features = rng.normal(size=(80, 2)).astype(np.float32)
     targets = (0.5 * features[:, 0] + features[:, 1]).astype(np.float32)
@@ -108,7 +108,7 @@ def test_training_device_resident_mode_accepts_numpy_arrays() -> None:
         batch_size=16,
         learning_rate=1e-3,
         weight_decay=0.0,
-        data_device_mode="device_resident",
+        data_device_mode="gpu_memory",
         seed=5,
         log_every=None,
     )

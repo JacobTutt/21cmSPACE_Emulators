@@ -32,7 +32,9 @@ settings:
 | `learning_rate_warmup_epochs` | Number of warmup epochs for `warmup_cosine`; ignored by the other schedules. |
 | `max_runtime_seconds` | Optional wall-clock training budget for graceful shutdown on long jobs. |
 | `shutdown_margin_seconds` | Time reserved after training for test evaluation and checkpoint saving. |
-| `data_device_mode` | Where batches are loaded from: `host_prefetch`, `device_resident`, or `auto`. |
+| `data_device_mode` | Memory mode: `cpu_memory`, `gpu_memory`, or `auto`. |
+| `batches_per_block` | Number of mini-batches grouped into one scanned host-memory training call. |
+| `validation_every_epochs` | Number of epochs between validation passes. |
 | `seed` | Random seed for deterministic shuffling of the training data. |
 
 ## The Training Step
@@ -64,7 +66,9 @@ model, history = train_mlp_regressor(
     learning_rate_schedule="warmup_cosine",
     learning_rate_final_fraction=0.05,
     learning_rate_warmup_epochs=5,
-    data_device_mode="host_prefetch",
+    data_device_mode="cpu_memory",
+    batches_per_block=8,
+    validation_every_epochs=1,
     seed=42,
 )
 ```
@@ -124,8 +128,9 @@ The high-level training commands expose the same scheduler settings:
 
 ## Evaluation Metrics
 
-At the end of every epoch, after all training mini-batches have been used to
-update the network, the trainer records two losses:
+After training updates have run for an epoch, the trainer records the training
+loss. It also evaluates the validation set on the requested validation
+interval:
 
 | Metric | Meaning |
 | :--- | :--- |
@@ -134,6 +139,24 @@ update the network, the trainer records two losses:
 
 The training loss shows whether the network is fitting the training set. The
 validation loss shows whether that fit generalises to unseen simulations.
+
+By default, validation runs every epoch. For large validation sets, this can be
+made less frequent:
+
+```python
+model, history = train_mlp_regressor(
+    model,
+    train_features,
+    train_targets,
+    validation_features,
+    validation_targets,
+    validation_every_epochs=10,
+)
+```
+
+Early stopping is checked only on epochs where validation is evaluated. Skipped
+validation epochs are stored as `NaN` in the validation curve so the training
+and validation arrays still align by epoch.
 
 ## Loss Curve Analysis
 
@@ -208,25 +231,16 @@ if the later test-loss calculation is interrupted.
 
 ## Efficient JAX Training
 
-The training code supports two ways of feeding mini-batches to the accelerator.
-The right choice depends on dataset size.
+The trainer has two memory modes. The choice is mostly determined by whether
+the prepared train/validation arrays fit comfortably in accelerator memory.
 
 | Mode | Use when | What happens |
 | :--- | :--- | :--- |
-| `host_prefetch` | The prepared arrays are too large to keep fully on GPU. | Arrays stay in host memory. The dataloader slices mini-batches and queues a few ahead with `jax.device_put`. |
-| `device_resident` | The prepared arrays fit comfortably on GPU. | Train/validation arrays are copied to the device once before the epoch loop. Evaluation arrays are copied once before evaluation. Mini-batches are then sliced on device. |
-| `auto` | You are calling the trainer directly and may pass either NumPy or JAX arrays. | JAX arrays use `device_resident`; NumPy arrays use `host_prefetch`. |
+| `gpu_memory` | The full prepared train/validation arrays fit on GPU. | Arrays are copied to the device once. Each epoch shuffles row indices on device and scans over all mini-batches with `nnx.scan`. |
+| `cpu_memory` | The prepared arrays are too large to keep fully on GPU. | Arrays stay in host memory. The CPU shuffles rows, builds fixed-shape blocks of mini-batches, and queues blocks to the device. |
+| `auto` | You are calling the trainer directly with either NumPy or JAX arrays. | JAX arrays use `gpu_memory`; NumPy arrays use `cpu_memory`. |
 
-For large simulation suites, the usual workflow is host-to-device streaming:
-
-1. **Store arrays on the host**: Prepared feature and target arrays can remain
-   in system memory.
-2. **Train on mini-batches**: Only the current fixed-shape mini-batches are
-   transferred to the JAX device.
-3. **Prefetch future batches**: While the device trains on one batch, the next
-   batches can be prepared and queued with `jax.device_put`.
-
-For small datasets, remove the repeated host-to-device transfer:
+For small datasets, use the GPU-memory path:
 
 ```python
 model, history = train_mlp_regressor(
@@ -235,24 +249,47 @@ model, history = train_mlp_regressor(
     train_targets,
     validation_features,
     validation_targets,
-    batch_size=1024,
+    batch_size=10000,
     epochs=1000,
-    data_device_mode="device_resident",
+    data_device_mode="gpu_memory",
 )
 ```
 
-The high-level CLIs expose the same option:
+This is the fastest path when the arrays fit. The full training set stays on
+GPU, the training rows are reshuffled each epoch, and all mini-batch updates are
+run inside one scanned epoch.
 
-```bash
-21cmspace-t21-train \
-  --dataset-root /path/to/21cmspace/data \
-  --output outputs/t21_model.nenemu \
-  --data-device-mode device_resident
+For large simulation suites, use CPU-memory streaming:
+
+1. **Store arrays on the host**: Prepared feature and target arrays can remain
+   in system memory.
+2. **Build fixed-shape blocks**: Each block contains several mini-batches,
+   padded and masked so every scanned call has the same shape.
+3. **Prefetch future blocks**: While the device trains on one block, later
+   blocks are prepared and queued with `jax.device_put`.
+
+```python
+model, history = train_mlp_regressor(
+    model,
+    train_features,
+    train_targets,
+    validation_features,
+    validation_targets,
+    batch_size=10000,
+    epochs=1000,
+    data_device_mode="cpu_memory",
+    batches_per_block=16,
+    prefetch_batches=4,
+)
 ```
 
-`prefetch_batches` only changes the `host_prefetch` path. In `device_resident`
-mode there is no host-side queue because the arrays have already been staged on
-the device before mini-batch iteration starts.
+`batches_per_block` controls how many mini-batches are grouped into one scanned
+device call. `prefetch_batches` controls how many of those blocks are kept
+queued ahead of the training loop.
+
+`prefetch_batches` only changes the `cpu_memory` path. In `gpu_memory`
+mode there is no host-side queue because the arrays are already staged on the
+device.
 
 ### Training Pipeline Flow
 
