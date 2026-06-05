@@ -189,14 +189,20 @@ elapsed time + estimated next epoch + shutdown margin >= max runtime
 -> save the checkpoint package
 ```
 
-For Slurm scripts, also request an early signal before the wall limit:
+For Slurm scripts, request a non-fatal warning signal before the wall limit:
 
 ```bash
-#SBATCH --signal=B:TERM@900
+#SBATCH --signal=USR1@900
 ```
 
-This gives Python a chance to catch `SIGTERM`, finish the current epoch, and
-return to the normal save path. A hard kill cannot be handled safely.
+This gives Python a chance to catch `SIGUSR1`, finish the current epoch, and
+return to the normal save path. Avoid `B:TERM@900`: that can terminate the batch
+shell before Python has a chance to stop cleanly. A hard kill cannot be handled
+safely.
+
+The model package is saved before the held-out test evaluation. This means a
+cleanly stopped Slurm job should still leave a loadable `.nenemu` package even
+if the later test-loss calculation is interrupted.
 
 ## Efficient JAX Training
 

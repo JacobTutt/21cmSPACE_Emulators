@@ -295,20 +295,9 @@ def train_delta21_from_dataset_root(
         log_prefix="delta21",
     )
 
-    # 4. Evaluate performance on the held-out test set.
-    test_loss = evaluate_mlp_regressor(
-        model,
-        prepared.test_features,
-        prepared.test_targets,
-        batch_size=config.training.batch_size if batch_size is None else batch_size,
-        prefetch_batches=(
-            config.training.prefetch_batches
-            if prefetch_batches is None
-            else prefetch_batches
-        ),
-    )
-
-    # 5. Prepare and save the versioned model package (.nenemu).
+    # 4. Save the versioned model package (.nenemu) before the test evaluation.
+    # This makes Slurm jobs safer: once training returns, the model is written
+    # before the potentially expensive held-out test pass starts.
     output = Path("delta21_model.nenemu") if output_path is None else Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -353,6 +342,19 @@ def train_delta21_from_dataset_root(
         learning_rate_schedule=schedule_name,
         learning_rate_final_fraction=schedule_final_fraction,
         learning_rate_warmup_epochs=schedule_warmup_epochs,
+    )
+
+    # 5. Evaluate performance on the held-out test set.
+    test_loss = evaluate_mlp_regressor(
+        model,
+        prepared.test_features,
+        prepared.test_targets,
+        batch_size=config.training.batch_size if batch_size is None else batch_size,
+        prefetch_batches=(
+            config.training.prefetch_batches
+            if prefetch_batches is None
+            else prefetch_batches
+        ),
     )
 
     # 6. Generate and return a training summary.
