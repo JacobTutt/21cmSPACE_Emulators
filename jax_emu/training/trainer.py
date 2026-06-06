@@ -343,6 +343,49 @@ def train_mlp_regressor(
         )
         return jnp.sum(squared_errors), jnp.sum(example_counts)
 
+    @nnx.jit
+    def eval_epoch_scan_step(
+        model_instance: DenseMLP,
+        features: jnp.ndarray,
+        targets: jnp.ndarray,
+        batch_starts: jnp.ndarray,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Evaluate a GPU-memory dataset by scanning over fixed-size batches.
+        """
+
+        @nnx.scan(
+            in_axes=(None, None, None, 0),
+            out_axes=0,
+        )
+        def scan_step(
+            current_model: DenseMLP,
+            full_features: jnp.ndarray,
+            full_targets: jnp.ndarray,
+            start: jnp.ndarray,
+        ) -> tuple[jnp.ndarray, jnp.ndarray]:
+            """
+            Gather one validation batch and return summed squared error.
+            """
+            row_positions = start + jnp.arange(batch_size, dtype=start.dtype)
+            valid = row_positions < len(full_features)
+            safe_positions = jnp.minimum(row_positions, len(full_features) - 1)
+            batch_features = full_features[safe_positions]
+            batch_targets = full_targets[safe_positions]
+            batch_mask = valid.astype(jnp.float32)
+
+            preds = current_model(batch_features).squeeze(-1)
+            squared_error = jnp.square(preds - batch_targets) * batch_mask
+            return jnp.sum(squared_error), jnp.sum(batch_mask)
+
+        squared_errors, example_counts = scan_step(
+            model_instance,
+            features,
+            targets,
+            batch_starts,
+        )
+        return jnp.sum(squared_errors), jnp.sum(example_counts)
+
     # Initialise lists for loss curves and early-stopping state to be stored.
     train_losses: list[float] = []
     validation_losses: list[float] = []
@@ -425,43 +468,58 @@ def train_mlp_regressor(
             )
             validation_loss = float("nan")
             if run_validation:
-                # Validation uses scanned blocks in both memory modes. This
-                # keeps the activation memory bounded even when the full
-                # validation array itself fits on the GPU.
-                validation_squared_error: list[jax.Array] = []
-                validation_example_count = 0
-                for (
-                    block_features,
-                    block_targets,
-                    block_mask,
-                    real_examples,
-                ) in iter_device_batch_blocks(
-                    validation_features,
-                    validation_targets,
-                    batch_size,
-                    shuffle=False,
-                    rng=rng,
-                    prefetch_batches=prefetch_batches,
-                    data_device_mode=resolved_data_device_mode,
-                    batches_per_block=batches_per_block,
-                ):
-                    squared_error, example_count = eval_block_step(
+                if resolved_data_device_mode == "gpu_memory":
+                    validation_batch_starts = jnp.arange(
+                        0,
+                        len(validation_features),
+                        batch_size,
+                        dtype=jnp.int32,
+                    )
+                    squared_error, example_count = eval_epoch_scan_step(
                         model,
+                        validation_features,
+                        validation_targets,
+                        validation_batch_starts,
+                    )
+                    validation_loss = float(squared_error / jnp.maximum(example_count, 1.0))
+                else:
+                    # CPU-memory validation uses scanned blocks and prefetching,
+                    # so the validation pass has the same memory behaviour as
+                    # CPU-memory training.
+                    validation_squared_error: list[jax.Array] = []
+                    validation_example_count = 0
+                    for (
                         block_features,
                         block_targets,
                         block_mask,
+                        real_examples,
+                    ) in iter_device_batch_blocks(
+                        validation_features,
+                        validation_targets,
+                        batch_size,
+                        shuffle=False,
+                        rng=rng,
+                        prefetch_batches=prefetch_batches,
+                        data_device_mode=resolved_data_device_mode,
+                        batches_per_block=batches_per_block,
+                    ):
+                        squared_error, example_count = eval_block_step(
+                            model,
+                            block_features,
+                            block_targets,
+                            block_mask,
+                        )
+                        validation_squared_error.append(squared_error)
+                        validation_example_count += real_examples
+                    if not validation_squared_error:
+                        raise ValueError("Validation data produced no mini-batches.")
+                    validation_loss = float(
+                        np.asarray(
+                            jax.device_get(validation_squared_error),
+                            dtype=np.float64,
+                        ).sum()
                     )
-                    validation_squared_error.append(squared_error)
-                    validation_example_count += real_examples
-                if not validation_squared_error:
-                    raise ValueError("Validation data produced no mini-batches.")
-                validation_loss = float(
-                    np.asarray(
-                        jax.device_get(validation_squared_error),
-                        dtype=np.float64,
-                    ).sum()
-                )
-                validation_loss /= max(validation_example_count, 1)
+                    validation_loss /= max(validation_example_count, 1)
 
                 validation_epochs.append(epoch)
 
