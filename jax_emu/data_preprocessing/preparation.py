@@ -72,6 +72,8 @@ def prepare_fixed_grid_training_split(
     random_state: int = 42,
     shuffle_seed: int = 42,
     standardize_target: bool = True,
+    target_min: float | None = None,
+    sampled_axes_override: tuple[np.ndarray, ...] | None = None,
 ) -> PreparedSplit:
     """
     Prepare one fixed-grid train / validation / test split.
@@ -106,6 +108,11 @@ def prepare_fixed_grid_training_split(
         Seed used for final row-wise shuffling of the flattened arrays.
     standardize_target:
         Whether to divide targets by one global training-label standard deviation.
+    target_min:
+        Optional lower bound applied after the physical-to-training target
+        transform and before splitting, interpolation, or target standardisation.
+    sampled_axes_override:
+        Optional transformed-coordinate grid to use instead of evenly sampled axes.
 
     Returns
     -------
@@ -113,7 +120,12 @@ def prepare_fixed_grid_training_split(
         The processed and shuffled datasets ready for the trainer.
     """
     # Step 1: Apply the requested physical-to-training transform (e.g. log10) to targets.
-    transformed_target = transform_target(target, data_log=data_log, offset=offset)
+    transformed_target = transform_target(
+        target,
+        data_log=data_log,
+        offset=offset,
+        target_min=target_min,
+    )
 
     # Step 2: Split the simulations (and their targets) into train, validation, and test sets.
     # This split happens at the simulation level, before resampling or flattening.
@@ -137,7 +149,11 @@ def prepare_fixed_grid_training_split(
     # Determine the transformed physical coordinates and the limits of the shared training grid.
     transformed_axes, transformed_limits = transformed_axis_configuration(axes, axis_specs)
     # Build the deterministic shared grid onto which all simulations will be interpolated.
-    sampled_axes = build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
+    sampled_axes = (
+        build_fixed_axis_grid(transformed_axes, transformed_limits, axis_specs)
+        if sampled_axes_override is None
+        else sampled_axes_override
+    )
 
     # Step 4: Construct the feature names.
     # The final feature matrix will contain the axis coordinates followed by the simulation parameters.
@@ -238,6 +254,7 @@ def transform_target(
     *,
     data_log: bool,
     offset: float | None,
+    target_min: float | None = None,
 ) -> np.ndarray:
     """
     Apply the configured target transform before splitting simulations.
@@ -250,6 +267,8 @@ def transform_target(
         Whether to apply log10 to the targets.
     offset:
         Optional constant to add to the targets before logging.
+    target_min:
+        Optional floor applied in transformed target space.
 
     Returns
     -------
@@ -260,10 +279,10 @@ def transform_target(
     arr = np.asarray(target, dtype=float).copy()
     # If no log transform is requested, return the array as-is.
     if not data_log:
-        return arr
+        return apply_target_floor(arr, target_min)
     # If an offset is provided, add it before taking the log.
     if offset is not None:
-        return np.log10(arr + offset)
+        return apply_target_floor(np.log10(arr + offset), target_min)
 
     # If no offset is provided, we must handle zero-valued bins manually.
     non_zero = arr[arr != 0]
@@ -276,7 +295,16 @@ def transform_target(
         # Keep zero-valued bins finite in log space by replacing them with a
         # small positive floor tied to the smallest non-zero target value.
         arr[zero_mask] = minimum * 1e-3
-    return np.log10(arr)
+    return apply_target_floor(np.log10(arr), target_min)
+
+
+def apply_target_floor(target: np.ndarray, target_min: float | None) -> np.ndarray:
+    """
+    Apply an optional lower bound to transformed target values.
+    """
+    if target_min is None:
+        return target
+    return np.maximum(target, target_min)
 
 
 # Dataset Splitting

@@ -24,6 +24,10 @@ from jax_emu.data_preprocessing.parameters import PreparedFeatures, prepare_feat
 from jax_emu.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
 
 
+DELTA21_LOG_TARGET_FLOOR = -2.0
+DELTA21_LOW_Z_GRID_POWER = 1.8
+
+
 # Emulator Specification
 # ----------------------
 # Defines the input/output contract for the Delta21 (power spectrum) model.
@@ -47,7 +51,7 @@ def delta21_spec() -> EmulatorSpec:
         # The Delta21 emulator operates on a 2D redshift-wavenumber grid.
         axes=(
             # Redshift stays in physical space and is z-score scaled later.
-            AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=50),
+            AxisSpec(name="z", transform="identity", limits=(6.0, 27.0), nsample=80),
             # Wavenumber k is transformed to log10 space for training.
             AxisSpec(
                 name="k",
@@ -150,6 +154,7 @@ def prepare_twentyonecmspace_delta21_training_split(
     prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
     # Get the Delta21 emulator contract.
     spec = delta21_spec()
+    sampled_axes = delta21_low_z_sampled_axes(spec.axes)
 
     # Run the generic preparation workflow with Delta21-specific settings.
     return prepare_fixed_grid_training_split(
@@ -174,6 +179,8 @@ def prepare_twentyonecmspace_delta21_training_split(
         # Delta21 signals are trained in log10 space with the JWST synergies offset.
         data_log=True,
         offset=1e-8,
+        target_min=DELTA21_LOG_TARGET_FLOOR,
+        sampled_axes_override=sampled_axes,
         train_size=0.6,
         validation_size=0.2,
         test_size=0.2,
@@ -182,3 +189,19 @@ def prepare_twentyonecmspace_delta21_training_split(
         # Divide log-space targets by one global training-label std.
         standardize_target=True,
     )
+
+
+def delta21_low_z_sampled_axes(axis_specs: tuple[AxisSpec, ...]) -> tuple[np.ndarray, ...]:
+    """
+    Build the Delta21 training grid with extra redshift density at low z.
+
+    Returned axes are in the transformed coordinate system expected by the
+    shared preprocessing path: z is physical, while k is log10(k).
+    """
+    z_spec, k_spec = axis_specs
+    z_low, z_high = z_spec.limits
+    k_low, k_high = k_spec.limits
+    u = np.linspace(0.0, 1.0, z_spec.nsample)
+    z_grid = z_low + (z_high - z_low) * u**DELTA21_LOW_Z_GRID_POWER
+    log_k_grid = np.linspace(np.log10(k_low), np.log10(k_high), k_spec.nsample)
+    return z_grid, log_k_grid
