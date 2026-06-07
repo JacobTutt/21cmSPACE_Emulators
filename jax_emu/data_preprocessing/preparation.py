@@ -74,6 +74,7 @@ def prepare_fixed_grid_training_split(
     standardize_target: bool = True,
     target_min: float | None = None,
     sampled_axes_override: tuple[np.ndarray, ...] | None = None,
+    interpolation_method: str = "linear",
 ) -> PreparedSplit:
     """
     Prepare one fixed-grid train / validation / test split.
@@ -113,6 +114,9 @@ def prepare_fixed_grid_training_split(
         transform and before splitting, interpolation, or target standardisation.
     sampled_axes_override:
         Optional transformed-coordinate grid to use instead of evenly sampled axes.
+    interpolation_method:
+        Interpolation method passed to SciPy's `RegularGridInterpolator` when
+        resampling simulation targets onto the shared grid.
 
     Returns
     -------
@@ -166,16 +170,19 @@ def prepare_fixed_grid_training_split(
         train_target,
         transformed_axes=transformed_axes,
         sampled_axes=sampled_axes,
+        interpolation_method=interpolation_method,
     )
     validation_target_grid = resample_targets_to_grid(
         validation_target,
         transformed_axes=transformed_axes,
         sampled_axes=sampled_axes,
+        interpolation_method=interpolation_method,
     )
     test_target_grid = resample_targets_to_grid(
         test_target,
         transformed_axes=transformed_axes,
         sampled_axes=sampled_axes,
+        interpolation_method=interpolation_method,
     )
 
     # Step 6: Optionally apply global target standardization.
@@ -383,6 +390,7 @@ def resample_targets_to_grid(
     *,
     transformed_axes: tuple[np.ndarray, ...],
     sampled_axes: tuple[np.ndarray, ...],
+    interpolation_method: str = "linear",
 ) -> np.ndarray:
     """
     Resample each simulation onto one deterministic shared axis grid.
@@ -395,6 +403,8 @@ def resample_targets_to_grid(
         The physical axis coordinates for the input targets.
     sampled_axes:
         The coordinates of the shared grid to interpolate onto.
+    interpolation_method:
+        Interpolation method passed to SciPy's `RegularGridInterpolator`.
 
     Returns
     -------
@@ -407,12 +417,12 @@ def resample_targets_to_grid(
     # Initialise the output array.
     resampled = np.empty((len(target), *axis_shape), dtype=float)
 
-    # Loop through each simulation and perform linear interpolation.
+    # Loop through each simulation and interpolate onto the requested grid.
     for idx, target_row in enumerate(target):
         interpolator = RegularGridInterpolator(
             transformed_axes,
             target_row,
-            method="linear",
+            method=interpolation_method,
             bounds_error=True,
         )
         # Reshape the interpolated values back to the grid structure.

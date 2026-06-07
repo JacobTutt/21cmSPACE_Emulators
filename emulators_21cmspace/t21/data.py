@@ -164,6 +164,7 @@ def prepare_twentyonecmspace_t21_training_split(
         test_size=0.2,
         random_state=random_state,
         shuffle_seed=shuffle_seed,
+        interpolation_method="cubic",
         # Divide targets by one global training-label std, following globalemu.
         standardize_target=True,
     )
