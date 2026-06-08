@@ -39,12 +39,22 @@ dev = [
   "pytest",
 ]
 [project.scripts]
-21cmspace-delta21-train = "emulators_21cmspace.delta21.train:main"
-21cmspace-t21-train = "emulators_21cmspace.t21.train:main"
+21cmspace-delta21-train = "examples_21cmspace.delta21.train:main"
+21cmspace-t21-train = "examples_21cmspace.t21.train:main"
+21cmspace-delta21-infer = "examples_21cmspace.delta21.file_inference:main"
+21cmspace-t21-infer = "examples_21cmspace.t21.file_inference:main"
+21cmspace-hera-infer = "examples_21cmspace.delta21.hera_inference:main"
+21cmspace-nenufar-infer = "examples_21cmspace.delta21.nenufar_inference:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["jax_emu*", "emulators_21cmspace*"]
+include = ["jax_emu*", "examples_21cmspace*"]
+
+[tool.setuptools.package-data]
+examples_21cmspace = [
+  "data/hera/observations_H1C_IDR2/*.h5",
+  "data/nenufar/*.csv",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

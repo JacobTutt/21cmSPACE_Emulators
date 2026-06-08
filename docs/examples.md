@@ -68,13 +68,13 @@ load dataset
 import numpy as np
 
 # T21-specific parameter filtering and emulator specification.
-from emulators_21cmspace.t21.data import (
+from examples_21cmspace.t21.data import (
     prepare_twentyonecmspace_t21_parameters,
     t21_spec,
 )
 
 # Dataset loader for the raw 21cmSPACE global-signal files.
-from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_t21
+from examples_21cmspace.twentyonecmspace import load_twentyonecmspace_t21
 
 # Lower-level preprocessing utilities used to build the training arrays.
 from jax_emu.data_preprocessing import (
@@ -309,10 +309,10 @@ import jax
 from flax import nnx
 
 # T21 spec is saved so inference can reconstruct the preprocessing contract.
-from emulators_21cmspace.t21.data import t21_spec
+from examples_21cmspace.t21.data import t21_spec
 
 # T21 config stores the default architecture and training settings.
-from emulators_21cmspace.t21.model import t21_config
+from examples_21cmspace.t21.model import t21_config
 
 # DenseMLP is the neural network architecture used by the emulator.
 from jax_emu.architectures import DenseMLP
@@ -413,7 +413,7 @@ DenseMLP architecture + trained weights + T21 preprocessing metadata
 import jax.numpy as jnp
 
 # T21 inference helpers load the checkpoint and build a reusable fixed-grid emulator.
-from emulators_21cmspace.t21.emulator import build_t21_fixed_grid_emulator, load_t21_package
+from examples_21cmspace.t21.emulator import build_t21_fixed_grid_emulator, load_t21_package
 
 # Load the trained model and its saved metadata.
 package = load_t21_package("outputs/t21_model.nenemu")
@@ -461,13 +461,13 @@ same parameter transforms and feature scaling used during training.
 import numpy as np
 
 # Delta21-specific parameter filtering and emulator specification.
-from emulators_21cmspace.delta21.data import (
+from examples_21cmspace.delta21.data import (
     delta21_spec,
     prepare_twentyonecmspace_delta21_parameters,
 )
 
 # Dataset loader for the raw 21cmSPACE power-spectrum files.
-from emulators_21cmspace.twentyonecmspace import load_twentyonecmspace_delta21
+from examples_21cmspace.twentyonecmspace import load_twentyonecmspace_delta21
 
 # Lower-level preprocessing utilities used to build the training arrays.
 from jax_emu.data_preprocessing import (
@@ -707,10 +707,10 @@ import jax
 from flax import nnx
 
 # Delta21 spec is saved so inference can reconstruct the preprocessing contract.
-from emulators_21cmspace.delta21.data import delta21_spec
+from examples_21cmspace.delta21.data import delta21_spec
 
 # Delta21 config stores the default architecture and training settings.
-from emulators_21cmspace.delta21.model import delta21_config
+from examples_21cmspace.delta21.model import delta21_config
 
 # DenseMLP is the neural network architecture used by the emulator.
 from jax_emu.architectures import DenseMLP
@@ -811,7 +811,7 @@ DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 import jax.numpy as jnp
 
 # Delta21 inference helpers load the checkpoint and build a reusable emulator.
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )
@@ -871,26 +871,26 @@ to the upper limits.
 import jax.numpy as jnp
 
 # Delta21 helper for fixed, non-rectangular coordinate lists.
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_point_emulator,
     default_delta21_hera_prior,
     load_delta21_package,
 )
 
 # HERA helpers extract the upper limits, errors, and window matrix.
-from jax_emu.inference import (
-    PowerSpectrumUpperLimitLikelihood,
+from examples_21cmspace.delta21.hera_data import (
     default_h1c_idr2_selections,
     hera_dataset_summary,
     load_hera_power_spectrum_dataset,
 )
+from jax_emu.inference import PowerSpectrumUpperLimitLikelihood
 
 # Load the trained Delta21 package.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
 # Load the H1C IDR2 field-1 selections used by the old HERA-only runs.
 hera_dataset = load_hera_power_spectrum_dataset(
-    default_h1c_idr2_selections("data/observations_H1C_IDR2", field="1")
+    default_h1c_idr2_selections(field="1")
 )
 print(hera_dataset_summary(hera_dataset))
 
@@ -922,18 +922,18 @@ Once extracted, save a portable cache and reuse it without reading the HDF5 file
 again:
 
 ```bash
-python examples/hera_power_spectrum_nested_sampling.py \
+21cmspace-hera-infer \
   --package outputs/delta21_model.nenemu \
   --summary-only \
-  --write-hera-cache data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz
+  --write-hera-cache outputs/hera_h1c_idr2_field1.npz
 ```
 
 Then run the HERA-only nested-sampling example:
 
 ```bash
-python examples/hera_power_spectrum_nested_sampling.py \
+21cmspace-hera-infer \
   --package outputs/delta21_model.nenemu \
-  --hera-npz data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz \
+  --hera-npz outputs/hera_h1c_idr2_field1.npz \
   --output-dir outputs/hera_nested_sampling
 ```
 

@@ -10,18 +10,12 @@ upper-limit likelihood.
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 from pprint import pprint
-import sys
 
 import jax
 import jax.numpy as jnp
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_point_emulator,
     default_delta21_hera_prior,
     load_delta21_package,
@@ -29,11 +23,14 @@ from emulators_21cmspace.delta21.emulator import (
 from jax_emu.inference import (
     NestedSamplingConfig,
     PowerSpectrumUpperLimitLikelihood,
+    run_nested_sampling,
+)
+from examples_21cmspace.delta21.hera_data import (
+    DEFAULT_HERA_IDR2_ROOT,
     default_h1c_idr2_selections,
     hera_dataset_summary,
     load_hera_power_spectrum_dataset,
     load_hera_power_spectrum_npz,
-    run_nested_sampling,
     save_hera_power_spectrum_npz,
 )
 
@@ -50,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--hera-idr2-root",
-        default="data/observations_H1C_IDR2",
+        default=str(DEFAULT_HERA_IDR2_ROOT),
         help="Directory containing pspec_h1c_idr2_field*.h5 files.",
     )
     parser.add_argument("--field", default="1", help="H1C IDR2 field to use.")

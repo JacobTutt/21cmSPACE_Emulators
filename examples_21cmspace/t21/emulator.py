@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
 from jax_emu.utils.checkpointing import load
-from emulators_21cmspace.t21.data import t21_spec
+from examples_21cmspace.t21.data import t21_spec
 
 
 # Loading Utilities

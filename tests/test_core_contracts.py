@@ -21,7 +21,7 @@ from jax_emu.training import TrainingHistory, build_learning_rate_schedule
 from flax import nnx
 
 from jax_emu.architectures.mlp import DenseMLP
-from emulators_21cmspace.t21.data import t21_spec
+from examples_21cmspace.t21.data import t21_spec
 
 
 def test_transform_round_trip_log10() -> None:

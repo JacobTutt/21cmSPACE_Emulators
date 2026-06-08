@@ -14,7 +14,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from emulators_21cmspace.delta21.data import (
+from examples_21cmspace.delta21.data import (
     delta21_spec,
 )
 from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
@@ -252,11 +252,11 @@ def describe_delta21_package(path: str | Path) -> dict[str, Any]:
 
 # Priors
 # ------
-# Reference prior used by the HERA power-spectrum nested-sampling example.
+# Reference prior used by the power-spectrum nested-sampling examples.
 
-def default_delta21_hera_prior() -> PriorSpec:
+def default_delta21_inference_prior() -> PriorSpec:
     """
-    Return a default HERA-only prior for the prepared Delta21 emulator inputs.
+    Return a default prior for the prepared Delta21 emulator inputs.
 
     The Delta21 emulator accepts either a raw 12-column 21cmSPACE table or the
     prepared nine-column table used by the network. This prior samples the
@@ -280,6 +280,13 @@ def default_delta21_hera_prior() -> PriorSpec:
             DiscretePrior("pop", [231.0, 232.0, 233.0]),
         ]
     )
+
+
+def default_delta21_hera_prior() -> PriorSpec:
+    """
+    Return the default prior used by the HERA example workflow.
+    """
+    return default_delta21_inference_prior()
 
 
 # Internal Helpers

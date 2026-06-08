@@ -22,15 +22,15 @@ import jax
 import numpy as np
 from flax import nnx
 
-from emulators_21cmspace.twentyonecmspace import DIMENSIONLESS_HUBBLE_PARAMETER
+from examples_21cmspace.twentyonecmspace import DIMENSIONLESS_HUBBLE_PARAMETER
 from jax_emu.data_preprocessing.preparation import prepare_fixed_grid_training_split
 from jax_emu.architectures.mlp import DenseMLP
-from emulators_21cmspace.delta21.data import (
+from examples_21cmspace.delta21.data import (
     delta21_spec,
     prepare_twentyonecmspace_delta21_parameters,
     prepare_twentyonecmspace_delta21_training_split,
 )
-from emulators_21cmspace.delta21.model import delta21_config
+from examples_21cmspace.delta21.model import delta21_config
 from jax_emu.utils.checkpointing import CheckpointMetadata, save
 from jax_emu.training import (
     evaluate_mlp_regressor,

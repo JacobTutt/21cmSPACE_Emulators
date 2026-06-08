@@ -13,7 +13,6 @@ from jax_emu.inference import (
     GaussianLikelihood,
     GlobalSignalForegroundLikelihood,
     GlobalSignalLikelihood,
-    HERAObservation,
     JointLikelihood,
     LogUniformPrior,
     NestedSamplingConfig,
@@ -23,13 +22,17 @@ from jax_emu.inference import (
     PowerSpectrumUpperLimitLikelihood,
     PriorSpec,
     UniformPrior,
+    resolve_nested_sampling_settings,
+    save_anesthetic_samples,
+)
+from examples_21cmspace.delta21.hera_data import (
+    HERAObservation,
     combine_hera_observations,
     hera_dataset_summary,
     load_hera_power_spectrum_npz,
-    resolve_nested_sampling_settings,
     save_hera_power_spectrum_npz,
-    save_anesthetic_samples,
 )
+from examples_21cmspace.delta21.nenufar_data import load_nenufar_table4_dataset
 
 
 class DummyEmulator:
@@ -347,6 +350,16 @@ def test_hera_observations_combine_into_block_window_dataset(tmp_path) -> None:
         np.asarray(cached.power_data.window_matrix),
         np.asarray(dataset.power_data.window_matrix),
     )
+
+
+def test_nenufar_table4_loader_returns_direct_upper_limit_data() -> None:
+    dataset = load_nenufar_table4_dataset()
+
+    assert dataset.power_data.coordinates.shape == (12, 2)
+    assert dataset.power_data.upper_limit.shape == (12,)
+    assert dataset.power_data.sigma.shape == (12,)
+    assert dataset.power_data.window_matrix is None
+    assert np.all(np.asarray(dataset.power_data.sigma) > 0.0)
 
 
 def test_joint_likelihood_sums_individual_modules() -> None:

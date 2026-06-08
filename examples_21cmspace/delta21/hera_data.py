@@ -19,6 +19,11 @@ import numpy as np
 from jax_emu.inference.likelihood import PowerSpectrumData
 
 
+DEFAULT_HERA_IDR2_ROOT = (
+    Path(__file__).resolve().parents[1] / "data" / "hera" / "observations_H1C_IDR2"
+)
+
+
 @dataclass(frozen=True)
 class HERADataSelection:
     """
@@ -93,7 +98,7 @@ class HERAPowerSpectrumDataset:
 
 
 def default_h1c_idr2_selections(
-    root: str | Path = "data/observations_H1C_IDR2",
+    root: str | Path = DEFAULT_HERA_IDR2_ROOT,
     *,
     field: str | int = "1",
 ) -> tuple[HERADataSelection, ...]:

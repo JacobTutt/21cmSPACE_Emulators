@@ -57,7 +57,7 @@ writes the JSON metadata alongside it.
 from dataclasses import asdict
 from pathlib import Path
 
-from emulators_21cmspace.t21.data import t21_spec
+from examples_21cmspace.t21.data import t21_spec
 from jax_emu.utils import CheckpointMetadata, save
 
 # Store the preprocessing and training information needed for inference.
@@ -148,7 +148,7 @@ helper can then apply the same forward transforms before the network and the
 same inverse transforms after the network.
 
 ```python
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )
@@ -173,7 +173,7 @@ For one-off calls, the convenience wrapper can still load and predict in one
 step:
 
 ```python
-from emulators_21cmspace.delta21.emulator import predict_delta21
+from examples_21cmspace.delta21.emulator import predict_delta21
 
 delta21 = predict_delta21(
     "outputs/delta21_model.nenemu",

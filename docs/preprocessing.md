@@ -230,7 +230,7 @@ to reproduce the exact transforms and scaling used during training.
 Training code saves this contract beside the model weights:
 
 ```python
-from emulators_21cmspace.delta21.data import delta21_spec
+from examples_21cmspace.delta21.data import delta21_spec
 from jax_emu.utils import CheckpointMetadata, save
 
 metadata = CheckpointMetadata(
@@ -274,7 +274,7 @@ During inference, the same metadata is loaded from the checkpoint:
 6. **Reconstruction**: fold flat predictions back into spectral arrays.
 
 ```python
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )

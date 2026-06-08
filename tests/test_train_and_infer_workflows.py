@@ -9,21 +9,21 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from emulators_21cmspace.delta21.emulator import (
+from examples_21cmspace.delta21.emulator import (
     build_delta21_fixed_coordinate_emulator,
     build_delta21_fixed_grid_emulator,
     build_delta21_emulator,
     build_delta21_predictor,
     predict_delta21,
 )
-from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
-from emulators_21cmspace.t21.emulator import (
+from examples_21cmspace.delta21.train import train_delta21_from_dataset_root
+from examples_21cmspace.t21.emulator import (
     build_t21_fixed_coordinate_emulator,
     build_t21_fixed_grid_emulator,
     build_t21_emulator,
     predict_t21,
 )
-from emulators_21cmspace.t21.train import train_t21_from_dataset_root
+from examples_21cmspace.t21.train import train_t21_from_dataset_root
 
 
 def write_mock_twentyonecmspace_dataset(tmp_path: Path) -> Path:

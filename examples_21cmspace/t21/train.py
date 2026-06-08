@@ -23,12 +23,12 @@ from flax import nnx
 
 from jax_emu.data_preprocessing.preparation import prepare_fixed_grid_training_split
 from jax_emu.architectures.mlp import DenseMLP
-from emulators_21cmspace.t21.data import (
+from examples_21cmspace.t21.data import (
     prepare_twentyonecmspace_t21_parameters,
     prepare_twentyonecmspace_t21_training_split,
     t21_spec,
 )
-from emulators_21cmspace.t21.model import t21_config
+from examples_21cmspace.t21.model import t21_config
 from jax_emu.utils.checkpointing import CheckpointMetadata, save
 from jax_emu.training import (
     evaluate_mlp_regressor,

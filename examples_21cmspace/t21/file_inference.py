@@ -1,7 +1,7 @@
 """
 Run file-based inference with a trained global 21-cm emulator.
 
-This is an example script rather than source package code. It loads arrays from
+This is an example package module. It loads arrays from
 disk, calls the reusable T21 emulator helper, and writes the prediction to an
 `.npz` file.
 """
@@ -11,17 +11,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from pprint import pprint
-import sys
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from emulators_21cmspace.t21.emulator import describe_t21_package, predict_t21
+from examples_21cmspace.t21.emulator import describe_t21_package, predict_t21
 
 
 def load_array_file(path: str | Path) -> np.ndarray:

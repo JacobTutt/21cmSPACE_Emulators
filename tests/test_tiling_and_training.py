@@ -8,8 +8,8 @@ import jax.numpy as jnp
 from flax import nnx
 
 from jax_emu.data_preprocessing.tiling import reconstruct_spectra, tile_spectra
-from emulators_21cmspace.delta21.data import delta21_spec
-from emulators_21cmspace.t21.data import t21_spec
+from examples_21cmspace.delta21.data import delta21_spec
+from examples_21cmspace.t21.data import t21_spec
 from jax_emu.architectures.mlp import DenseMLP
 from jax_emu.training import train_mlp_regressor
 

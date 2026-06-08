@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
-from emulators_21cmspace.twentyonecmspace import (
+from examples_21cmspace.twentyonecmspace import (
     TWENTYONECMSPACE_COLUMNS,
     load_twentyonecmspace_t21,
 )

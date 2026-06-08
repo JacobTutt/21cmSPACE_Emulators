@@ -1,17 +1,6 @@
 """Reusable inference utilities for emulator-based Bayesian analyses."""
 
 from jax_emu.inference.emulator import Emulator, FixedCoordinateEmulator, FixedGridEmulator
-from jax_emu.inference.hera import (
-    HERADataSelection,
-    HERAObservation,
-    HERAPowerSpectrumDataset,
-    combine_hera_observations,
-    default_h1c_idr2_selections,
-    hera_dataset_summary,
-    load_hera_power_spectrum_dataset,
-    load_hera_power_spectrum_npz,
-    save_hera_power_spectrum_npz,
-)
 from jax_emu.inference.likelihood import (
     GaussianLikelihood,
     GlobalSignalForegroundLikelihood,
@@ -45,9 +34,6 @@ __all__ = [
     "FixedCoordinateEmulator",
     "FixedGridEmulator",
     "GaussianLikelihood",
-    "HERADataSelection",
-    "HERAObservation",
-    "HERAPowerSpectrumDataset",
     "GlobalSignalForegroundLikelihood",
     "GlobalSignalLikelihood",
     "JointLikelihood",
@@ -61,13 +47,7 @@ __all__ = [
     "PriorSpec",
     "UniformPrior",
     "UpperLimitLikelihood",
-    "combine_hera_observations",
-    "default_h1c_idr2_selections",
-    "hera_dataset_summary",
-    "load_hera_power_spectrum_dataset",
-    "load_hera_power_spectrum_npz",
     "resolve_nested_sampling_settings",
     "run_nested_sampling",
-    "save_hera_power_spectrum_npz",
     "save_anesthetic_samples",
 ]

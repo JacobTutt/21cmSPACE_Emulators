@@ -88,7 +88,7 @@ theta["noise"]       -> noise nuisance parameter
 For a measured global signal, use a Gaussian likelihood:
 
 ```python
-from emulators_21cmspace.t21.emulator import build_t21_fixed_coordinate_emulator
+from examples_21cmspace.t21.emulator import build_t21_fixed_coordinate_emulator
 from jax_emu.inference import GlobalSignalLikelihood
 
 emulator = build_t21_fixed_coordinate_emulator(package, z_data)
@@ -171,17 +171,17 @@ field 1, bands 1 and 2, the same `kstart` values, the same decimation, and the
 same block window matrix used before the upper-limit likelihood is evaluated.
 
 ```python
-from emulators_21cmspace.delta21.emulator import build_delta21_fixed_point_emulator
-from jax_emu.inference import (
-    PowerSpectrumUpperLimitLikelihood,
+from examples_21cmspace.delta21.emulator import build_delta21_fixed_point_emulator
+from examples_21cmspace.delta21.hera_data import (
     default_h1c_idr2_selections,
     load_hera_power_spectrum_dataset,
 )
+from jax_emu.inference import PowerSpectrumUpperLimitLikelihood
 
 # This reads the HERA HDF5 products and returns coordinates, limits, errors,
 # and the block window matrix in one validated container.
 hera_data = load_hera_power_spectrum_dataset(
-    default_h1c_idr2_selections("data/observations_H1C_IDR2", field="1")
+    default_h1c_idr2_selections(field="1")
 ).power_data
 
 emulator = build_delta21_fixed_point_emulator(
@@ -205,18 +205,18 @@ that package is only available on one machine, extract once and save a portable
 cache:
 
 ```bash
-python examples/hera_power_spectrum_nested_sampling.py \
+21cmspace-hera-infer \
   --package outputs/delta21_model.nenemu \
   --summary-only \
-  --write-hera-cache data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz
+  --write-hera-cache outputs/hera_h1c_idr2_field1.npz
 ```
 
 Then later runs can use the cache directly:
 
 ```bash
-python examples/hera_power_spectrum_nested_sampling.py \
+21cmspace-hera-infer \
   --package outputs/delta21_model.nenemu \
-  --hera-npz data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz \
+  --hera-npz outputs/hera_h1c_idr2_field1.npz \
   --output-dir outputs/hera_nested_sampling
 ```
 
