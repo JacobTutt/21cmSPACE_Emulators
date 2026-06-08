@@ -102,6 +102,28 @@ likelihood = GlobalSignalLikelihood(
 loglike = likelihood(theta)
 ```
 
+The noise term must be defined in one of two ways:
+
+```python
+# Fixed noise or observational uncertainty.
+likelihood = GlobalSignalLikelihood(
+    emulator=emulator,
+    data=t21_data,
+    sigma=t21_sigma,
+)
+
+# Or sampled noise nuisance parameter.
+likelihood = GlobalSignalLikelihood(
+    emulator=emulator,
+    data=t21_data,
+)
+
+theta["noise"] = noise_parameter
+```
+
+If neither fixed `sigma` nor `theta["noise"]` is available, the likelihood will
+raise an error.
+
 For data with a smooth foreground, use the foreground likelihood. The
 foreground is a polynomial in reduced log-frequency:
 
@@ -126,8 +148,8 @@ loglike = likelihood(theta)
 
 The likelihood uses `theta["astro"]` for the emulator, `theta["foreground"]`
 for the polynomial coefficients, and `theta["noise"]` for the noise standard
-deviation. Other likelihoods in a joint run can ignore the nuisance groups and
-use only `theta["astro"]`.
+deviation, unless a fixed `sigma` is passed at initialization. Other likelihoods
+in a joint run can ignore the nuisance groups and use only `theta["astro"]`.
 
 ## Power Spectrum
 

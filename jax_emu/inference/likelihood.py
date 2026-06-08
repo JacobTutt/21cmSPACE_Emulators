@@ -193,13 +193,13 @@ class GlobalSignalLikelihood:
     Gaussian likelihood for a global 21-cm signal emulator.
 
     The emulator should already be initialized on the redshift points used by
-    the data. Calling the likelihood then only requires astrophysical
-    parameters.
+    the data. The noise model is either fixed by `sigma` at initialization or
+    supplied later as `parameters["noise"]`.
     """
 
     emulator: EmulatorLike
     data: jax.Array
-    sigma: jax.Array
+    sigma: jax.Array | None = None
     theory_fractional_error: float | jax.Array = 0.0
     name: str = "global_signal"
     _loglikelihood: Callable[[jax.Array], jax.Array] = field(
@@ -210,7 +210,7 @@ class GlobalSignalLikelihood:
 
     def __post_init__(self) -> None:
         data = jnp.asarray(self.data, dtype=jnp.float32)
-        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        sigma = _optional_array(self.sigma)
         theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
         object.__setattr__(self, "data", data)
         object.__setattr__(self, "sigma", sigma)
@@ -254,6 +254,7 @@ class GlobalSignalForegroundLikelihood:
     data: jax.Array
     frequency: jax.Array | None = None
     reduced_frequency: jax.Array | None = None
+    sigma: jax.Array | None = None
     theory_fractional_error: float | jax.Array = 0.0
     signal_scale: float = 1.0
     name: str = "global_signal_foreground"
@@ -269,8 +270,10 @@ class GlobalSignalForegroundLikelihood:
         if data.shape[-1] != reduced_frequency.shape[0]:
             raise ValueError("data and reduced_frequency must have matching lengths.")
 
+        sigma = _optional_array(self.sigma)
         theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
         object.__setattr__(self, "data", data)
+        object.__setattr__(self, "sigma", sigma)
         object.__setattr__(self, "reduced_frequency", reduced_frequency)
         object.__setattr__(self, "theory_fractional_error", theory_fractional_error)
         object.__setattr__(
@@ -280,6 +283,7 @@ class GlobalSignalForegroundLikelihood:
                 self.emulator,
                 data,
                 reduced_frequency,
+                sigma,
                 theory_fractional_error,
                 self.signal_scale,
             ),
@@ -549,6 +553,20 @@ def _noise_sigma(noise: jax.Array) -> jax.Array:
     return noise_array[..., 0][..., None]
 
 
+def _likelihood_noise_sigma(
+    parameters: jax.Array | Mapping[str, jax.Array],
+    fixed_sigma: jax.Array | None,
+) -> jax.Array:
+    """
+    Return fixed noise or the grouped `noise` nuisance parameter.
+    """
+    if fixed_sigma is not None:
+        return fixed_sigma
+    if not isinstance(parameters, Mapping):
+        raise ValueError("Global-signal likelihood requires either fixed sigma or theta['noise'].")
+    return _noise_sigma(_parameter_group(parameters, "noise"))
+
+
 def _build_gaussian_loglikelihood(
     data: jax.Array,
     sigma: jax.Array,
@@ -593,19 +611,24 @@ def _build_upper_limit_loglikelihood(
 def _build_global_signal_loglikelihood(
     emulator: EmulatorLike,
     data: jax.Array,
-    sigma: jax.Array,
+    sigma: jax.Array | None,
     theory_fractional_error: jax.Array,
 ) -> Callable[[jax.Array], jax.Array]:
     """
     Build the compiled global-signal likelihood.
     """
-    gaussian = _build_gaussian_loglikelihood(data, sigma, include_normalization=True)
 
     @jax.jit
     def loglikelihood(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         prediction = emulator.emulate(_astro_parameters(parameters))
         theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
-        return gaussian(prediction, theory_sigma)
+        total_sigma = _total_sigma(_likelihood_noise_sigma(parameters, sigma), theory_sigma)
+        residual = data - prediction
+        loglike = (
+            -0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * total_sigma**2), axis=-1)
+            -0.5 * jnp.sum((residual / total_sigma) ** 2, axis=-1)
+        )
+        return _squeeze_single(loglike)
 
     return loglikelihood
 
@@ -614,6 +637,7 @@ def _build_global_signal_foreground_loglikelihood(
     emulator: EmulatorLike,
     data: jax.Array,
     reduced_frequency: jax.Array,
+    sigma: jax.Array | None,
     theory_fractional_error: jax.Array,
     signal_scale: float,
 ) -> Callable[[Mapping[str, jax.Array]], jax.Array]:
@@ -625,12 +649,11 @@ def _build_global_signal_foreground_loglikelihood(
     def loglikelihood(parameters: Mapping[str, jax.Array]) -> jax.Array:
         astro = _parameter_group(parameters, "astro")
         foreground_coefficients = _parameter_group(parameters, "foreground")
-        noise = _parameter_group(parameters, "noise")
 
         signal = emulator.emulate(astro) * signal_scale
         foreground = _polynomial_foreground(reduced_frequency, foreground_coefficients)
         theory_sigma = _fractional_theory_sigma(signal, theory_fractional_error)
-        total_sigma = _total_sigma(_noise_sigma(noise), theory_sigma)
+        total_sigma = _total_sigma(_likelihood_noise_sigma(parameters, sigma), theory_sigma)
         residual = data - foreground - signal
         loglike = (
             -0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * total_sigma**2), axis=-1)

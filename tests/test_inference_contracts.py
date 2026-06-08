@@ -102,6 +102,38 @@ def test_global_signal_foreground_likelihood_uses_nuisance_groups() -> None:
     np.testing.assert_allclose(float(loglike), -0.5 * 3 * np.log(2 * np.pi), rtol=1e-6)
 
 
+def test_global_signal_likelihood_can_use_noise_group() -> None:
+    likelihood = GlobalSignalLikelihood(
+        emulator=DummyEmulator(jnp.array([1.0, 2.0])),
+        data=jnp.array([1.0, 2.0]),
+    )
+    parameters = {
+        "astro": jnp.array([0.0]),
+        "noise": jnp.array([1.0]),
+    }
+
+    loglike = likelihood(parameters)
+
+    np.testing.assert_allclose(float(loglike), -0.5 * 2 * np.log(2 * np.pi), rtol=1e-6)
+
+
+def test_global_signal_foreground_likelihood_can_use_fixed_sigma() -> None:
+    likelihood = GlobalSignalForegroundLikelihood(
+        emulator=DummyEmulator(jnp.array([1.0])),
+        data=jnp.array([11.0]),
+        reduced_frequency=jnp.array([0.0]),
+        sigma=jnp.array([1.0]),
+    )
+    parameters = {
+        "astro": jnp.array([0.0]),
+        "foreground": jnp.array([1.0]),
+    }
+
+    loglike = likelihood(parameters)
+
+    np.testing.assert_allclose(float(loglike), -0.5 * np.log(2 * np.pi), rtol=1e-6)
+
+
 def test_power_spectrum_upper_limit_penalizes_models_above_the_limit() -> None:
     parameters = jnp.array([0.0])
     sigma = jnp.array([1.0, 1.0])
