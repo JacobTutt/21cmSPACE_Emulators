@@ -9,6 +9,7 @@ description = "JAX-native emulators for 21cmSPACE 21-cm inference workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "blackjax",
   "matplotlib",
   "numpy",
   "scipy",
@@ -36,10 +37,6 @@ cuda13 = [
 dev = [
   "pytest",
 ]
-inference = [
-  "blackjax",
-]
-
 [project.scripts]
 21cmspace-delta21-train = "emulators_21cmspace.delta21.train:main"
 21cmspace-delta21-infer = "emulators_21cmspace.delta21.infer:main"

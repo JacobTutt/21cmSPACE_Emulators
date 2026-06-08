@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from jax_emu.inference import (
     DiscretePrior,
@@ -94,6 +95,15 @@ def test_power_spectrum_data_uses_explicit_coordinate_pairs() -> None:
 
     np.testing.assert_allclose(np.asarray(data.z_model_points), np.array([7.9, 7.9, 10.4]))
     np.testing.assert_allclose(np.asarray(data.k_model_points), np.array([0.12, 0.18, 0.09]))
+
+
+def test_power_spectrum_data_rejects_grid_shaped_coordinates() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        PowerSpectrumData(
+            coordinates=jnp.ones((2, 3)),
+            upper_limit=jnp.ones(2),
+            sigma=jnp.ones(2),
+        )
 
 
 def test_power_spectrum_likelihood_applies_window_matrix() -> None:

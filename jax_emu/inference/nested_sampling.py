@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+import blackjax
 import jax
 import jax.numpy as jnp
 
@@ -109,31 +110,14 @@ def run_nested_sampling(
     NestedSamplingResult
         Raw final sampler state plus extracted samples/evidence when available.
     """
-    try:
-        import blackjax
-    except ImportError as exc:
-        raise ImportError(
-            "BlackJAX is required for nested sampling. Install the inference "
-            "extra, for example `python -m pip install -e '.[cpu,inference]'`."
-        ) from exc
-
     if prior.ndim <= 0:
         raise ValueError("Nested sampling requires at least one sampled prior dimension.")
 
     n_inner = 3 * prior.ndim if num_inner_steps is None else num_inner_steps
     unit_loglikelihood = make_unit_cube_loglikelihood(prior, likelihood)
-    unit_logprior = _unit_cube_logprior
 
-    algorithm_builder = getattr(blackjax, "nss", None)
-    if algorithm_builder is None:
-        raise AttributeError(
-            "This BlackJAX installation does not expose `blackjax.nss`. "
-            "The inference layer is ready for BlackJAX nested sampling, but "
-            "the exact sampler API must match the installed BlackJAX version."
-        )
-
-    algorithm = algorithm_builder(
-        logprior_fn=unit_logprior,
+    algorithm = blackjax.nss(
+        logprior_fn=_unit_cube_logprior,
         loglikelihood_fn=unit_loglikelihood,
         num_delete=num_delete,
         num_inner_steps=n_inner,

@@ -89,7 +89,7 @@ Identify which machine:
 For CPU development:
 
 ```bash
-uv sync --extra cpu --extra dev --extra inference
+uv sync --extra cpu --extra dev
 source .venv/bin/activate
 ```
 
@@ -97,10 +97,10 @@ For GPU systems, choose the command that matches your driver stack:
 
 ```bash
 # CUDA 12 (older systems)
-uv sync --extra cuda12 --extra dev --extra inference
+uv sync --extra cuda12 --extra dev
 
 # CUDA 13 (latest)
-uv sync --extra cuda13 --extra dev --extra inference
+uv sync --extra cuda13 --extra dev
 
 source .venv/bin/activate
 ```
@@ -118,7 +118,7 @@ python -m pip install -U pip
 
 # 2. Install based on your hardware
 # Replace [cpu] with [cuda12] or [cuda13] if using a GPU
-python -m pip install -e ".[cpu,dev,inference]"
+python -m pip install -e ".[cpu,dev]"
 ```
 
 ---

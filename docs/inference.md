@@ -16,6 +16,10 @@ observed redshift / k points
 This avoids interpolation inside the sampler and keeps repeated likelihood
 calls as small as possible.
 
+The likelihood classes store the data arrays and build a jitted log-likelihood
+function during initialization. After construction, each call should only pass
+new astrophysical parameters through the emulator and likelihood math.
+
 ## Priors
 
 Nested samplers usually explore a unit cube. `PriorSpec` maps that unit cube to

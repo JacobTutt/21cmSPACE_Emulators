@@ -8,8 +8,8 @@ has an `emulate(parameters)` method that returns physical predictions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import Callable, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -55,6 +55,34 @@ class PowerSpectrumData:
     sigma: jax.Array
     window_matrix: jax.Array | None = None
 
+    def __post_init__(self) -> None:
+        coordinates = _coordinate_array(self.coordinates)
+        upper_limit = _array_1d(self.upper_limit, "upper_limit")
+        sigma = _array_1d(self.sigma, "sigma")
+        if upper_limit.shape != sigma.shape:
+            raise ValueError("upper_limit and sigma must have matching shapes.")
+
+        object.__setattr__(self, "coordinates", coordinates)
+        object.__setattr__(self, "upper_limit", upper_limit)
+        object.__setattr__(self, "sigma", sigma)
+        if self.window_matrix is not None:
+            window_matrix = jnp.asarray(self.window_matrix, dtype=jnp.float32)
+            if window_matrix.shape[1] != coordinates.shape[0]:
+                raise ValueError(
+                    "window_matrix must have one column per model coordinate point."
+                )
+            if window_matrix.shape[0] != upper_limit.shape[0]:
+                raise ValueError("window_matrix must have one row per data value.")
+            object.__setattr__(
+                self,
+                "window_matrix",
+                window_matrix,
+            )
+        elif upper_limit.shape[0] != coordinates.shape[0]:
+            raise ValueError(
+                "Without a window matrix, data values must match model coordinate points."
+            )
+
     @property
     def z_model_points(self) -> jax.Array:
         """
@@ -88,19 +116,28 @@ class GaussianLikelihood:
     data: jax.Array
     sigma: jax.Array
     include_normalization: bool = True
+    _loglikelihood: Callable[[jax.Array, jax.Array | float], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        data = jnp.asarray(self.data, dtype=jnp.float32)
+        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_gaussian_loglikelihood(data, sigma, self.include_normalization),
+        )
 
     def __call__(self, theory: jax.Array, theory_sigma: jax.Array | float = 0.0) -> jax.Array:
         """
         Evaluate the log likelihood for one or more theory predictions.
         """
-        data = jnp.asarray(self.data, dtype=jnp.float32)
-        sigma = _total_sigma(self.sigma, theory_sigma)
-        residual = data - theory
-
-        loglike = -0.5 * jnp.sum((residual / sigma) ** 2, axis=-1)
-        if self.include_normalization:
-            loglike -= 0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * sigma**2), axis=-1)
-        return _squeeze_single(loglike)
+        return self._loglikelihood(theory, theory_sigma)
 
 
 @dataclass(frozen=True)
@@ -125,17 +162,28 @@ class UpperLimitLikelihood:
     upper_limit: jax.Array
     sigma: jax.Array
     min_probability: float = 1e-50
+    _loglikelihood: Callable[[jax.Array, jax.Array | float], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        upper_limit = jnp.asarray(self.upper_limit, dtype=jnp.float32)
+        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        object.__setattr__(self, "upper_limit", upper_limit)
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_upper_limit_loglikelihood(upper_limit, sigma, self.min_probability),
+        )
 
     def __call__(self, theory: jax.Array, theory_sigma: jax.Array | float = 0.0) -> jax.Array:
         """
         Evaluate the one-sided log likelihood.
         """
-        upper_limit = jnp.asarray(self.upper_limit, dtype=jnp.float32)
-        sigma = _total_sigma(self.sigma, theory_sigma)
-        standardized = (upper_limit - theory) / (jnp.sqrt(2.0) * sigma)
-        probability = 0.5 * (1.0 + erf(standardized))
-        probability = jnp.clip(probability, self.min_probability, 1.0)
-        return _squeeze_single(jnp.sum(jnp.log(probability), axis=-1))
+        return self._loglikelihood(theory, theory_sigma)
 
 
 @dataclass(frozen=True)
@@ -153,14 +201,35 @@ class GlobalSignalLikelihood:
     sigma: jax.Array
     theory_fractional_error: float | jax.Array = 0.0
     name: str = "global_signal"
+    _loglikelihood: Callable[[jax.Array], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        data = jnp.asarray(self.data, dtype=jnp.float32)
+        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(self, "theory_fractional_error", theory_fractional_error)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_global_signal_loglikelihood(
+                self.emulator,
+                data,
+                sigma,
+                theory_fractional_error,
+            ),
+        )
 
     def __call__(self, parameters: jax.Array) -> jax.Array:
         """
         Evaluate the global-signal log likelihood.
         """
-        prediction = self.emulator.emulate(parameters)
-        theory_sigma = _fractional_theory_sigma(prediction, self.theory_fractional_error)
-        return GaussianLikelihood(self.data, self.sigma)(prediction, theory_sigma)
+        return self._loglikelihood(parameters)
 
 
 @dataclass(frozen=True)
@@ -179,14 +248,38 @@ class PowerSpectrumGaussianLikelihood:
     window_matrix: jax.Array | None = None
     theory_fractional_error: float | jax.Array = 0.0
     name: str = "power_spectrum_gaussian"
+    _loglikelihood: Callable[[jax.Array], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        data = jnp.asarray(self.data, dtype=jnp.float32)
+        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        window_matrix = _optional_array(self.window_matrix)
+        theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(self, "window_matrix", window_matrix)
+        object.__setattr__(self, "theory_fractional_error", theory_fractional_error)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_power_spectrum_gaussian_loglikelihood(
+                self.emulator,
+                data,
+                sigma,
+                window_matrix,
+                theory_fractional_error,
+            ),
+        )
 
     def __call__(self, parameters: jax.Array) -> jax.Array:
         """
         Evaluate the power-spectrum Gaussian log likelihood.
         """
-        prediction = _apply_window(self.emulator.emulate(parameters), self.window_matrix)
-        theory_sigma = _fractional_theory_sigma(prediction, self.theory_fractional_error)
-        return GaussianLikelihood(self.data, self.sigma)(prediction, theory_sigma)
+        return self._loglikelihood(parameters)
 
 
 @dataclass(frozen=True)
@@ -207,18 +300,39 @@ class PowerSpectrumUpperLimitLikelihood:
     theory_fractional_error: float | jax.Array = 0.0
     min_probability: float = 1e-50
     name: str = "power_spectrum_upper_limit"
+    _loglikelihood: Callable[[jax.Array], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        upper_limit = jnp.asarray(self.upper_limit, dtype=jnp.float32)
+        sigma = jnp.asarray(self.sigma, dtype=jnp.float32)
+        window_matrix = _optional_array(self.window_matrix)
+        theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
+        object.__setattr__(self, "upper_limit", upper_limit)
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(self, "window_matrix", window_matrix)
+        object.__setattr__(self, "theory_fractional_error", theory_fractional_error)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_power_spectrum_upper_limit_loglikelihood(
+                self.emulator,
+                upper_limit,
+                sigma,
+                window_matrix,
+                theory_fractional_error,
+                self.min_probability,
+            ),
+        )
 
     def __call__(self, parameters: jax.Array) -> jax.Array:
         """
         Evaluate the one-sided power-spectrum log likelihood.
         """
-        prediction = _apply_window(self.emulator.emulate(parameters), self.window_matrix)
-        theory_sigma = _fractional_theory_sigma(prediction, self.theory_fractional_error)
-        return UpperLimitLikelihood(
-            self.upper_limit,
-            self.sigma,
-            min_probability=self.min_probability,
-        )(prediction, theory_sigma)
+        return self._loglikelihood(parameters)
 
 
 class JointLikelihood:
@@ -237,15 +351,13 @@ class JointLikelihood:
         if len(likelihoods) == 0:
             raise ValueError("JointLikelihood requires at least one likelihood.")
         self.likelihoods = tuple(likelihoods)
+        self._loglikelihood = _build_joint_loglikelihood(self.likelihoods)
 
     def __call__(self, parameters: jax.Array) -> jax.Array:
         """
         Evaluate the summed log likelihood.
         """
-        total = 0.0
-        for likelihood in self.likelihoods:
-            total = total + likelihood(parameters)
-        return total
+        return self._loglikelihood(parameters)
 
     def contributions(self, parameters: jax.Array) -> dict[str, jax.Array]:
         """
@@ -266,8 +378,7 @@ def _apply_window(prediction: jax.Array, window_matrix: jax.Array | None) -> jax
     """
     if window_matrix is None:
         return prediction
-    window = jnp.asarray(window_matrix, dtype=jnp.float32)
-    return prediction @ window.T
+    return prediction @ window_matrix.T
 
 
 def _coordinate_array(coordinates: jax.Array) -> jax.Array:
@@ -284,16 +395,14 @@ def _fractional_theory_sigma(prediction: jax.Array, fraction: float | jax.Array)
     """
     Convert a fractional emulator/theory error into an absolute uncertainty.
     """
-    return jnp.asarray(fraction, dtype=jnp.float32) * jnp.abs(prediction)
+    return fraction * jnp.abs(prediction)
 
 
 def _total_sigma(observation_sigma: jax.Array, theory_sigma: jax.Array | float) -> jax.Array:
     """
     Combine observational and theory uncertainties in quadrature.
     """
-    sigma = jnp.asarray(observation_sigma, dtype=jnp.float32)
-    theory = jnp.asarray(theory_sigma, dtype=jnp.float32)
-    return jnp.sqrt(sigma**2 + theory**2)
+    return jnp.sqrt(observation_sigma**2 + theory_sigma**2)
 
 
 def _squeeze_single(values: jax.Array) -> jax.Array:
@@ -301,3 +410,145 @@ def _squeeze_single(values: jax.Array) -> jax.Array:
     Return a scalar for one parameter row, otherwise keep the batch axis.
     """
     return jnp.squeeze(values) if values.shape == (1,) else values
+
+
+def _array_1d(values: jax.Array, name: str) -> jax.Array:
+    """
+    Convert a value array to one float32 dimension.
+    """
+    array = jnp.asarray(values, dtype=jnp.float32).ravel()
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional.")
+    return array
+
+
+def _optional_array(values: jax.Array | None) -> jax.Array | None:
+    """
+    Convert an optional array once during likelihood setup.
+    """
+    return None if values is None else jnp.asarray(values, dtype=jnp.float32)
+
+
+def _build_gaussian_loglikelihood(
+    data: jax.Array,
+    sigma: jax.Array,
+    include_normalization: bool,
+) -> Callable[[jax.Array, jax.Array | float], jax.Array]:
+    """
+    Build the compiled diagonal Gaussian likelihood.
+    """
+
+    @jax.jit
+    def loglikelihood(theory: jax.Array, theory_sigma: jax.Array | float = 0.0) -> jax.Array:
+        total_sigma = _total_sigma(sigma, theory_sigma)
+        residual = data - theory
+        loglike = -0.5 * jnp.sum((residual / total_sigma) ** 2, axis=-1)
+        if include_normalization:
+            loglike -= 0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * total_sigma**2), axis=-1)
+        return _squeeze_single(loglike)
+
+    return loglikelihood
+
+
+def _build_upper_limit_loglikelihood(
+    upper_limit: jax.Array,
+    sigma: jax.Array,
+    min_probability: float,
+) -> Callable[[jax.Array, jax.Array | float], jax.Array]:
+    """
+    Build the compiled one-sided upper-limit likelihood.
+    """
+
+    @jax.jit
+    def loglikelihood(theory: jax.Array, theory_sigma: jax.Array | float = 0.0) -> jax.Array:
+        total_sigma = _total_sigma(sigma, theory_sigma)
+        standardized = (upper_limit - theory) / (jnp.sqrt(2.0) * total_sigma)
+        probability = 0.5 * (1.0 + erf(standardized))
+        probability = jnp.clip(probability, min_probability, 1.0)
+        return _squeeze_single(jnp.sum(jnp.log(probability), axis=-1))
+
+    return loglikelihood
+
+
+def _build_global_signal_loglikelihood(
+    emulator: EmulatorLike,
+    data: jax.Array,
+    sigma: jax.Array,
+    theory_fractional_error: jax.Array,
+) -> Callable[[jax.Array], jax.Array]:
+    """
+    Build the compiled global-signal likelihood.
+    """
+    gaussian = _build_gaussian_loglikelihood(data, sigma, include_normalization=True)
+
+    @jax.jit
+    def loglikelihood(parameters: jax.Array) -> jax.Array:
+        prediction = emulator.emulate(parameters)
+        theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
+        return gaussian(prediction, theory_sigma)
+
+    return loglikelihood
+
+
+def _build_power_spectrum_gaussian_loglikelihood(
+    emulator: EmulatorLike,
+    data: jax.Array,
+    sigma: jax.Array,
+    window_matrix: jax.Array | None,
+    theory_fractional_error: jax.Array,
+) -> Callable[[jax.Array], jax.Array]:
+    """
+    Build the compiled power-spectrum Gaussian likelihood.
+    """
+    gaussian = _build_gaussian_loglikelihood(data, sigma, include_normalization=True)
+
+    @jax.jit
+    def loglikelihood(parameters: jax.Array) -> jax.Array:
+        prediction = _apply_window(emulator.emulate(parameters), window_matrix)
+        theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
+        return gaussian(prediction, theory_sigma)
+
+    return loglikelihood
+
+
+def _build_power_spectrum_upper_limit_loglikelihood(
+    emulator: EmulatorLike,
+    upper_limit: jax.Array,
+    sigma: jax.Array,
+    window_matrix: jax.Array | None,
+    theory_fractional_error: jax.Array,
+    min_probability: float,
+) -> Callable[[jax.Array], jax.Array]:
+    """
+    Build the compiled HERA-style upper-limit likelihood.
+    """
+    upper_limit_likelihood = _build_upper_limit_loglikelihood(
+        upper_limit,
+        sigma,
+        min_probability,
+    )
+
+    @jax.jit
+    def loglikelihood(parameters: jax.Array) -> jax.Array:
+        prediction = _apply_window(emulator.emulate(parameters), window_matrix)
+        theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
+        return upper_limit_likelihood(prediction, theory_sigma)
+
+    return loglikelihood
+
+
+def _build_joint_loglikelihood(
+    likelihoods: tuple[object, ...],
+) -> Callable[[jax.Array], jax.Array]:
+    """
+    Build the compiled joint likelihood.
+    """
+
+    @jax.jit
+    def loglikelihood(parameters: jax.Array) -> jax.Array:
+        total = 0.0
+        for likelihood in likelihoods:
+            total = total + likelihood(parameters)
+        return total
+
+    return loglikelihood
