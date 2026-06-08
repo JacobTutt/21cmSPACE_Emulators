@@ -1,6 +1,6 @@
 # 21cmSPACE JAX Emulators
 
-**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Examples](docs/examples.md)
+**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Inference](docs/inference.md) · [Examples](docs/examples.md)
 
 The repository is designed to be a practical guide for those wanting to build simple JAX emulators
 from 21-cm cosmology simulations and other associated multi-wavelength probes
@@ -24,6 +24,7 @@ observable values, then reconstruct spectra or grids after inference.
     architectures/                  (shared MLP definitions)
     data_preprocessing/             (specs, parameter prep, transforms, scaling, tiling)
     training/                       (training and evaluation loops)
+    inference/                      (priors, likelihoods, nested sampling)
     utils/                          (configs, checkpoints, metrics)
   emulators_21cmspace/              (21cmSPACE-specific examples)
     t21/                            (global 21-cm signal emulator)
@@ -64,6 +65,7 @@ Start here, then move into the stage-specific docs:
 - [Preprocessing](docs/preprocessing.md): parameter preparation, target transforms, scaling, and tiling.
 - [JAX training](docs/jax-training.md): model initialization, batching, optimization, and validation.
 - [Checkpointing](docs/checkpoint.md): saving model weights, losses, and preprocessing metadata.
+- [Inference](docs/inference.md): priors, likelihoods, upper limits, and nested sampling.
 - [Examples](docs/examples.md): worked global 21-cm and power-spectrum workflows.
 
 ## Installation
@@ -87,7 +89,7 @@ Identify which machine:
 For CPU development:
 
 ```bash
-uv sync --extra cpu --extra dev
+uv sync --extra cpu --extra dev --extra inference
 source .venv/bin/activate
 ```
 
@@ -95,10 +97,10 @@ For GPU systems, choose the command that matches your driver stack:
 
 ```bash
 # CUDA 12 (older systems)
-uv sync --extra cuda12 --extra dev
+uv sync --extra cuda12 --extra dev --extra inference
 
 # CUDA 13 (latest)
-uv sync --extra cuda13 --extra dev
+uv sync --extra cuda13 --extra dev --extra inference
 
 source .venv/bin/activate
 ```
@@ -116,9 +118,9 @@ python -m pip install -U pip
 
 # 2. Install based on your hardware
 # Replace [cpu] with [cuda12] or [cuda13] if using a GPU
-python -m pip install -e ".[cpu,dev]"
+python -m pip install -e ".[cpu,dev,inference]"
 ```
 
 ---
 
-**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Examples](docs/examples.md)
+**Navigation:** [README](README.md) · [Architecture](docs/architecture.md) · [Preprocessing](docs/preprocessing.md) · [JAX Training](docs/jax-training.md) · [Checkpointing](docs/checkpoint.md) · [Inference](docs/inference.md) · [Examples](docs/examples.md)

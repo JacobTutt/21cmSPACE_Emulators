@@ -10,6 +10,7 @@ import numpy as np
 from scipy.io import loadmat, savemat
 
 from emulators_21cmspace.delta21.infer import (
+    build_delta21_fixed_coordinate_emulator,
     build_delta21_fixed_grid_emulator,
     build_delta21_emulator,
     build_delta21_predictor,
@@ -17,6 +18,7 @@ from emulators_21cmspace.delta21.infer import (
 )
 from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
 from emulators_21cmspace.t21.infer import (
+    build_t21_fixed_coordinate_emulator,
     build_t21_fixed_grid_emulator,
     build_t21_emulator,
     predict_t21,
@@ -97,6 +99,14 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
         compile_parameters=raw_parameters,
     )
     fixed_grid_predictions = fixed_grid_emulator.emulate(raw_parameters)
+    zz, kk = jnp.meshgrid(z, k, indexing="ij")
+    fixed_coordinate_emulator = build_delta21_fixed_coordinate_emulator(
+        package_path,
+        zz.ravel(),
+        kk.ravel(),
+        compile_parameters=raw_parameters,
+    )
+    fixed_coordinate_predictions = fixed_coordinate_emulator.emulate(raw_parameters)
 
     assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 2, 2)
@@ -110,9 +120,18 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert isinstance(fixed_grid_predictions, jax.Array)
     assert fixed_grid_predictions.shape == (2, 2, 2)
     assert np.isfinite(np.asarray(jax.device_get(fixed_grid_predictions))).all()
+    assert isinstance(fixed_coordinate_predictions, jax.Array)
+    assert fixed_coordinate_predictions.shape == (2, 4)
+    assert np.isfinite(np.asarray(jax.device_get(fixed_coordinate_predictions))).all()
     np.testing.assert_allclose(
         np.asarray(jax.device_get(fixed_grid_predictions)),
         np.asarray(jax.device_get(compiled_predictions)),
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(
+        np.asarray(jax.device_get(fixed_coordinate_predictions)),
+        np.asarray(jax.device_get(fixed_grid_predictions)).reshape(2, -1),
         rtol=1e-5,
         atol=1e-5,
     )
@@ -151,6 +170,12 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
         compile_parameters=raw_parameters,
     )
     fixed_grid_predictions = fixed_grid_emulator.emulate(raw_parameters)
+    fixed_coordinate_emulator = build_t21_fixed_coordinate_emulator(
+        package_path,
+        z,
+        compile_parameters=raw_parameters,
+    )
+    fixed_coordinate_predictions = fixed_coordinate_emulator.emulate(raw_parameters)
 
     assert isinstance(predictions, jax.Array)
     assert predictions.shape == (2, 4)
@@ -161,9 +186,18 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
     assert isinstance(fixed_grid_predictions, jax.Array)
     assert fixed_grid_predictions.shape == (2, 4)
     assert np.isfinite(np.asarray(jax.device_get(fixed_grid_predictions))).all()
+    assert isinstance(fixed_coordinate_predictions, jax.Array)
+    assert fixed_coordinate_predictions.shape == (2, 4)
+    assert np.isfinite(np.asarray(jax.device_get(fixed_coordinate_predictions))).all()
     np.testing.assert_allclose(
         np.asarray(jax.device_get(fixed_grid_predictions)),
         np.asarray(jax.device_get(emulator_predictions)),
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(
+        np.asarray(jax.device_get(fixed_coordinate_predictions)),
+        np.asarray(jax.device_get(fixed_grid_predictions)),
         rtol=1e-5,
         atol=1e-5,
     )

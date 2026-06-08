@@ -18,7 +18,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from jax_emu.infer import Emulator, FixedGridEmulator
+from jax_emu.infer import Emulator, FixedCoordinateEmulator, FixedGridEmulator
 from jax_emu.utils.checkpointing import load
 from emulators_21cmspace.t21.data import t21_spec
 
@@ -140,6 +140,31 @@ def build_t21_fixed_grid_emulator(
     return FixedGridEmulator(
         package=package,
         axes=(z_values,),
+        parameter_adapter=_prepare_parameter_values,
+        compile_parameters=compile_parameters,
+    )
+
+
+def build_t21_fixed_coordinate_emulator(
+    package_or_path: str | Path | dict[str, Any],
+    z_points: jax.Array,
+    *,
+    compile_parameters: jax.Array | None = None,
+) -> FixedCoordinateEmulator:
+    """
+    Build a reusable T21 emulator for one fixed redshift coordinate list.
+
+    This has the same output as the fixed-grid route for one axis, but it gives
+    likelihood code a common interface for all emulator families.
+    """
+    package = (
+        load_t21_package(package_or_path)
+        if isinstance(package_or_path, (str, Path))
+        else _validate_t21_package(package_or_path)
+    )
+    return FixedCoordinateEmulator(
+        package=package,
+        coordinates=(z_points,),
         parameter_adapter=_prepare_parameter_values,
         compile_parameters=compile_parameters,
     )

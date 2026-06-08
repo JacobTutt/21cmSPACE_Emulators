@@ -36,6 +36,9 @@ cuda13 = [
 dev = [
   "pytest",
 ]
+inference = [
+  "blackjax",
+]
 
 [project.scripts]
 21cmspace-delta21-train = "emulators_21cmspace.delta21.train:main"

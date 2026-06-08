@@ -21,7 +21,7 @@ import numpy as np
 from emulators_21cmspace.delta21.data import (
     delta21_spec,
 )
-from jax_emu.infer import Emulator, FixedGridEmulator
+from jax_emu.infer import Emulator, FixedCoordinateEmulator, FixedGridEmulator
 from jax_emu.utils.checkpointing import load
 
 
@@ -162,6 +162,32 @@ def build_delta21_fixed_grid_emulator(
     return FixedGridEmulator(
         package=package,
         axes=(z_values, k_values),
+        parameter_adapter=_prepare_parameter_values,
+        compile_parameters=compile_parameters,
+    )
+
+
+def build_delta21_fixed_coordinate_emulator(
+    package_or_path: str | Path | dict[str, Any],
+    z_points: jax.Array,
+    k_points: jax.Array,
+    *,
+    compile_parameters: jax.Array | None = None,
+) -> FixedCoordinateEmulator:
+    """
+    Build a reusable Delta21 emulator for one fixed coordinate list.
+
+    This is useful for likelihoods where the requested `(z, k)` points are
+    sparse or window-function based rather than a full rectangular grid.
+    """
+    package = (
+        load_delta21_package(package_or_path)
+        if isinstance(package_or_path, (str, Path))
+        else _validate_delta21_package(package_or_path)
+    )
+    return FixedCoordinateEmulator(
+        package=package,
+        coordinates=(z_points, k_points),
         parameter_adapter=_prepare_parameter_values,
         compile_parameters=compile_parameters,
     )

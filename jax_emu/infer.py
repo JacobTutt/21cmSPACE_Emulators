@@ -391,6 +391,178 @@ class FixedGridEmulator:
         return _predict
 
 
+class FixedCoordinateEmulator:
+    """
+    Generic compiled inference wrapper for one fixed coordinate list.
+
+    This is the inference path to use when the requested output points are not
+    a full rectangular grid. HERA-style power-spectrum data are a common
+    example: the likelihood may need predictions only at the model k-bins used
+    by a window matrix.
+
+    Parameters
+    ----------
+    coordinates:
+        One coordinate array per emulator axis. All arrays must have the same
+        length, for example `(z_points, k_points)` for Delta21.
+    package:
+        Loaded checkpoint package containing at least `model` and `metadata`.
+    model:
+        Live trained model. Used when `package` is not supplied.
+    metadata:
+        Checkpoint metadata. Used when `package` is not supplied.
+    parameter_adapter:
+        Optional function that maps incoming physical parameter arrays into the
+        transformed parameter columns expected by the model.
+    compile_parameters:
+        Optional parameter array used to force JIT compilation during
+        initialization. If omitted, compilation happens on the first call.
+    """
+
+    def __init__(
+        self,
+        *,
+        coordinates: tuple[jax.Array, ...],
+        package: dict[str, Any] | None = None,
+        model: Any | None = None,
+        metadata: CheckpointMetadata | None = None,
+        parameter_adapter: ParameterAdapter | None = None,
+        compile_parameters: jax.Array | None = None,
+    ) -> None:
+        # Accept either a loaded checkpoint package or explicit model/metadata.
+        if package is not None:
+            model = package["model"]
+            metadata = package["metadata"]
+
+        if model is None:
+            raise ValueError(
+                "FixedCoordinateEmulator requires a model or a package containing a model."
+            )
+        if metadata is None:
+            raise ValueError("FixedCoordinateEmulator requires checkpoint metadata.")
+
+        self.model = model
+        self.metadata = metadata
+        self.spec = metadata.emulator_spec
+        self.parameter_adapter = parameter_adapter
+        self.n_coordinates = _coordinate_count(coordinates)
+
+        self._validate_feature_order()
+        self.scaled_axis_features = _build_scaled_coordinate_features_jax(
+            coordinates,
+            self.spec.axes,
+            self.metadata.input_scaling,
+        )
+        self._predict = self._build_compiled_predictor()
+
+        # Optional warm-up call. This compiles the parameter-only call path for
+        # the stored coordinate list and the supplied parameter shape.
+        if compile_parameters is not None:
+            self.compile(compile_parameters)
+
+    def forward_model(self, parameters: jax.Array) -> jax.Array:
+        """
+        Evaluate the physical emulator prediction on the stored coordinates.
+
+        Parameters
+        ----------
+        parameters:
+            Parameter table for one or more simulations.
+
+        Returns
+        -------
+        jax.Array
+            Physical prediction array with shape `(n_sims, n_coordinates)`.
+        """
+        return self._predict(self.model, parameters, self.scaled_axis_features)
+
+    def forwardmodel(self, parameters: jax.Array) -> jax.Array:
+        """
+        Alias for `forward_model`.
+        """
+        return self.forward_model(parameters)
+
+    def emulate(self, parameters: jax.Array) -> jax.Array:
+        """
+        Alias for `forward_model`.
+        """
+        return self.forward_model(parameters)
+
+    def compile(self, parameters: jax.Array) -> None:
+        """
+        Compile the fixed-coordinate forward model for one parameter shape.
+        """
+        self.forward_model(parameters).block_until_ready()
+
+    def _validate_feature_order(self) -> None:
+        """
+        Ensure saved feature scaling follows the emulator input contract.
+        """
+        expected_names = self.spec.input_feature_names()
+        actual_names = tuple(feature.name for feature in self.metadata.input_scaling)
+        if actual_names != expected_names:
+            raise ValueError(
+                "Saved feature scaling order does not match the emulator spec. "
+                f"Expected {expected_names}, received {actual_names}."
+            )
+
+    def _build_compiled_predictor(self) -> Callable[..., jax.Array]:
+        """
+        Build the NNX-jitted fixed-coordinate inference function.
+        """
+        spec = self.spec
+        input_scaling = self.metadata.input_scaling
+        target_scaling = self.metadata.target_scaling
+        target_std = None if target_scaling is None else target_scaling.std
+        parameter_adapter = self.parameter_adapter
+        n_axes = len(spec.axes)
+        parameter_scaling = input_scaling[n_axes:]
+        n_coordinates = self.n_coordinates
+
+        @nnx.jit
+        def _predict(
+            model_instance: Any,
+            parameters: jax.Array,
+            scaled_axis_features: jax.Array,
+        ) -> jax.Array:
+            """
+            Run the compiled fixed-coordinate numerical inference path.
+            """
+            # Convert parameters into transformed parameter columns.
+            prepared_parameters = (
+                _prepare_parameters_from_spec(parameters, spec.parameters)
+                if parameter_adapter is None
+                else parameter_adapter(parameters)
+            )
+
+            # Scale parameter columns per call. The coordinate columns were
+            # transformed and scaled once when the wrapper was initialized.
+            scaled_parameters = _scale_features_jax(prepared_parameters, parameter_scaling)
+
+            # Pair every parameter row with every stored coordinate row.
+            repeated_axes = jnp.tile(scaled_axis_features, (scaled_parameters.shape[0], 1))
+            repeated_parameters = jnp.repeat(
+                scaled_parameters,
+                repeats=scaled_axis_features.shape[0],
+                axis=0,
+            )
+            scaled_features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
+
+            # Evaluate the network and return to physical target space.
+            flat_predictions = model_instance(scaled_features).squeeze(-1)
+            if target_std is not None:
+                flat_predictions = flat_predictions * target_std
+            physical_predictions = _invert_transform_jax(
+                flat_predictions,
+                spec.target_transform,
+                offset=spec.target_offset,
+            )
+
+            return physical_predictions.reshape((prepared_parameters.shape[0], n_coordinates))
+
+        return _predict
+
+
 # JAX Helpers
 # -----------
 # Small numerical helpers used inside the compiled inference path.
@@ -491,6 +663,46 @@ def _build_scaled_axis_features_jax(
     axis_columns = [
         _apply_transform_jax(mesh_axis.ravel(), axis_spec.transform)
         for mesh_axis, axis_spec in zip(mesh_axes, axis_specs, strict=True)
+    ]
+    axis_features = jnp.stack(axis_columns, axis=1)
+
+    # Only scale the axis columns here. Parameter columns are handled per call.
+    axis_scaling = input_scaling[: len(axis_specs)]
+    return _scale_features_jax(axis_features, axis_scaling)
+
+
+def _coordinate_count(coordinates: tuple[jax.Array, ...]) -> int:
+    """
+    Return the number of points in a fixed coordinate list.
+    """
+    if not coordinates:
+        raise ValueError("At least one coordinate array is required.")
+
+    lengths = tuple(int(jnp.asarray(coordinate).size) for coordinate in coordinates)
+    if len(set(lengths)) != 1:
+        raise ValueError("All coordinate arrays must have the same length.")
+    return lengths[0]
+
+
+def _build_scaled_coordinate_features_jax(
+    coordinates: tuple[jax.Array, ...],
+    axis_specs: tuple[Any, ...],
+    input_scaling: tuple[FeatureScaling, ...],
+) -> jax.Array:
+    """
+    Build transformed and scaled feature rows for one coordinate list.
+    """
+    if len(coordinates) != len(axis_specs):
+        raise ValueError(
+            f"Expected {len(axis_specs)} coordinate arrays, received {len(coordinates)}."
+        )
+    _coordinate_count(coordinates)
+
+    # Store one row per requested coordinate. Unlike the fixed-grid route, this
+    # does not expand the axes into a meshgrid.
+    axis_columns = [
+        _apply_transform_jax(jnp.asarray(coordinate).ravel(), axis_spec.transform)
+        for coordinate, axis_spec in zip(coordinates, axis_specs, strict=True)
     ]
     axis_features = jnp.stack(axis_columns, axis=1)
 
