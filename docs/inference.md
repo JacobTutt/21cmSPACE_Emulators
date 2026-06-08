@@ -223,20 +223,51 @@ terms = joint_likelihood.contributions(theta)
 ## Nested Sampling
 
 The BlackJAX adapter keeps the sampler in unit-cube space and applies the prior
-transform before each likelihood call:
+transform before each likelihood call. The main sampler sizes can be defined as
+fractions or multiples of the number of sampled dimensions:
 
 ```python
 import jax
-from jax_emu.inference import run_nested_sampling
+from jax_emu.inference import NestedSamplingConfig, run_nested_sampling
+
+config = NestedSamplingConfig(
+    n_live_scale=100,          # n_live = n_dim * 100
+    num_delete_fraction=0.05,  # replace 5% of live points per step
+    num_inner_steps_scale=3,   # inner MCMC steps = n_dim * 3
+    logz_live_threshold=-3.0,  # stop when live evidence is negligible
+    output_dir="outputs/hera_nested_sampling",
+)
 
 result = run_nested_sampling(
     prior=prior,
     likelihood=joint_likelihood,
     key=jax.random.PRNGKey(0),
-    n_live=1000,
-    max_steps=5000,
+    config=config,
 )
 ```
+
+If exact values are needed, set `n_live`, `num_delete`, or `num_inner_steps`
+directly in the config. Explicit values override the dimension-scaled versions.
+
+During the run, BlackJAX collects dead points until:
+
+```text
+logZ_live - logZ < logz_live_threshold
+```
+
+The final dead and live points are then combined and written in an
+anesthetic-friendly format:
+
+```text
+outputs/hera_nested_sampling/
+  nested_sampling_results.csv
+  parameter_names.json
+  sampler_config.json
+  test_stats.txt
+```
+
+`nested_sampling_results.csv` contains the physical parameter columns, `logL`,
+and `logL_birth`. This can be read with `anesthetic.NestedSamples`.
 
 The likelihood and emulator remain separate from the sampler, so the same
 likelihood can be tested directly before launching a full nested-sampling run.

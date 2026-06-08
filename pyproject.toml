@@ -9,6 +9,7 @@ description = "JAX-native emulators for 21cmSPACE 21-cm inference workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "anesthetic",
   "blackjax",
   "matplotlib",
   "numpy",

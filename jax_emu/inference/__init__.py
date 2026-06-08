@@ -10,7 +10,14 @@ from jax_emu.inference.likelihood import (
     PowerSpectrumUpperLimitLikelihood,
     UpperLimitLikelihood,
 )
-from jax_emu.inference.nested_sampling import NestedSamplingResult, run_nested_sampling
+from jax_emu.inference.nested_sampling import (
+    NestedSamplingConfig,
+    NestedSamplingResult,
+    NestedSamplingSettings,
+    resolve_nested_sampling_settings,
+    run_nested_sampling,
+    save_anesthetic_samples,
+)
 from jax_emu.inference.prior import (
     DiscretePrior,
     FixedPrior,
@@ -28,11 +35,15 @@ __all__ = [
     "JointLikelihood",
     "LogUniformPrior",
     "NestedSamplingResult",
+    "NestedSamplingConfig",
+    "NestedSamplingSettings",
     "PowerSpectrumGaussianLikelihood",
     "PowerSpectrumUpperLimitLikelihood",
     "PowerSpectrumData",
     "PriorSpec",
     "UniformPrior",
     "UpperLimitLikelihood",
+    "resolve_nested_sampling_settings",
     "run_nested_sampling",
+    "save_anesthetic_samples",
 ]

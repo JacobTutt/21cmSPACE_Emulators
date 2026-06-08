@@ -9,16 +9,21 @@ import pytest
 
 from jax_emu.inference import (
     DiscretePrior,
+    FixedPrior,
     GaussianLikelihood,
     GlobalSignalForegroundLikelihood,
     GlobalSignalLikelihood,
     JointLikelihood,
     LogUniformPrior,
+    NestedSamplingConfig,
+    NestedSamplingResult,
     PowerSpectrumData,
     PowerSpectrumGaussianLikelihood,
     PowerSpectrumUpperLimitLikelihood,
     PriorSpec,
     UniformPrior,
+    resolve_nested_sampling_settings,
+    save_anesthetic_samples,
 )
 
 
@@ -71,6 +76,65 @@ def test_prior_spec_can_return_grouped_parameters() -> None:
     np.testing.assert_allclose(np.asarray(theta["astro"]), np.array([0.0]), rtol=1e-6)
     np.testing.assert_allclose(np.asarray(theta["foreground"]), np.array([3.0, 0.5]), rtol=1e-6)
     np.testing.assert_allclose(np.asarray(theta["noise"]), np.array([1.0]), rtol=1e-6)
+
+
+def test_nested_sampling_settings_scale_with_prior_dimension() -> None:
+    prior = PriorSpec(
+        [
+            UniformPrior("x", -1.0, 1.0),
+            LogUniformPrior("scale", 1.0, 100.0),
+            DiscretePrior("alpha", [1.0, 1.3, 1.5]),
+            FixedPrior("fixed", 2.0),
+        ]
+    )
+
+    settings = resolve_nested_sampling_settings(
+        prior,
+        NestedSamplingConfig(
+            n_live_scale=20,
+            num_delete_fraction=0.1,
+            num_inner_steps_scale=5,
+        ),
+    )
+
+    assert prior.ndim == 3
+    assert settings.n_live == 60
+    assert settings.num_delete == 6
+    assert settings.num_inner_steps == 15
+
+
+def test_anesthetic_export_writes_expected_files(tmp_path) -> None:
+    pytest.importorskip("anesthetic")
+    prior = PriorSpec(
+        [
+            UniformPrior("x", -1.0, 1.0),
+            FixedPrior("fixed", 2.0),
+        ]
+    )
+    result = NestedSamplingResult(
+        state=None,
+        final_state=None,
+        info=None,
+        physical_samples=jnp.array([[0.0, 2.0], [0.5, 2.0], [1.0, 2.0]]),
+        loglikelihood=jnp.array([-3.0, -1.0, -2.0]),
+        loglikelihood_birth=jnp.array([-jnp.inf, -3.0, -2.0]),
+        logz=jnp.array(-1.2),
+        logz_error=jnp.array(0.1),
+        n_steps=2,
+        converged=True,
+        settings=resolve_nested_sampling_settings(
+            prior,
+            NestedSamplingConfig(n_live=10, num_delete=1, num_inner_steps=3),
+        ),
+    )
+
+    csv_path = save_anesthetic_samples(result, prior, tmp_path)
+
+    assert csv_path.name == "nested_sampling_results.csv"
+    assert csv_path.exists()
+    assert (tmp_path / "parameter_names.json").exists()
+    assert (tmp_path / "sampler_config.json").exists()
+    assert (tmp_path / "test_stats.txt").exists()
 
 
 def test_gaussian_likelihood_matches_manual_diagonal_result() -> None:
