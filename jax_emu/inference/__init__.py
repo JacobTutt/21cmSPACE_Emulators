@@ -2,6 +2,7 @@
 
 from jax_emu.inference.likelihood import (
     GaussianLikelihood,
+    GlobalSignalForegroundLikelihood,
     GlobalSignalLikelihood,
     JointLikelihood,
     PowerSpectrumData,
@@ -22,6 +23,7 @@ __all__ = [
     "DiscretePrior",
     "FixedPrior",
     "GaussianLikelihood",
+    "GlobalSignalForegroundLikelihood",
     "GlobalSignalLikelihood",
     "JointLikelihood",
     "LogUniformPrior",

@@ -9,6 +9,7 @@ has an `emulate(parameters)` method that returns physical predictions.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 from typing import Callable, Protocol
 
 import jax
@@ -225,9 +226,68 @@ class GlobalSignalLikelihood:
             ),
         )
 
-    def __call__(self, parameters: jax.Array) -> jax.Array:
+    def __call__(self, parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         """
         Evaluate the global-signal log likelihood.
+        """
+        return self._loglikelihood(parameters)
+
+
+@dataclass(frozen=True)
+class GlobalSignalForegroundLikelihood:
+    """
+    Global-signal likelihood with a smooth foreground and noise nuisance term.
+
+    The parameter input should contain:
+    - `astro`: parameters used by the emulator
+    - `foreground`: polynomial foreground coefficients
+    - `noise`: one positive noise standard deviation
+
+    The foreground model is:
+
+    `foreground = 10 ** sum(a_i * x**i)`
+
+    where `x` is reduced log-frequency on `[-1, 1]`.
+    """
+
+    emulator: EmulatorLike
+    data: jax.Array
+    frequency: jax.Array | None = None
+    reduced_frequency: jax.Array | None = None
+    theory_fractional_error: float | jax.Array = 0.0
+    signal_scale: float = 1.0
+    name: str = "global_signal_foreground"
+    _loglikelihood: Callable[[Mapping[str, jax.Array]], jax.Array] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        data = jnp.asarray(self.data, dtype=jnp.float32)
+        reduced_frequency = _resolve_reduced_frequency(self.frequency, self.reduced_frequency)
+        if data.shape[-1] != reduced_frequency.shape[0]:
+            raise ValueError("data and reduced_frequency must have matching lengths.")
+
+        theory_fractional_error = jnp.asarray(self.theory_fractional_error, dtype=jnp.float32)
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "reduced_frequency", reduced_frequency)
+        object.__setattr__(self, "theory_fractional_error", theory_fractional_error)
+        object.__setattr__(
+            self,
+            "_loglikelihood",
+            _build_global_signal_foreground_loglikelihood(
+                self.emulator,
+                data,
+                reduced_frequency,
+                theory_fractional_error,
+                self.signal_scale,
+            ),
+        )
+
+    def __call__(self, parameters: Mapping[str, jax.Array]) -> jax.Array:
+        """
+        Evaluate the foreground-marginalized global-signal log likelihood.
         """
         return self._loglikelihood(parameters)
 
@@ -275,7 +335,7 @@ class PowerSpectrumGaussianLikelihood:
             ),
         )
 
-    def __call__(self, parameters: jax.Array) -> jax.Array:
+    def __call__(self, parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         """
         Evaluate the power-spectrum Gaussian log likelihood.
         """
@@ -328,7 +388,7 @@ class PowerSpectrumUpperLimitLikelihood:
             ),
         )
 
-    def __call__(self, parameters: jax.Array) -> jax.Array:
+    def __call__(self, parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         """
         Evaluate the one-sided power-spectrum log likelihood.
         """
@@ -353,13 +413,13 @@ class JointLikelihood:
         self.likelihoods = tuple(likelihoods)
         self._loglikelihood = _build_joint_loglikelihood(self.likelihoods)
 
-    def __call__(self, parameters: jax.Array) -> jax.Array:
+    def __call__(self, parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         """
         Evaluate the summed log likelihood.
         """
         return self._loglikelihood(parameters)
 
-    def contributions(self, parameters: jax.Array) -> dict[str, jax.Array]:
+    def contributions(self, parameters: jax.Array | Mapping[str, jax.Array]) -> dict[str, jax.Array]:
         """
         Return individual likelihood terms for diagnostics.
         """
@@ -429,6 +489,66 @@ def _optional_array(values: jax.Array | None) -> jax.Array | None:
     return None if values is None else jnp.asarray(values, dtype=jnp.float32)
 
 
+def _astro_parameters(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
+    """
+    Return emulator parameters from either flat or grouped inputs.
+    """
+    if isinstance(parameters, Mapping):
+        return parameters["astro"]
+    return parameters
+
+
+def _parameter_group(parameters: Mapping[str, jax.Array], group: str) -> jax.Array:
+    """
+    Return one named nuisance parameter group.
+    """
+    if group not in parameters:
+        raise KeyError(f"Grouped likelihood parameters require a {group!r} entry.")
+    return parameters[group]
+
+
+def _resolve_reduced_frequency(
+    frequency: jax.Array | None,
+    reduced_frequency: jax.Array | None,
+) -> jax.Array:
+    """
+    Return the reduced log-frequency coordinate used by the foreground model.
+    """
+    if reduced_frequency is not None:
+        return jnp.asarray(reduced_frequency, dtype=jnp.float32).ravel()
+    if frequency is None:
+        raise ValueError("Provide either frequency or reduced_frequency.")
+
+    log_frequency = jnp.log10(jnp.asarray(frequency, dtype=jnp.float32).ravel())
+    return 2.0 * (
+        (log_frequency - jnp.min(log_frequency))
+        / (jnp.max(log_frequency) - jnp.min(log_frequency))
+    ) - 1.0
+
+
+def _polynomial_foreground(
+    reduced_frequency: jax.Array,
+    coefficients: jax.Array,
+) -> jax.Array:
+    """
+    Evaluate `10 ** sum(a_i * x**i)` for foreground coefficients.
+    """
+    coeffs = jnp.asarray(coefficients, dtype=jnp.float32)
+    powers = reduced_frequency[None, :] ** jnp.arange(coeffs.shape[-1])[:, None]
+    log_foreground = coeffs @ powers
+    return jnp.power(10.0, log_foreground)
+
+
+def _noise_sigma(noise: jax.Array) -> jax.Array:
+    """
+    Return a broadcastable positive noise standard deviation.
+    """
+    noise_array = jnp.asarray(noise, dtype=jnp.float32)
+    if noise_array.ndim == 0:
+        return noise_array
+    return noise_array[..., 0][..., None]
+
+
 def _build_gaussian_loglikelihood(
     data: jax.Array,
     sigma: jax.Array,
@@ -482,10 +602,41 @@ def _build_global_signal_loglikelihood(
     gaussian = _build_gaussian_loglikelihood(data, sigma, include_normalization=True)
 
     @jax.jit
-    def loglikelihood(parameters: jax.Array) -> jax.Array:
-        prediction = emulator.emulate(parameters)
+    def loglikelihood(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
+        prediction = emulator.emulate(_astro_parameters(parameters))
         theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
         return gaussian(prediction, theory_sigma)
+
+    return loglikelihood
+
+
+def _build_global_signal_foreground_loglikelihood(
+    emulator: EmulatorLike,
+    data: jax.Array,
+    reduced_frequency: jax.Array,
+    theory_fractional_error: jax.Array,
+    signal_scale: float,
+) -> Callable[[Mapping[str, jax.Array]], jax.Array]:
+    """
+    Build the compiled global-signal foreground likelihood.
+    """
+
+    @jax.jit
+    def loglikelihood(parameters: Mapping[str, jax.Array]) -> jax.Array:
+        astro = _parameter_group(parameters, "astro")
+        foreground_coefficients = _parameter_group(parameters, "foreground")
+        noise = _parameter_group(parameters, "noise")
+
+        signal = emulator.emulate(astro) * signal_scale
+        foreground = _polynomial_foreground(reduced_frequency, foreground_coefficients)
+        theory_sigma = _fractional_theory_sigma(signal, theory_fractional_error)
+        total_sigma = _total_sigma(_noise_sigma(noise), theory_sigma)
+        residual = data - foreground - signal
+        loglike = (
+            -0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * total_sigma**2), axis=-1)
+            -0.5 * jnp.sum((residual / total_sigma) ** 2, axis=-1)
+        )
+        return _squeeze_single(loglike)
 
     return loglikelihood
 
@@ -503,8 +654,8 @@ def _build_power_spectrum_gaussian_loglikelihood(
     gaussian = _build_gaussian_loglikelihood(data, sigma, include_normalization=True)
 
     @jax.jit
-    def loglikelihood(parameters: jax.Array) -> jax.Array:
-        prediction = _apply_window(emulator.emulate(parameters), window_matrix)
+    def loglikelihood(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
+        prediction = _apply_window(emulator.emulate(_astro_parameters(parameters)), window_matrix)
         theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
         return gaussian(prediction, theory_sigma)
 
@@ -529,8 +680,8 @@ def _build_power_spectrum_upper_limit_loglikelihood(
     )
 
     @jax.jit
-    def loglikelihood(parameters: jax.Array) -> jax.Array:
-        prediction = _apply_window(emulator.emulate(parameters), window_matrix)
+    def loglikelihood(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
+        prediction = _apply_window(emulator.emulate(_astro_parameters(parameters)), window_matrix)
         theory_sigma = _fractional_theory_sigma(prediction, theory_fractional_error)
         return upper_limit_likelihood(prediction, theory_sigma)
 
@@ -545,7 +696,7 @@ def _build_joint_loglikelihood(
     """
 
     @jax.jit
-    def loglikelihood(parameters: jax.Array) -> jax.Array:
+    def loglikelihood(parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         total = 0.0
         for likelihood in likelihoods:
             total = total + likelihood(parameters)

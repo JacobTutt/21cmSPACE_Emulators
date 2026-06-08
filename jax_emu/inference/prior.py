@@ -8,6 +8,7 @@ the emulator likelihood.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -136,14 +137,35 @@ class PriorSpec:
     """
     Ordered collection of parameter priors.
 
-    The order defines both the unit-cube sampling coordinates and the physical
-    parameter vector passed to the likelihood.
+    The order defines the unit-cube sampling coordinates. Priors can be supplied
+    either as a flat list or as named groups such as `astro`, `foreground`, and
+    `noise`.
     """
 
     priors: tuple[ParameterPrior, ...]
+    groups: tuple[str, ...]
+    grouped_priors: tuple[tuple[ParameterPrior, ...], ...]
 
-    def __init__(self, priors: tuple[ParameterPrior, ...] | list[ParameterPrior]) -> None:
-        object.__setattr__(self, "priors", tuple(priors))
+    def __init__(
+        self,
+        priors: (
+            tuple[ParameterPrior, ...]
+            | list[ParameterPrior]
+            | Mapping[str, tuple[ParameterPrior, ...] | list[ParameterPrior]]
+        ),
+    ) -> None:
+        if isinstance(priors, Mapping):
+            groups = tuple(priors.keys())
+            grouped_priors = tuple(tuple(group_priors) for group_priors in priors.values())
+            flat_priors = tuple(prior for group in grouped_priors for prior in group)
+        else:
+            groups = ("parameters",)
+            grouped_priors = (tuple(priors),)
+            flat_priors = tuple(priors)
+
+        object.__setattr__(self, "priors", flat_priors)
+        object.__setattr__(self, "groups", groups)
+        object.__setattr__(self, "grouped_priors", grouped_priors)
         self._validate()
 
     @property
@@ -151,6 +173,12 @@ class PriorSpec:
         """
         Return physical parameter names in likelihood order.
         """
+        if self.is_grouped:
+            return tuple(
+                f"{group}.{prior.name}"
+                for group, priors in zip(self.groups, self.grouped_priors, strict=True)
+                for prior in priors
+            )
         return tuple(prior.name for prior in self.priors)
 
     @property
@@ -158,6 +186,13 @@ class PriorSpec:
         """
         Return names for parameters represented in the unit cube.
         """
+        if self.is_grouped:
+            return tuple(
+                f"{group}.{prior.name}"
+                for group, priors in zip(self.groups, self.grouped_priors, strict=True)
+                for prior in priors
+                if prior.ndim == 1
+            )
         return tuple(prior.name for prior in self.priors if prior.ndim == 1)
 
     @property
@@ -174,7 +209,14 @@ class PriorSpec:
         """
         return tuple(prior.label or prior.name for prior in self.priors)
 
-    def transform(self, unit_cube: jax.Array) -> jax.Array:
+    @property
+    def is_grouped(self) -> bool:
+        """
+        Return whether the transform produces a structured parameter object.
+        """
+        return self.groups != ("parameters",)
+
+    def transform(self, unit_cube: jax.Array) -> jax.Array | dict[str, jax.Array]:
         """
         Map a unit-cube vector onto physical parameter values.
         """
@@ -182,43 +224,63 @@ class PriorSpec:
         if cube.shape[-1] != self.ndim:
             raise ValueError(f"Expected unit cube with width {self.ndim}, received {cube.shape[-1]}.")
 
-        outputs = []
         cube_index = 0
-        for prior in self.priors:
-            if prior.ndim == 0:
-                fixed_value = prior.transform()
-                if cube.shape[:-1]:
-                    fixed_value = jnp.broadcast_to(fixed_value, cube.shape[:-1])
-                outputs.append(fixed_value)
-            else:
-                outputs.append(prior.transform(cube[..., cube_index]))
-                cube_index += 1
-        return jnp.stack(outputs, axis=-1)
+        grouped_outputs = {}
+        for group_name, group_priors in zip(self.groups, self.grouped_priors, strict=True):
+            outputs = []
+            for prior in group_priors:
+                if prior.ndim == 0:
+                    fixed_value = prior.transform()
+                    if cube.shape[:-1]:
+                        fixed_value = jnp.broadcast_to(fixed_value, cube.shape[:-1])
+                    outputs.append(fixed_value)
+                else:
+                    outputs.append(prior.transform(cube[..., cube_index]))
+                    cube_index += 1
+            grouped_outputs[group_name] = jnp.stack(outputs, axis=-1)
 
-    def log_prior(self, physical_parameters: jax.Array) -> jax.Array:
+        if self.is_grouped:
+            return grouped_outputs
+        return grouped_outputs["parameters"]
+
+    def log_prior(self, physical_parameters: jax.Array | Mapping[str, jax.Array]) -> jax.Array:
         """
         Return zero inside the prior support and `-inf` outside it.
 
         Nested sampling mainly needs the unit-cube transform. This helper is
         still useful for diagnostics or samplers that expect a log prior.
         """
-        params = jnp.asarray(physical_parameters, dtype=jnp.float32)
-        if params.shape[-1] != len(self.priors):
-            raise ValueError(
-                f"Expected parameter width {len(self.priors)}, received {params.shape[-1]}."
-            )
+        if self.is_grouped:
+            if not isinstance(physical_parameters, Mapping):
+                raise ValueError("Grouped priors require grouped physical parameters.")
+            params_by_group = {
+                group: jnp.asarray(physical_parameters[group], dtype=jnp.float32)
+                for group in self.groups
+            }
+        else:
+            params_by_group = {
+                "parameters": jnp.asarray(physical_parameters, dtype=jnp.float32)
+            }
 
-        in_support = jnp.ones(params.shape[:-1], dtype=bool)
-        for index, prior in enumerate(self.priors):
-            values = params[..., index]
-            if prior.kind in {"uniform", "log_uniform"}:
-                lower, upper = _require_bounds(prior)
-                in_support = in_support & (values >= lower) & (values <= upper)
-            elif prior.kind == "discrete":
-                allowed = jnp.asarray(prior.values, dtype=jnp.float32)
-                in_support = in_support & jnp.any(values[..., None] == allowed, axis=-1)
-            elif prior.kind == "fixed":
-                in_support = in_support & (values == prior.value)
+        first_params = next(iter(params_by_group.values()))
+        in_support = jnp.ones(first_params.shape[:-1], dtype=bool)
+        for group, group_priors in zip(self.groups, self.grouped_priors, strict=True):
+            params = params_by_group[group]
+            if params.shape[-1] != len(group_priors):
+                raise ValueError(
+                    f"Expected group {group!r} with width {len(group_priors)}, "
+                    f"received {params.shape[-1]}."
+                )
+            for index, prior in enumerate(group_priors):
+                values = params[..., index]
+                if prior.kind in {"uniform", "log_uniform"}:
+                    lower, upper = _require_bounds(prior)
+                    in_support = in_support & (values >= lower) & (values <= upper)
+                elif prior.kind == "discrete":
+                    allowed = jnp.asarray(prior.values, dtype=jnp.float32)
+                    in_support = in_support & jnp.any(values[..., None] == allowed, axis=-1)
+                elif prior.kind == "fixed":
+                    in_support = in_support & (values == prior.value)
 
         return jnp.where(in_support, 0.0, -jnp.inf)
 
@@ -226,9 +288,11 @@ class PriorSpec:
         """
         Check that parameter names are unique and prior definitions are valid.
         """
-        names = [prior.name for prior in self.priors]
+        names = list(self.names)
         if len(set(names)) != len(names):
             raise ValueError("Prior names must be unique.")
+        if len(set(self.groups)) != len(self.groups):
+            raise ValueError("Prior group names must be unique.")
         for prior in self.priors:
             if prior.kind in {"uniform", "log_uniform"}:
                 lower, upper = _require_bounds(prior)

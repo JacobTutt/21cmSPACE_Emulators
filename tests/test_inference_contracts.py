@@ -10,6 +10,7 @@ import pytest
 from jax_emu.inference import (
     DiscretePrior,
     GaussianLikelihood,
+    GlobalSignalForegroundLikelihood,
     GlobalSignalLikelihood,
     JointLikelihood,
     LogUniformPrior,
@@ -48,6 +49,30 @@ def test_prior_spec_transforms_unit_cube_to_physical_values() -> None:
     np.testing.assert_allclose(np.asarray(theta), np.array([-0.5, 10.0, 1.5]), rtol=1e-6)
 
 
+def test_prior_spec_can_return_grouped_parameters() -> None:
+    prior = PriorSpec(
+        {
+            "astro": [
+                UniformPrior("x", -1.0, 1.0),
+            ],
+            "foreground": [
+                UniformPrior("a0", 3.0, 4.0),
+                UniformPrior("a1", -1.0, 1.0),
+            ],
+            "noise": [
+                LogUniformPrior("sigma", 0.1, 10.0),
+            ],
+        }
+    )
+
+    theta = prior.transform(jnp.array([0.5, 0.0, 0.75, 0.5]))
+
+    assert prior.names == ("astro.x", "foreground.a0", "foreground.a1", "noise.sigma")
+    np.testing.assert_allclose(np.asarray(theta["astro"]), np.array([0.0]), rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(theta["foreground"]), np.array([3.0, 0.5]), rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(theta["noise"]), np.array([1.0]), rtol=1e-6)
+
+
 def test_gaussian_likelihood_matches_manual_diagonal_result() -> None:
     likelihood = GaussianLikelihood(
         data=jnp.array([1.0, 2.0]),
@@ -58,6 +83,23 @@ def test_gaussian_likelihood_matches_manual_diagonal_result() -> None:
     loglike = likelihood(jnp.array([[1.5, 1.0]]))
 
     assert np.isclose(float(loglike), -0.625)
+
+
+def test_global_signal_foreground_likelihood_uses_nuisance_groups() -> None:
+    likelihood = GlobalSignalForegroundLikelihood(
+        emulator=DummyEmulator(jnp.array([1.0, 2.0, 3.0])),
+        data=jnp.array([11.0, 12.0, 13.0]),
+        reduced_frequency=jnp.array([-1.0, 0.0, 1.0]),
+    )
+    parameters = {
+        "astro": jnp.array([0.0]),
+        "foreground": jnp.array([1.0, 0.0]),
+        "noise": jnp.array([1.0]),
+    }
+
+    loglike = likelihood(parameters)
+
+    np.testing.assert_allclose(float(loglike), -0.5 * 3 * np.log(2 * np.pi), rtol=1e-6)
 
 
 def test_power_spectrum_upper_limit_penalizes_models_above_the_limit() -> None:
@@ -138,3 +180,26 @@ def test_joint_likelihood_sums_individual_modules() -> None:
 
     np.testing.assert_allclose(float(joint(parameters)), float(expected))
     assert set(joint.contributions(parameters)) == {"global_signal", "global_signal_1"}
+
+
+def test_joint_likelihood_allows_shared_astro_and_nuisance_groups() -> None:
+    foreground_like = GlobalSignalForegroundLikelihood(
+        emulator=DummyEmulator(jnp.array([1.0])),
+        data=jnp.array([11.0]),
+        reduced_frequency=jnp.array([0.0]),
+    )
+    power_like = PowerSpectrumUpperLimitLikelihood(
+        emulator=DummyEmulator(jnp.array([1.0])),
+        upper_limit=jnp.array([10.0]),
+        sigma=jnp.array([1.0]),
+    )
+    joint = JointLikelihood([foreground_like, power_like])
+    parameters = {
+        "astro": jnp.array([0.0]),
+        "foreground": jnp.array([1.0]),
+        "noise": jnp.array([1.0]),
+    }
+
+    expected = foreground_like(parameters) + power_like(parameters)
+
+    np.testing.assert_allclose(float(joint(parameters)), float(expected))

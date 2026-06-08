@@ -43,6 +43,46 @@ prior = PriorSpec([
 theta = prior.transform(unit_cube)
 ```
 
+For joint analyses with nuisance parameters, use grouped priors:
+
+```python
+prior = PriorSpec({
+    "astro": [
+        LogUniformPrior("fstarII", 1e-3, 0.5),
+        LogUniformPrior("fstarIII", 1e-3, 0.5),
+        LogUniformPrior("Vc", 4.2, 100.0),
+        LogUniformPrior("fX", 1e-3, 1e3),
+        DiscretePrior("alpha", [1.0, 1.3, 1.5]),
+        DiscretePrior("nu_0", [100.0, 200.0, 300.0, 500.0, 1000.0, 2000.0, 3000.0]),
+        UniformPrior("tau", 0.02, 0.10),
+        LogUniformPrior("fradio", 1e-1, 1e5),
+        DiscretePrior("pop", [231.0, 232.0, 233.0]),
+    ],
+    "foreground": [
+        UniformPrior("a0", 3.54, 3.55),
+        UniformPrior("a1", -0.23, -0.21),
+        UniformPrior("a2", 0.0, 0.01),
+        UniformPrior("a3", -0.01, 0.0),
+        UniformPrior("a4", 0.0, 0.01),
+        UniformPrior("a5", -0.01, 0.01),
+        UniformPrior("a6", -0.01, 0.01),
+    ],
+    "noise": [
+        LogUniformPrior("sigma", 0.01, 1.0),
+    ],
+})
+
+theta = prior.transform(unit_cube)
+```
+
+This returns:
+
+```text
+theta["astro"]       -> emulator parameters
+theta["foreground"]  -> foreground polynomial coefficients
+theta["noise"]       -> noise nuisance parameter
+```
+
 ## Global Signal
 
 For a measured global signal, use a Gaussian likelihood:
@@ -61,6 +101,33 @@ likelihood = GlobalSignalLikelihood(
 
 loglike = likelihood(theta)
 ```
+
+For data with a smooth foreground, use the foreground likelihood. The
+foreground is a polynomial in reduced log-frequency:
+
+```text
+foreground = 10 ** sum(a_i * x**i)
+```
+
+where `x` is reduced log-frequency on `[-1, 1]`.
+
+```python
+from jax_emu.inference import GlobalSignalForegroundLikelihood
+
+likelihood = GlobalSignalForegroundLikelihood(
+    emulator=emulator,
+    data=temperature_data,
+    frequency=frequency_mhz,
+    signal_scale=1e-3,
+)
+
+loglike = likelihood(theta)
+```
+
+The likelihood uses `theta["astro"]` for the emulator, `theta["foreground"]`
+for the polynomial coefficients, and `theta["noise"]` for the noise standard
+deviation. Other likelihoods in a joint run can ignore the nuisance groups and
+use only `theta["astro"]`.
 
 ## Power Spectrum
 
