@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from examples_21cmspace.delta21.data import delta21_spec, prepare_twentyonecmspace_delta21_parameters
+from examples_21cmspace.delta21.emulator import default_delta21_inference_prior
 from examples_21cmspace.delta21.model import delta21_config
 from examples_21cmspace.t21.data import prepare_twentyonecmspace_t21_parameters, t21_spec
 from examples_21cmspace.t21.model import t21_config
@@ -26,6 +27,35 @@ def test_delta21_spec_matches_expected_feature_contract() -> None:
     assert spec.parameters[8].discrete_values == (231.0, 232.0, 233.0)
     assert spec.target_transform == "log10"
     assert spec.target_offset == 1e-8
+
+
+def test_delta21_inference_prior_matches_simulation_bounds() -> None:
+    prior = default_delta21_inference_prior()
+    priors_by_name = {parameter.name: parameter for parameter in prior.priors}
+
+    assert priors_by_name["log10fX"].lower == -3.0
+    assert priors_by_name["log10fX"].upper == 3.0
+    assert priors_by_name["log10fradio"].lower == -1.0
+    assert priors_by_name["log10fradio"].upper == 5.0
+    assert priors_by_name["nu_0"].values == (
+        100.0,
+        200.0,
+        300.0,
+        400.0,
+        500.0,
+        600.0,
+        700.0,
+        800.0,
+        900.0,
+        1000.0,
+        1100.0,
+        1200.0,
+        1300.0,
+        1400.0,
+        1500.0,
+        2000.0,
+        3000.0,
+    )
 
 
 def test_t21_spec_matches_expected_feature_contract() -> None:

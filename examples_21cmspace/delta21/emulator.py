@@ -269,14 +269,14 @@ def default_delta21_inference_prior() -> PriorSpec:
             UniformPrior("log10fstarII", -3.0, float(jnp.log10(0.5))),
             UniformPrior("log10fstarIII", -3.0, float(jnp.log10(0.5))),
             UniformPrior("log10Vc", float(jnp.log10(4.2)), 2.0),
-            UniformPrior("log10fX", -3.0, 2.0),
+            UniformPrior("log10fX", -3.0, 3.0),
             DiscretePrior("alpha", [1.0, 1.3, 1.5]),
             DiscretePrior(
                 "nu_0",
                 [*range(100, 1600, 100), 2000, 3000],
             ),
             UniformPrior("tau", 0.054 - 3.0 * 0.007, 0.054 + 3.0 * 0.007),
-            UniformPrior("log10fradio", 1.0, 5.0),
+            UniformPrior("log10fradio", -1.0, 5.0),
             DiscretePrior("pop", [231.0, 232.0, 233.0]),
         ]
     )
