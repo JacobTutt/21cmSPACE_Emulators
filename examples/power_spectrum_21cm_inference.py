@@ -11,10 +11,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from pprint import pprint
+import sys
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from emulators_21cmspace.delta21.emulator import describe_delta21_package, predict_delta21
 

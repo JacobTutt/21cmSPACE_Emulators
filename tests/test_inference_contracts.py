@@ -13,6 +13,7 @@ from jax_emu.inference import (
     GaussianLikelihood,
     GlobalSignalForegroundLikelihood,
     GlobalSignalLikelihood,
+    HERAObservation,
     JointLikelihood,
     LogUniformPrior,
     NestedSamplingConfig,
@@ -22,7 +23,11 @@ from jax_emu.inference import (
     PowerSpectrumUpperLimitLikelihood,
     PriorSpec,
     UniformPrior,
+    combine_hera_observations,
+    hera_dataset_summary,
+    load_hera_power_spectrum_npz,
     resolve_nested_sampling_settings,
+    save_hera_power_spectrum_npz,
     save_anesthetic_samples,
 )
 
@@ -274,6 +279,74 @@ def test_power_spectrum_likelihood_applies_window_matrix() -> None:
 
     assert np.isfinite(float(loglike))
     np.testing.assert_allclose(float(loglike), -0.5 * np.log(2 * np.pi), rtol=1e-6)
+
+
+def test_hera_observations_combine_into_block_window_dataset(tmp_path) -> None:
+    first = HERAObservation(
+        z=7.9,
+        k_model=np.array([0.1, 0.2], dtype=np.float32),
+        upper_limit=np.array([10.0], dtype=np.float32),
+        sigma=np.array([1.0], dtype=np.float32),
+        window_matrix=np.array([[0.25, 0.75]], dtype=np.float32),
+        k_data=np.array([0.1], dtype=np.float32),
+        source_file="field1.h5",
+        band=1,
+        field="1",
+    )
+    second = HERAObservation(
+        z=10.4,
+        k_model=np.array([0.3, 0.4, 0.5], dtype=np.float32),
+        upper_limit=np.array([20.0, 30.0], dtype=np.float32),
+        sigma=np.array([2.0, 3.0], dtype=np.float32),
+        window_matrix=np.array(
+            [[1.0, 0.0, 0.0], [0.0, 0.5, 0.5]],
+            dtype=np.float32,
+        ),
+        k_data=np.array([0.3, 0.4], dtype=np.float32),
+        source_file="field1.h5",
+        band=2,
+        field="1",
+    )
+
+    dataset = combine_hera_observations([first, second])
+
+    np.testing.assert_allclose(
+        np.asarray(dataset.power_data.coordinates),
+        np.array(
+            [
+                [7.9, 0.1],
+                [7.9, 0.2],
+                [10.4, 0.3],
+                [10.4, 0.4],
+                [10.4, 0.5],
+            ],
+            dtype=np.float32,
+        ),
+    )
+    np.testing.assert_allclose(
+        np.asarray(dataset.power_data.window_matrix),
+        np.array(
+            [
+                [0.25, 0.75, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.5, 0.5],
+            ],
+            dtype=np.float32,
+        ),
+    )
+    assert hera_dataset_summary(dataset)["n_data_bins"] == 3
+
+    cache_path = save_hera_power_spectrum_npz(dataset, tmp_path / "hera_cache.npz")
+    cached = load_hera_power_spectrum_npz(cache_path)
+
+    np.testing.assert_allclose(
+        np.asarray(cached.power_data.coordinates),
+        np.asarray(dataset.power_data.coordinates),
+    )
+    np.testing.assert_allclose(
+        np.asarray(cached.power_data.window_matrix),
+        np.asarray(dataset.power_data.window_matrix),
+    )
 
 
 def test_joint_likelihood_sums_individual_modules() -> None:

@@ -862,9 +862,9 @@ scaling.
 ### Use HERA Data
 
 HERA power-spectrum data are normally used as upper limits. The emulator is
-initialized on the model-side `(z, k)` points required by the data. If the data
-include a window matrix, the likelihood applies that matrix before comparing the
-prediction to the upper limits.
+initialized on the model-side `(z, k)` points required by the data. The
+likelihood then applies the HERA window matrix before comparing the prediction
+to the upper limits.
 
 ```python
 # JAX arrays keep the likelihood inputs on the accelerator.
@@ -873,51 +873,68 @@ import jax.numpy as jnp
 # Delta21 helper for fixed, non-rectangular coordinate lists.
 from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_point_emulator,
+    default_delta21_hera_prior,
     load_delta21_package,
 )
 
-# HERA data are compared with a one-sided upper-limit likelihood.
-from jax_emu.inference import PowerSpectrumData, PowerSpectrumUpperLimitLikelihood
+# HERA helpers extract the upper limits, errors, and window matrix.
+from jax_emu.inference import (
+    PowerSpectrumUpperLimitLikelihood,
+    default_h1c_idr2_selections,
+    hera_dataset_summary,
+    load_hera_power_spectrum_dataset,
+)
 
 # Load the trained Delta21 package.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
-# These arrays should be read from the HERA data product.
-# - hera_model_coordinates has shape (n_model_points, 2)
-# - hera_upper_limit has shape (n_data_bins,)
-# - hera_sigma has shape (n_data_bins,)
-# - hera_window_matrix has shape (n_data_bins, n_model_points)
-hera_model_coordinates = jnp.asarray(hera_model_coordinates, dtype=jnp.float32)
-hera_upper_limit = jnp.asarray(hera_upper_limit, dtype=jnp.float32)
-hera_sigma = jnp.asarray(hera_sigma, dtype=jnp.float32)
-hera_window_matrix = jnp.asarray(hera_window_matrix, dtype=jnp.float32)
-
-# Bundle the HERA arrays and validate that their shapes are consistent.
-hera_data = PowerSpectrumData(
-    coordinates=hera_model_coordinates,
-    upper_limit=hera_upper_limit,
-    sigma=hera_sigma,
-    window_matrix=hera_window_matrix,
+# Load the H1C IDR2 field-1 selections used by the old HERA-only runs.
+hera_dataset = load_hera_power_spectrum_dataset(
+    default_h1c_idr2_selections("data/observations_H1C_IDR2", field="1")
 )
+print(hera_dataset_summary(hera_dataset))
 
 # Compile the emulator for exactly the coordinates needed by the HERA data.
+prior = default_delta21_hera_prior()
+physical_parameters = prior.transform(jnp.full((prior.ndim,), 0.5, dtype=jnp.float32))
 emulator = build_delta21_fixed_point_emulator(
     package,
-    hera_data.coordinates,
+    hera_dataset.power_data.coordinates,
     compile_parameters=physical_parameters,
 )
 
 # Compare emulator predictions to the HERA upper limits.
 likelihood = PowerSpectrumUpperLimitLikelihood(
     emulator=emulator,
-    upper_limit=hera_data.upper_limit,
-    sigma=hera_data.sigma,
-    window_matrix=hera_data.window_matrix,
+    upper_limit=hera_dataset.power_data.upper_limit,
+    sigma=hera_dataset.power_data.sigma,
+    window_matrix=hera_dataset.power_data.window_matrix,
     theory_fractional_error=0.2,
 )
 
 # Evaluate the log likelihood for one or more physical parameter rows.
 loglike = likelihood(physical_parameters)
+```
+
+Direct HDF5 extraction requires `hera_pspec`, because the HERA products store
+cosmology, k bins, covariances, and window functions in the HERA data format.
+Once extracted, save a portable cache and reuse it without reading the HDF5 file
+again:
+
+```bash
+python examples/hera_power_spectrum_nested_sampling.py \
+  --package outputs/delta21_model.nenemu \
+  --summary-only \
+  --write-hera-cache data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz
+```
+
+Then run the HERA-only nested-sampling example:
+
+```bash
+python examples/hera_power_spectrum_nested_sampling.py \
+  --package outputs/delta21_model.nenemu \
+  --hera-npz data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz \
+  --output-dir outputs/hera_nested_sampling
 ```
 
 Some HERA power-spectrum estimates can be negative because they are noisy

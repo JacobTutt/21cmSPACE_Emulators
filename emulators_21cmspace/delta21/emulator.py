@@ -18,6 +18,7 @@ from emulators_21cmspace.delta21.data import (
     delta21_spec,
 )
 from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
+from jax_emu.inference.prior import DiscretePrior, PriorSpec, UniformPrior
 from jax_emu.utils.checkpointing import load
 
 
@@ -247,6 +248,38 @@ def describe_delta21_package(path: str | Path) -> dict[str, Any]:
         "train_losses": len(package["train_losses"]),
         "validation_losses": len(package["val_losses"]),
     }
+
+
+# Priors
+# ------
+# Reference prior used by the HERA power-spectrum nested-sampling example.
+
+def default_delta21_hera_prior() -> PriorSpec:
+    """
+    Return a default HERA-only prior for the prepared Delta21 emulator inputs.
+
+    The Delta21 emulator accepts either a raw 12-column 21cmSPACE table or the
+    prepared nine-column table used by the network. This prior samples the
+    prepared table directly, so log-scaled parameters are sampled in log10
+    space and discrete simulation parameters are sampled from their allowed
+    values.
+    """
+    return PriorSpec(
+        [
+            UniformPrior("log10fstarII", -3.0, float(jnp.log10(0.5))),
+            UniformPrior("log10fstarIII", -3.0, float(jnp.log10(0.5))),
+            UniformPrior("log10Vc", float(jnp.log10(4.2)), 2.0),
+            UniformPrior("log10fX", -3.0, 2.0),
+            DiscretePrior("alpha", [1.0, 1.3, 1.5]),
+            DiscretePrior(
+                "nu_0",
+                [*range(100, 1600, 100), 2000, 3000],
+            ),
+            UniformPrior("tau", 0.054 - 3.0 * 0.007, 0.054 + 3.0 * 0.007),
+            UniformPrior("log10fradio", 1.0, 5.0),
+            DiscretePrior("pop", [231.0, 232.0, 233.0]),
+        ]
+    )
 
 
 # Internal Helpers

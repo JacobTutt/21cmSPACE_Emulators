@@ -164,41 +164,60 @@ theory above limit -> rapidly decreasing likelihood
 
 If the observation supplies a window matrix, initialize the emulator on the
 model coordinate points and let the likelihood apply the window. The coordinate
-array is a list of explicit `(z, k)` pairs, not a rectangular grid:
+array is a list of explicit `(z, k)` pairs, not a rectangular grid.
+
+For the bundled H1C IDR2 example, the loader follows the older HERA-only setup:
+field 1, bands 1 and 2, the same `kstart` values, the same decimation, and the
+same block window matrix used before the upper-limit likelihood is evaluated.
 
 ```python
-import jax.numpy as jnp
-
 from emulators_21cmspace.delta21.emulator import build_delta21_fixed_point_emulator
-from jax_emu.inference import PowerSpectrumData, PowerSpectrumUpperLimitLikelihood
-
-power_data = PowerSpectrumData(
-    coordinates=jnp.array([
-        [7.9, 0.12],
-        [7.9, 0.18],
-        [10.4, 0.09],
-        [10.4, 0.21],
-        [10.4, 0.36],
-    ]),
-    upper_limit=delta21_upper_limit,
-    sigma=delta21_sigma,
-    window_matrix=window_matrix,
+from jax_emu.inference import (
+    PowerSpectrumUpperLimitLikelihood,
+    default_h1c_idr2_selections,
+    load_hera_power_spectrum_dataset,
 )
+
+# This reads the HERA HDF5 products and returns coordinates, limits, errors,
+# and the block window matrix in one validated container.
+hera_data = load_hera_power_spectrum_dataset(
+    default_h1c_idr2_selections("data/observations_H1C_IDR2", field="1")
+).power_data
 
 emulator = build_delta21_fixed_point_emulator(
     package,
-    power_data.coordinates,
+    hera_data.coordinates,
 )
 
 likelihood = PowerSpectrumUpperLimitLikelihood(
     emulator=emulator,
-    upper_limit=power_data.upper_limit,
-    sigma=power_data.sigma,
-    window_matrix=power_data.window_matrix,
+    upper_limit=hera_data.upper_limit,
+    sigma=hera_data.sigma,
+    window_matrix=hera_data.window_matrix,
     theory_fractional_error=0.2,
 )
 
 loglike = likelihood(theta)
+```
+
+Direct HDF5 extraction uses `hera_pspec`, matching the older analysis code. If
+that package is only available on one machine, extract once and save a portable
+cache:
+
+```bash
+python examples/hera_power_spectrum_nested_sampling.py \
+  --package outputs/delta21_model.nenemu \
+  --summary-only \
+  --write-hera-cache data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz
+```
+
+Then later runs can use the cache directly:
+
+```bash
+python examples/hera_power_spectrum_nested_sampling.py \
+  --package outputs/delta21_model.nenemu \
+  --hera-npz data/observations_H1C_IDR2/hera_h1c_idr2_field1.npz \
+  --output-dir outputs/hera_nested_sampling
 ```
 
 For mock detections or future symmetric measurements, use
