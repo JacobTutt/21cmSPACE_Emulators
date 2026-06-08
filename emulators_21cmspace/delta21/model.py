@@ -47,9 +47,8 @@ def delta21_config() -> Delta21Config:
     """
     Return the default 21cmSPACE `Delta21` architecture and trainer.
 
-    This matches the hidden-layer width and activation used by the JWST
-    synergies Dsq21 emulator: four hidden layers of width 100 with tanh
-    activations.
+    This uses a moderately wider GELU MLP for the cubic-interpolation Delta21
+    workflow: five hidden layers of width 160.
 
     Returns
     -------
@@ -61,9 +60,9 @@ def delta21_config() -> Delta21Config:
         # Note: input_dim=11 accounts for (z, log10k) + 9 parameters.
         mlp=MLPConfig(
             input_dim=11,
-            hidden_dim=100,
-            n_hidden_blocks=3,
-            activation="tanh",
+            hidden_dim=160,
+            n_hidden_blocks=4,
+            activation="gelu",
         ),
         # Default Adam optimizer settings.
         optimizer=OptimizerConfig(),

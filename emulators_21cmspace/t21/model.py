@@ -44,9 +44,8 @@ def t21_config() -> T21Config:
     """
     Return the default configuration for the current T21 workflow.
 
-    This matches the hidden-layer width and activation used by the JWST
-    synergies T21 emulator: four hidden layers of width 32 with ReLU
-    activations.
+    This uses a moderately wider GELU MLP for the cubic-interpolation T21
+    workflow: four hidden layers of width 64.
 
     Returns
     -------
@@ -57,9 +56,9 @@ def t21_config() -> T21Config:
         # Baseline MLP architecture for brightness temperature regression.
         mlp=MLPConfig(
             input_dim=10,
-            hidden_dim=32,
+            hidden_dim=64,
             n_hidden_blocks=3,
-            activation="relu",
+            activation="gelu",
         ),
         # Default Adam optimizer settings.
         optimizer=OptimizerConfig(),
