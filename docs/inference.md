@@ -70,23 +70,38 @@ theory above limit -> rapidly decreasing likelihood
 ```
 
 If the observation supplies a window matrix, initialize the emulator on the
-model k-bins and let the likelihood apply the window:
+model coordinate points and let the likelihood apply the window. The coordinate
+array is a list of explicit `(z, k)` pairs, not a rectangular grid:
 
 ```python
-from emulators_21cmspace.delta21.infer import build_delta21_fixed_coordinate_emulator
-from jax_emu.inference import PowerSpectrumUpperLimitLikelihood
+import jax.numpy as jnp
 
-emulator = build_delta21_fixed_coordinate_emulator(
+from emulators_21cmspace.delta21.infer import build_delta21_fixed_point_emulator
+from jax_emu.inference import PowerSpectrumData, PowerSpectrumUpperLimitLikelihood
+
+power_data = PowerSpectrumData(
+    coordinates=jnp.array([
+        [7.9, 0.12],
+        [7.9, 0.18],
+        [10.4, 0.09],
+        [10.4, 0.21],
+        [10.4, 0.36],
+    ]),
+    upper_limit=delta21_upper_limit,
+    sigma=delta21_sigma,
+    window_matrix=window_matrix,
+)
+
+emulator = build_delta21_fixed_point_emulator(
     package,
-    z_model_points,
-    k_model_points,
+    power_data.coordinates,
 )
 
 likelihood = PowerSpectrumUpperLimitLikelihood(
     emulator=emulator,
-    upper_limit=delta21_upper_limit,
-    sigma=delta21_sigma,
-    window_matrix=window_matrix,
+    upper_limit=power_data.upper_limit,
+    sigma=power_data.sigma,
+    window_matrix=power_data.window_matrix,
     theory_fractional_error=0.2,
 )
 

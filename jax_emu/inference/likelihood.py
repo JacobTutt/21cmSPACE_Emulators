@@ -28,6 +28,49 @@ class EmulatorLike(Protocol):
 
 
 @dataclass(frozen=True)
+class PowerSpectrumData:
+    """
+    Storage utility for pointwise power-spectrum data.
+
+    The coordinates are explicit `(z, k)` pairs, not a rectangular grid. This
+    supports ragged observations where different redshifts have different k
+    values.
+
+    Parameters
+    ----------
+    coordinates:
+        Array with shape `(n_model_points, 2)`. Column 0 is redshift and column
+        1 is k.
+    upper_limit:
+        Upper limits or measured values in data-bin space.
+    sigma:
+        Observational uncertainties in data-bin space.
+    window_matrix:
+        Optional matrix mapping model coordinate points onto data bins. If
+        omitted, the data bins are assumed to match the model points directly.
+    """
+
+    coordinates: jax.Array
+    upper_limit: jax.Array
+    sigma: jax.Array
+    window_matrix: jax.Array | None = None
+
+    @property
+    def z_model_points(self) -> jax.Array:
+        """
+        Return redshift coordinates as a 1D array.
+        """
+        return _coordinate_array(self.coordinates)[:, 0]
+
+    @property
+    def k_model_points(self) -> jax.Array:
+        """
+        Return k coordinates as a 1D array.
+        """
+        return _coordinate_array(self.coordinates)[:, 1]
+
+
+@dataclass(frozen=True)
 class GaussianLikelihood:
     """
     Diagonal Gaussian likelihood for measured data points.
@@ -225,6 +268,16 @@ def _apply_window(prediction: jax.Array, window_matrix: jax.Array | None) -> jax
         return prediction
     window = jnp.asarray(window_matrix, dtype=jnp.float32)
     return prediction @ window.T
+
+
+def _coordinate_array(coordinates: jax.Array) -> jax.Array:
+    """
+    Validate and return an explicit `(z, k)` coordinate table.
+    """
+    array = jnp.asarray(coordinates, dtype=jnp.float32)
+    if array.ndim != 2 or array.shape[1] != 2:
+        raise ValueError("Power-spectrum coordinates must have shape (n_points, 2).")
+    return array
 
 
 def _fractional_theory_sigma(prediction: jax.Array, fraction: float | jax.Array) -> jax.Array:

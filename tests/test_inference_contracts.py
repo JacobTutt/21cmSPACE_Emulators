@@ -12,6 +12,7 @@ from jax_emu.inference import (
     GlobalSignalLikelihood,
     JointLikelihood,
     LogUniformPrior,
+    PowerSpectrumData,
     PowerSpectrumGaussianLikelihood,
     PowerSpectrumUpperLimitLikelihood,
     PriorSpec,
@@ -76,6 +77,23 @@ def test_power_spectrum_upper_limit_penalizes_models_above_the_limit() -> None:
 
     assert float(low_model(parameters)) > float(high_model(parameters))
     assert float(low_model(parameters)) > -1e-6
+
+
+def test_power_spectrum_data_uses_explicit_coordinate_pairs() -> None:
+    data = PowerSpectrumData(
+        coordinates=jnp.array(
+            [
+                [7.9, 0.12],
+                [7.9, 0.18],
+                [10.4, 0.09],
+            ]
+        ),
+        upper_limit=jnp.array([10.0, 20.0, 30.0]),
+        sigma=jnp.array([1.0, 2.0, 3.0]),
+    )
+
+    np.testing.assert_allclose(np.asarray(data.z_model_points), np.array([7.9, 7.9, 10.4]))
+    np.testing.assert_allclose(np.asarray(data.k_model_points), np.array([0.12, 0.18, 0.09]))
 
 
 def test_power_spectrum_likelihood_applies_window_matrix() -> None:

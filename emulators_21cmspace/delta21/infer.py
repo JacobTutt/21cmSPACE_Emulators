@@ -193,6 +193,30 @@ def build_delta21_fixed_coordinate_emulator(
     )
 
 
+def build_delta21_fixed_point_emulator(
+    package_or_path: str | Path | dict[str, Any],
+    coordinates: jax.Array,
+    *,
+    compile_parameters: jax.Array | None = None,
+) -> FixedCoordinateEmulator:
+    """
+    Build a reusable Delta21 emulator from explicit `(z, k)` coordinate pairs.
+
+    `coordinates` must have shape `(n_points, 2)`, with redshift in column 0
+    and k in column 1. These points are not expanded into a grid.
+    """
+    coordinate_array = jnp.asarray(coordinates, dtype=jnp.float32)
+    if coordinate_array.ndim != 2 or coordinate_array.shape[1] != 2:
+        raise ValueError("Delta21 coordinates must have shape (n_points, 2).")
+
+    return build_delta21_fixed_coordinate_emulator(
+        package_or_path,
+        coordinate_array[:, 0],
+        coordinate_array[:, 1],
+        compile_parameters=compile_parameters,
+    )
+
+
 def predict_delta21(
     package_or_path: str | Path | dict[str, Any],
     parameters: jax.Array,
