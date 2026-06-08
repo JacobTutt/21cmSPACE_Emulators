@@ -185,6 +185,14 @@ def prepare_fixed_grid_training_split(
         interpolation_method=interpolation_method,
     )
 
+    # Re-apply any target-space floor after interpolation. Higher-order
+    # interpolants can overshoot beyond the range of the original transformed
+    # target values, so the floor must be enforced after resampling as well.
+    if target_min is not None:
+        train_target_grid = apply_target_floor(train_target_grid, target_min)
+        validation_target_grid = apply_target_floor(validation_target_grid, target_min)
+        test_target_grid = apply_target_floor(test_target_grid, target_min)
+
     # Step 6: Optionally apply global target standardization.
     # This follows globalemu: divide all labels by one std from the training set only.
     target_scaling = None
