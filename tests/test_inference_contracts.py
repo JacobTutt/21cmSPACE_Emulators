@@ -103,6 +103,24 @@ def test_nested_sampling_settings_scale_with_prior_dimension() -> None:
     assert settings.num_inner_steps == 15
 
 
+def test_nested_sampling_default_settings_match_reference_recipe() -> None:
+    prior = PriorSpec(
+        [
+            UniformPrior("x", -1.0, 1.0),
+            UniformPrior("y", -1.0, 1.0),
+            UniformPrior("z", -1.0, 1.0),
+            FixedPrior("fixed", 2.0),
+        ]
+    )
+
+    settings = resolve_nested_sampling_settings(prior)
+
+    assert prior.ndim == 3
+    assert settings.n_live == 75
+    assert settings.num_delete == 15
+    assert settings.num_inner_steps == 15
+
+
 def test_anesthetic_export_writes_expected_files(tmp_path) -> None:
     pytest.importorskip("anesthetic")
     prior = PriorSpec(

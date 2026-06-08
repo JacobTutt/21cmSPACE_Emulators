@@ -62,11 +62,11 @@ class NestedSamplingConfig:
     """
 
     n_live: int | None = None
-    n_live_scale: int = 100
+    n_live_scale: int = 25
     num_delete: int | None = None
-    num_delete_fraction: float = 0.05
+    num_delete_fraction: float = 0.2
     num_inner_steps: int | None = None
-    num_inner_steps_scale: int = 3
+    num_inner_steps_scale: int = 5
     logz_live_threshold: float = -3.0
     max_steps: int | None = None
     finalise_on_cpu: bool = True

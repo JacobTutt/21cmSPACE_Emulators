@@ -231,9 +231,9 @@ import jax
 from jax_emu.inference import NestedSamplingConfig, run_nested_sampling
 
 config = NestedSamplingConfig(
-    n_live_scale=100,          # n_live = n_dim * 100
-    num_delete_fraction=0.05,  # replace 5% of live points per step
-    num_inner_steps_scale=3,   # inner MCMC steps = n_dim * 3
+    n_live_scale=25,           # n_live = n_dim * 25
+    num_delete_fraction=0.2,   # replace 20% of live points per step
+    num_inner_steps_scale=5,   # inner MCMC steps = n_dim * 5
     logz_live_threshold=-3.0,  # stop when live evidence is negligible
     output_dir="outputs/hera_nested_sampling",
 )
