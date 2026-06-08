@@ -413,7 +413,7 @@ DenseMLP architecture + trained weights + T21 preprocessing metadata
 import jax.numpy as jnp
 
 # T21 inference helpers load the checkpoint and build a reusable fixed-grid emulator.
-from emulators_21cmspace.t21.infer import build_t21_fixed_grid_emulator, load_t21_package
+from emulators_21cmspace.t21.emulator import build_t21_fixed_grid_emulator, load_t21_package
 
 # Load the trained model and its saved metadata.
 package = load_t21_package("outputs/t21_model.nenemu")
@@ -811,7 +811,7 @@ DenseMLP architecture + trained weights + Delta21 preprocessing metadata
 import jax.numpy as jnp
 
 # Delta21 inference helpers load the checkpoint and build a reusable emulator.
-from emulators_21cmspace.delta21.infer import (
+from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )
@@ -871,7 +871,7 @@ prediction to the upper limits.
 import jax.numpy as jnp
 
 # Delta21 helper for fixed, non-rectangular coordinate lists.
-from emulators_21cmspace.delta21.infer import (
+from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_point_emulator,
     load_delta21_package,
 )

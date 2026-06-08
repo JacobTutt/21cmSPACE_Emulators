@@ -148,7 +148,7 @@ helper can then apply the same forward transforms before the network and the
 same inverse transforms after the network.
 
 ```python
-from emulators_21cmspace.delta21.infer import (
+from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )
@@ -173,7 +173,7 @@ For one-off calls, the convenience wrapper can still load and predict in one
 step:
 
 ```python
-from emulators_21cmspace.delta21.infer import predict_delta21
+from emulators_21cmspace.delta21.emulator import predict_delta21
 
 delta21 = predict_delta21(
     "outputs/delta21_model.nenemu",

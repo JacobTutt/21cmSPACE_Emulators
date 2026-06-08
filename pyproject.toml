@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "anesthetic",
-  "blackjax",
+  "blackjax @ git+https://github.com/handley-lab/blackjax.git@v0.1.0-beta",
   "matplotlib",
   "numpy",
   "scipy",
@@ -40,9 +40,7 @@ dev = [
 ]
 [project.scripts]
 21cmspace-delta21-train = "emulators_21cmspace.delta21.train:main"
-21cmspace-delta21-infer = "emulators_21cmspace.delta21.infer:main"
 21cmspace-t21-train = "emulators_21cmspace.t21.train:main"
-21cmspace-t21-infer = "emulators_21cmspace.t21.infer:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

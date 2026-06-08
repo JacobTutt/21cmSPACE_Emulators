@@ -1,47 +1,26 @@
 """
-T21 inference helpers and CLI entrypoint.
+T21 emulator loading and prediction helpers.
 
-This module provides the logic for using a trained T21 emulator for prediction.
-It handles loading versioned model packages, preparing input parameter tables,
-executing the model forward pass, and inverting all preprocessing transforms
-to recover physical brightness temperature signals.
+This module contains reusable package code for using a trained T21 emulator.
+File-based examples and command-line wrappers live outside the source package.
 """
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
-from pprint import pprint
 from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
-from jax_emu.infer import Emulator, FixedCoordinateEmulator, FixedGridEmulator
+from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
 from jax_emu.utils.checkpointing import load
 from emulators_21cmspace.t21.data import t21_spec
 
 
 # Loading Utilities
 # -----------------
-# Helpers for retrieving saved models and numeric arrays from disk.
-
-def _load_array_file(path: str | Path) -> np.ndarray:
-    """
-    Load a 1D or 2D numeric array from .npy, .npz, or text.
-    """
-    file_path = Path(path)
-    # Handle standard NumPy binary formats.
-    if file_path.suffix == ".npy":
-        return np.asarray(np.load(file_path), dtype=float)
-    if file_path.suffix == ".npz":
-        payload = np.load(file_path)
-        # Take the first available array from the archive.
-        first_key = payload.files[0]
-        return np.asarray(payload[first_key], dtype=float)
-    # Fallback to space-separated text files.
-    return np.asarray(np.loadtxt(file_path), dtype=float)
+# Helpers for retrieving saved models from disk.
 
 
 def load_t21_package(path: str | Path) -> dict[str, Any]:
@@ -217,87 +196,6 @@ def describe_t21_package(path: str | Path) -> dict[str, Any]:
         "train_losses": len(package["train_losses"]),
         "validation_losses": len(package["val_losses"]),
     }
-
-
-# CLI Entrypoint
-# -------------
-# Logic for running inference from the command line.
-
-def build_parser() -> argparse.ArgumentParser:
-    """
-    Build the T21 inference command-line interface.
-    """
-    parser = argparse.ArgumentParser(description="T21 inference entrypoint.")
-    parser.add_argument("--package", type=str, help="Path to a saved .nenemu checkpoint.")
-    parser.add_argument(
-        "--describe",
-        action="store_true",
-        help="Print a short description of a saved checkpoint.",
-    )
-    parser.add_argument(
-        "--parameters-file",
-        type=str,
-        help="Path to a raw 12-column or prepared 9-column parameter table.",
-    )
-    parser.add_argument("--z-file", type=str, help="Path to a 1D redshift array.")
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Path to the output .npz prediction file.",
-    )
-    return parser
-
-
-def main() -> None:
-    """
-    Run the T21 inference CLI.
-    """
-    args = build_parser().parse_args()
-
-    # Handle the describe task.
-    if args.describe:
-        if args.package is None:
-            raise SystemExit("Use --package together with --describe.")
-        pprint(describe_t21_package(args.package))
-        return
-
-    # Ensure all required inputs are provided for prediction.
-    required = [args.package, args.parameters_file, args.z_file]
-    if not all(required):
-        raise SystemExit(
-            "Use --package, --parameters-file, and --z-file to run predictions, "
-            "or --package --describe to inspect a saved model."
-        )
-
-    # Load input data.
-    parameter_table = _load_array_file(args.parameters_file)
-    z_values = _load_array_file(args.z_file)
-
-    # Run the prediction pipeline.
-    predictions = predict_t21(
-        args.package,
-        jnp.asarray(parameter_table, dtype=jnp.float32),
-        jnp.asarray(z_values, dtype=jnp.float32),
-    )
-
-    # Save the output to a compressed NumPy archive.
-    output_path = Path("t21_prediction.npz") if args.output is None else Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    prediction_array = np.asarray(jax.device_get(predictions))
-    np.savez(
-        output_path,
-        t21=prediction_array,
-        parameters=parameter_table,
-        z=np.asarray(z_values, dtype=float).ravel(),
-    )
-
-    # Print success summary.
-    pprint(
-        {
-            "output_path": str(output_path),
-            "prediction_shape": list(predictions.shape),
-        }
-    )
 
 
 # Internal Helpers

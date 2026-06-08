@@ -20,13 +20,15 @@ observable values, then reconstruct spectra or grids after inference.
 21cmspace-emulators/
   README.md
   docs/                             (detailed guides to emulator training)
+  examples/                         (file-based prediction examples)
   jax_emu/                          (reusable JAX emulator infrastructure)
+    analysis/                       (training-history and diagnostic plotting helpers)
     architectures/                  (shared MLP definitions)
     data_preprocessing/             (specs, parameter prep, transforms, scaling, tiling)
-    training/                       (training and evaluation loops)
     inference/                      (priors, likelihoods, nested sampling)
+    training/                       (training and evaluation loops)
     utils/                          (configs, checkpoints, metrics)
-  emulators_21cmspace/              (21cmSPACE-specific examples)
+  emulators_21cmspace/              (21cmSPACE-specific reusable workflows)
     t21/                            (global 21-cm signal emulator)
     delta21/                        (21-cm power-spectrum emulator)
     twentyonecmspace.py             (shared 21cmSPACE constants/helpers)

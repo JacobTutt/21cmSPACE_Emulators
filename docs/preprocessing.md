@@ -274,7 +274,7 @@ During inference, the same metadata is loaded from the checkpoint:
 6. **Reconstruction**: fold flat predictions back into spectral arrays.
 
 ```python
-from emulators_21cmspace.delta21.infer import (
+from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )

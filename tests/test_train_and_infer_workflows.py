@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.io import loadmat, savemat
 
-from emulators_21cmspace.delta21.infer import (
+from emulators_21cmspace.delta21.emulator import (
     build_delta21_fixed_coordinate_emulator,
     build_delta21_fixed_grid_emulator,
     build_delta21_emulator,
@@ -17,7 +17,7 @@ from emulators_21cmspace.delta21.infer import (
     predict_delta21,
 )
 from emulators_21cmspace.delta21.train import train_delta21_from_dataset_root
-from emulators_21cmspace.t21.infer import (
+from emulators_21cmspace.t21.emulator import (
     build_t21_fixed_coordinate_emulator,
     build_t21_fixed_grid_emulator,
     build_t21_emulator,

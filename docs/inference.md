@@ -88,7 +88,7 @@ theta["noise"]       -> noise nuisance parameter
 For a measured global signal, use a Gaussian likelihood:
 
 ```python
-from emulators_21cmspace.t21.infer import build_t21_fixed_coordinate_emulator
+from emulators_21cmspace.t21.emulator import build_t21_fixed_coordinate_emulator
 from jax_emu.inference import GlobalSignalLikelihood
 
 emulator = build_t21_fixed_coordinate_emulator(package, z_data)
@@ -169,7 +169,7 @@ array is a list of explicit `(z, k)` pairs, not a rectangular grid:
 ```python
 import jax.numpy as jnp
 
-from emulators_21cmspace.delta21.infer import build_delta21_fixed_point_emulator
+from emulators_21cmspace.delta21.emulator import build_delta21_fixed_point_emulator
 from jax_emu.inference import PowerSpectrumData, PowerSpectrumUpperLimitLikelihood
 
 power_data = PowerSpectrumData(
