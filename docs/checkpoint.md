@@ -148,20 +148,25 @@ helper can then apply the same forward transforms before the network and the
 same inverse transforms after the network.
 
 ```python
-from emulators_21cmspace.delta21.infer import build_delta21_emulator, load_delta21_package
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_fixed_grid_emulator,
+    load_delta21_package,
+)
 
 # The emulator-specific loader validates that the checkpoint metadata is present.
 package = load_delta21_package("outputs/delta21_model.nenemu")
 
-# Build the reusable emulator object once.
-# Pass compile_inputs to pay the first JIT compilation cost immediately.
-emulator = build_delta21_emulator(
+# Build the reusable emulator object once for this fixed (z, k) grid.
+# Pass compile_parameters to pay the first JIT compilation cost immediately.
+emulator = build_delta21_fixed_grid_emulator(
     package,
-    compile_inputs=(physical_parameters, z, k),
+    z,
+    k,
+    compile_parameters=physical_parameters,
 )
 
-# Reuse the compiled forward model, for example inside an inference loop.
-delta21 = emulator.forward_model(physical_parameters, z, k)
+# Reuse the compiled fixed-grid forward model inside an inference loop.
+delta21 = emulator.emulate(physical_parameters)
 ```
 
 For one-off calls, the convenience wrapper can still load and predict in one
@@ -178,9 +183,11 @@ delta21 = predict_delta21(
 )
 ```
 
-For repeated inference, prefer `build_delta21_emulator`. It keeps disk I/O and
-metadata validation outside the compiled numerical path and exposes a reusable
-`forward_model` method.
+For repeated inference on one fixed grid, prefer
+`build_delta21_fixed_grid_emulator`. It keeps disk I/O, metadata validation,
+and grid construction outside the repeated numerical path. The older
+`build_delta21_emulator` route is still useful when the requested grid changes
+from call to call.
 
 ---
 

@@ -21,7 +21,7 @@ import numpy as np
 from emulators_21cmspace.delta21.data import (
     delta21_spec,
 )
-from jax_emu.infer import Emulator
+from jax_emu.infer import Emulator, FixedGridEmulator
 from jax_emu.utils.checkpointing import load
 
 
@@ -136,6 +136,35 @@ def build_delta21_predictor(
     # forward model method.
     emulator = build_delta21_emulator(package_or_path, compile_inputs=compile_inputs)
     return emulator.forward_model
+
+
+def build_delta21_fixed_grid_emulator(
+    package_or_path: str | Path | dict[str, Any],
+    z_values: jax.Array,
+    k_values: jax.Array,
+    *,
+    compile_parameters: jax.Array | None = None,
+) -> FixedGridEmulator:
+    """
+    Build a reusable Delta21 emulator for one fixed `(z, k)` grid.
+
+    The redshift and wavenumber grid is transformed and scaled once during
+    initialization. Later calls only pass parameter tables to `emulate(...)` or
+    `forward_model(...)`.
+    """
+    # Resolve and validate the package outside JIT. The fixed-grid wrapper then
+    # stores the compiled parameter-only forward model.
+    package = (
+        load_delta21_package(package_or_path)
+        if isinstance(package_or_path, (str, Path))
+        else _validate_delta21_package(package_or_path)
+    )
+    return FixedGridEmulator(
+        package=package,
+        axes=(z_values, k_values),
+        parameter_adapter=_prepare_parameter_values,
+        compile_parameters=compile_parameters,
+    )
 
 
 def predict_delta21(

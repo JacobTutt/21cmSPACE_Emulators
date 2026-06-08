@@ -412,8 +412,8 @@ DenseMLP architecture + trained weights + T21 preprocessing metadata
 # JAX arrays keep inference inputs and outputs on the accelerator.
 import jax.numpy as jnp
 
-# T21 inference helpers load the checkpoint and build a reusable emulator.
-from emulators_21cmspace.t21.infer import build_t21_emulator, load_t21_package
+# T21 inference helpers load the checkpoint and build a reusable fixed-grid emulator.
+from emulators_21cmspace.t21.infer import build_t21_fixed_grid_emulator, load_t21_package
 
 # Load the trained model and its saved metadata.
 package = load_t21_package("outputs/t21_model.nenemu")
@@ -429,14 +429,15 @@ physical_parameters = jnp.asarray(
 # Choose the redshift coordinates where the signal should be predicted.
 z = jnp.linspace(6.0, 27.0, 200)
 
-# Build the reusable emulator object and compile it for these input shapes.
-emulator = build_t21_emulator(
+# Build the reusable emulator object and compile it for this fixed redshift grid.
+emulator = build_t21_fixed_grid_emulator(
     package,
-    compile_inputs=(physical_parameters, z),
+    z,
+    compile_parameters=physical_parameters,
 )
 
 # Predict T21 and return an array with shape (n_sims, n_z).
-t21 = emulator.forward_model(physical_parameters, z)
+t21 = emulator.emulate(physical_parameters)
 
 # Inspect the prediction shape.
 print(t21.shape)
@@ -811,7 +812,7 @@ import jax.numpy as jnp
 
 # Delta21 inference helpers load the checkpoint and build a reusable emulator.
 from emulators_21cmspace.delta21.infer import (
-    build_delta21_emulator,
+    build_delta21_fixed_grid_emulator,
     load_delta21_package,
 )
 
@@ -832,14 +833,16 @@ z = jnp.linspace(6.0, 27.0, 50)
 # Choose the physical k coordinates using logarithmic spacing in k.
 k = jnp.geomspace(3e-2 / 0.6704, 0.99 / 0.6704, 50, dtype=jnp.float32)
 
-# Build the reusable emulator object and compile it for these input shapes.
-emulator = build_delta21_emulator(
+# Build the reusable emulator object and compile it for this fixed (z, k) grid.
+emulator = build_delta21_fixed_grid_emulator(
     package,
-    compile_inputs=(physical_parameters, z, k),
+    z,
+    k,
+    compile_parameters=physical_parameters,
 )
 
 # Predict Delta21 and return an array with shape (n_sims, n_z, n_k).
-delta21 = emulator.forward_model(physical_parameters, z, k)
+delta21 = emulator.emulate(physical_parameters)
 
 # Inspect the prediction shape.
 print(delta21.shape)

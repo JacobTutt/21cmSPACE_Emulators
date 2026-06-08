@@ -274,21 +274,27 @@ During inference, the same metadata is loaded from the checkpoint:
 6. **Reconstruction**: fold flat predictions back into spectral arrays.
 
 ```python
-from emulators_21cmspace.delta21.infer import build_delta21_emulator, load_delta21_package
-
-package = load_delta21_package("delta21_model.nenemu")
-emulator = build_delta21_emulator(
-    package,
-    compile_inputs=(physical_parameters, z_grid, k_grid),
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_fixed_grid_emulator,
+    load_delta21_package,
 )
 
-delta21 = emulator.forward_model(physical_parameters, z_grid, k_grid)
+package = load_delta21_package("delta21_model.nenemu")
+emulator = build_delta21_fixed_grid_emulator(
+    package,
+    z_grid,
+    k_grid,
+    compile_parameters=physical_parameters,
+)
+
+delta21 = emulator.emulate(physical_parameters)
 ```
 
 The emulator closes over the loaded model and metadata. `metadata.emulator_spec`
 supplies the transforms, `metadata.input_scaling` supplies the input
 normalisation, and `metadata.target_scaling` supplies the inverse target
-scaling.
+scaling. For repeated inference on one grid, the fixed-grid emulator also
+stores the transformed and scaled axis grid so it is not rebuilt at every call.
 
 ![Inference preprocessing flow](assets/preprocessing-inference.svg)
 
