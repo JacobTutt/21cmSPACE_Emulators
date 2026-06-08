@@ -80,7 +80,7 @@ def delta21_spec() -> EmulatorSpec:
             ParameterSpec(name="fradio", transform="log10"),
             ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
-        # Target power spectrum is trained in log10 space with the JWST synergies offset.
+        # Target power spectrum is trained in log10 space with a small positive offset.
         target_transform="log10",
         target_offset=1e-8,
     )
@@ -176,7 +176,7 @@ def prepare_twentyonecmspace_delta21_training_split(
             "log10fradio": "zscore",
             "pop": "minmax_zero_to_one",
         },
-        # Delta21 signals are trained in log10 space with the JWST synergies offset.
+        # Delta21 signals are trained in log10 space with a small positive offset.
         data_log=True,
         offset=1e-8,
         target_min=DELTA21_LOG_TARGET_FLOOR,

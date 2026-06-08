@@ -859,6 +859,73 @@ defines the axis and target transforms, `metadata.input_scaling` defines the
 feature scaling, and `metadata.target_scaling` defines the inverse target
 scaling.
 
+### Use HERA Data
+
+HERA power-spectrum data are normally used as upper limits. The emulator is
+initialized on the model-side `(z, k)` points required by the data. If the data
+include a window matrix, the likelihood applies that matrix before comparing the
+prediction to the upper limits.
+
+```python
+# JAX arrays keep the likelihood inputs on the accelerator.
+import jax.numpy as jnp
+
+# Delta21 helper for fixed, non-rectangular coordinate lists.
+from emulators_21cmspace.delta21.infer import (
+    build_delta21_fixed_point_emulator,
+    load_delta21_package,
+)
+
+# HERA data are compared with a one-sided upper-limit likelihood.
+from jax_emu.inference import PowerSpectrumData, PowerSpectrumUpperLimitLikelihood
+
+# Load the trained Delta21 package.
+package = load_delta21_package("outputs/delta21_model.nenemu")
+
+# These arrays should be read from the HERA data product.
+# - hera_model_coordinates has shape (n_model_points, 2)
+# - hera_upper_limit has shape (n_data_bins,)
+# - hera_sigma has shape (n_data_bins,)
+# - hera_window_matrix has shape (n_data_bins, n_model_points)
+hera_model_coordinates = jnp.asarray(hera_model_coordinates, dtype=jnp.float32)
+hera_upper_limit = jnp.asarray(hera_upper_limit, dtype=jnp.float32)
+hera_sigma = jnp.asarray(hera_sigma, dtype=jnp.float32)
+hera_window_matrix = jnp.asarray(hera_window_matrix, dtype=jnp.float32)
+
+# Bundle the HERA arrays and validate that their shapes are consistent.
+hera_data = PowerSpectrumData(
+    coordinates=hera_model_coordinates,
+    upper_limit=hera_upper_limit,
+    sigma=hera_sigma,
+    window_matrix=hera_window_matrix,
+)
+
+# Compile the emulator for exactly the coordinates needed by the HERA data.
+emulator = build_delta21_fixed_point_emulator(
+    package,
+    hera_data.coordinates,
+    compile_parameters=physical_parameters,
+)
+
+# Compare emulator predictions to the HERA upper limits.
+likelihood = PowerSpectrumUpperLimitLikelihood(
+    emulator=emulator,
+    upper_limit=hera_data.upper_limit,
+    sigma=hera_data.sigma,
+    window_matrix=hera_data.window_matrix,
+    theory_fractional_error=0.2,
+)
+
+# Evaluate the log likelihood for one or more physical parameter rows.
+loglike = likelihood(physical_parameters)
+```
+
+Some HERA power-spectrum estimates can be negative because they are noisy
+cross-power estimates rather than exact physical power spectra. Setting negative
+data values to zero means replacing only those measured data-bin values before
+the upper-limit likelihood is evaluated. The emulator prediction is not clipped
+by this step, and the observational uncertainty for the bin is still used.
+
 ---
 
 **Navigation:** [README](../README.md) · [Architecture](architecture.md) · [Preprocessing](preprocessing.md) · [JAX Training](jax-training.md) · [Checkpointing](checkpoint.md) · [Inference](inference.md) · [Examples](examples.md)

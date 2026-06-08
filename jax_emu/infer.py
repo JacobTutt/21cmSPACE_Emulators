@@ -396,9 +396,9 @@ class FixedCoordinateEmulator:
     Generic compiled inference wrapper for one fixed coordinate list.
 
     This is the inference path to use when the requested output points are not
-    a full rectangular grid. HERA-style power-spectrum data are a common
-    example: the likelihood may need predictions only at the model k-bins used
-    by a window matrix.
+    a full rectangular grid. HERA power-spectrum data are a common example: the
+    likelihood may need predictions only at the model k-bins used by a window
+    matrix.
 
     Parameters
     ----------

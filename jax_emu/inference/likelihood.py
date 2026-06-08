@@ -146,7 +146,7 @@ class UpperLimitLikelihood:
     """
     One-sided upper-limit likelihood.
 
-    This is the form used by HERA-style 21-cm power-spectrum constraints. A
+    This is the form used by HERA 21-cm power-spectrum constraints. A
     model below the reported upper limit is weakly penalized, while a model
     above the limit receives a rapidly decreasing likelihood.
 
@@ -349,7 +349,7 @@ class PowerSpectrumGaussianLikelihood:
 @dataclass(frozen=True)
 class PowerSpectrumUpperLimitLikelihood:
     """
-    HERA-style upper-limit likelihood for 21-cm power spectra.
+    HERA upper-limit likelihood for 21-cm power spectra.
 
     The emulator should be initialized on the model k-bins required by the
     observation. If the data provide a window matrix, it is applied as
@@ -694,7 +694,7 @@ def _build_power_spectrum_upper_limit_loglikelihood(
     min_probability: float,
 ) -> Callable[[jax.Array], jax.Array]:
     """
-    Build the compiled HERA-style upper-limit likelihood.
+    Build the compiled HERA upper-limit likelihood.
     """
     upper_limit_likelihood = _build_upper_limit_loglikelihood(
         upper_limit,

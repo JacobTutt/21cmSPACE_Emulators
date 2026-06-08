@@ -153,7 +153,7 @@ in a joint run can ignore the nuisance groups and use only `theta["astro"]`.
 
 ## Power Spectrum
 
-HERA-style power-spectrum constraints are usually upper limits. The likelihood
+HERA power-spectrum data are usually upper limits. The likelihood
 therefore uses a one-sided Gaussian CDF rather than a two-sided Gaussian
 residual:
 
