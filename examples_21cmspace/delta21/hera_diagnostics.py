@@ -31,12 +31,26 @@ DEFAULT_PARAMETER_LABELS = {
     "log10fstarIII": r"$\log_{10} f_{\star,\mathrm{III}}$",
     "log10Vc": r"$\log_{10} V_c$",
     "log10fX": r"$\log_{10} f_X$",
+    "log10LX_per_SFR": r"$\log_{10}(L_X/\mathrm{SFR})$",
     "alpha": r"$\alpha$",
     "nu_0": r"$\nu_0$",
     "tau": r"$\tau$",
     "log10fradio": r"$\log_{10} f_\mathrm{radio}$",
+    "log10Lr_per_SFR": r"$\log_{10}(L_r/\mathrm{SFR})$",
     "pop": "Pop.",
 }
+
+
+CORNER_PARAMETER_NAMES = (
+    "log10fstarIII",
+    "log10fstarII",
+    "log10Vc",
+    "log10LX_per_SFR",
+    "log10Lr_per_SFR",
+)
+
+LOG10_LX_PER_SFR_OFFSET = 40.47712125471966
+LOG10_LR_PER_SFR_OFFSET = 22.0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--n-prior", type=int, default=10_000)
     parser.add_argument("--n-corner-points", type=int, default=4_000)
-    parser.add_argument("--n-pencil", type=int, default=200)
+    parser.add_argument("--n-pencil", type=int, default=1_000)
     return parser
 
 
@@ -87,13 +101,15 @@ def main() -> None:
     prior = default_delta21_hera_prior()
     posterior_samples, posterior_weights = read_anesthetic_csv(nested_results, prior.names)
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
+    corner_prior_samples = select_corner_parameters(prior_samples, prior.names)
+    corner_posterior_samples = select_corner_parameters(posterior_samples, prior.names)
 
     corner_path = output_dir / "hera_prior_posterior_corner.png"
     plot_prior_posterior_corner(
-        prior_samples,
-        posterior_samples,
+        corner_prior_samples,
+        corner_posterior_samples,
         posterior_weights,
-        names=prior.names,
+        names=CORNER_PARAMETER_NAMES,
         output_path=corner_path,
         rng=rng,
         n_corner_points=args.n_corner_points,
@@ -164,6 +180,22 @@ def draw_prior_samples(prior: Any, n_samples: int, rng: np.random.Generator) -> 
     """
     unit = rng.uniform(0.0, 1.0, size=(n_samples, prior.ndim)).astype(np.float32)
     return np.asarray(jax.device_get(prior.transform(jnp.asarray(unit))), dtype=np.float64)
+
+
+def select_corner_parameters(samples: np.ndarray, names: tuple[str, ...]) -> np.ndarray:
+    """
+    Select the paper-style parameters used in the HERA corner plot.
+    """
+    index = {name: column for column, name in enumerate(names)}
+    return np.column_stack(
+        [
+            samples[:, index["log10fstarIII"]],
+            samples[:, index["log10fstarII"]],
+            samples[:, index["log10Vc"]],
+            samples[:, index["log10fX"]] + LOG10_LX_PER_SFR_OFFSET,
+            samples[:, index["log10fradio"]] + LOG10_LR_PER_SFR_OFFSET,
+        ]
+    )
 
 
 def plot_prior_posterior_corner(
