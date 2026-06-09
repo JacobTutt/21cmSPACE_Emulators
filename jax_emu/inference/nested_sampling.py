@@ -17,6 +17,7 @@ import blackjax
 import jax
 import jax.numpy as jnp
 import numpy as np
+from anesthetic import NestedSamples
 from blackjax.ns.utils import finalise, log_weights
 
 from jax_emu.inference.prior import PriorSpec
@@ -334,14 +335,6 @@ def save_anesthetic_samples(
     parameters, `logL`, and `logL_birth` in the format read by
     `anesthetic.NestedSamples`.
     """
-    try:
-        from anesthetic import NestedSamples
-    except ImportError as exc:
-        raise ImportError(
-            "Saving anesthetic-compatible nested-sampling results requires "
-            "the `anesthetic` package."
-        ) from exc
-
     if result.physical_samples is None:
         raise ValueError("Cannot save anesthetic samples without physical samples.")
     if result.loglikelihood is None:
