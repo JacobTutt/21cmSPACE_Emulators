@@ -450,11 +450,19 @@ def load(path: str | Path, *, step: int | None = None) -> dict[str, Any]:
     abstract_model = nnx.eval_shape(build_model)
     graphdef, abstract_state = nnx.split(abstract_model)
 
+    # Restore onto the current process topology. This fallback matters when a
+    # checkpoint saved on one device type, such as CUDA, is loaded on another,
+    # such as CPU-only plotting or diagnostics.
+    fallback_sharding = jax.sharding.SingleDeviceSharding(jax.local_devices()[0])
+
     # Perform the full restoration of saved state and config.
     restored = manager.restore(
         restore_step,
         args=ocp.args.Composite(
-            state=ocp.args.StandardRestore(abstract_state),
+            state=ocp.args.StandardRestore(
+                abstract_state,
+                fallback_sharding=fallback_sharding,
+            ),
             config=ocp.args.JsonRestore(),
         ),
     )
