@@ -103,6 +103,7 @@ def main() -> None:
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
     fit_configs = tuple(parse_fit_config(value) for value in args.fit)
 
+    delta21_package = load_delta21_package(args.delta21_package)
     t21_package = load_t21_package(args.t21_package)
     t21_z = np.linspace(args.t21_z_min, args.t21_z_max, args.t21_z_points, dtype=np.float32)
     t21_emulator = build_t21_fixed_grid_emulator(
@@ -129,7 +130,7 @@ def main() -> None:
         power_data = load_power_spectrum_plot_data(fit)
         delta_plot = output_dir / f"{fit.name}_delta21_prior_posterior_predictive.png"
         plot_delta21_prior_posterior_predictive(
-            package_path=args.delta21_package,
+            package=delta21_package,
             power_data=power_data,
             prior_samples=prior_samples,
             posterior_samples=posterior_samples,
@@ -212,7 +213,7 @@ def load_power_spectrum_plot_data(fit: FitConfig) -> PowerSpectrumPlotData:
 
 def plot_delta21_prior_posterior_predictive(
     *,
-    package_path: str | Path,
+    package: dict[str, object],
     power_data: PowerSpectrumPlotData,
     prior_samples: np.ndarray,
     posterior_samples: np.ndarray,
@@ -231,7 +232,6 @@ def plot_delta21_prior_posterior_predictive(
     ]
     posterior_draw = weighted_resample(posterior_samples, posterior_weights, n_pencil, rng)
 
-    package = load_delta21_package(package_path)
     emulator = build_delta21_fixed_point_emulator(
         package,
         jnp.asarray(coordinates, dtype=jnp.float32),
