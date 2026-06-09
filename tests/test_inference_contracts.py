@@ -129,6 +129,7 @@ def test_nested_sampling_default_settings_match_reference_recipe() -> None:
     assert settings.n_live == 75
     assert settings.num_delete == 15
     assert settings.num_inner_steps == 15
+    assert settings.progress_bar is True
 
 
 def test_anesthetic_export_writes_expected_files(tmp_path) -> None:

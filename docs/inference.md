@@ -255,6 +255,7 @@ config = NestedSamplingConfig(
     num_delete_fraction=0.2,   # replace 20% of live points per step
     num_inner_steps_scale=5,   # inner MCMC steps = n_dim * 5
     logz_live_threshold=-3.0,  # stop when live evidence is negligible
+    progress_bar=True,         # print tqdm progress during sampling
     output_dir="outputs/hera_nested_sampling",
 )
 

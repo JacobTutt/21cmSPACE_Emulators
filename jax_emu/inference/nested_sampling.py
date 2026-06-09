@@ -19,6 +19,7 @@ import jax.numpy as jnp
 import numpy as np
 from anesthetic import NestedSamples
 from blackjax.ns.utils import finalise, log_weights
+from tqdm import tqdm
 
 from jax_emu.inference.prior import PriorSpec
 
@@ -60,6 +61,8 @@ class NestedSamplingConfig:
         Optional directory where anesthetic-compatible outputs are written.
     run_name:
         Name stored in output metadata.
+    progress_bar:
+        Whether to print a tqdm progress bar during nested sampling.
     """
 
     n_live: int | None = None
@@ -74,6 +77,7 @@ class NestedSamplingConfig:
     log_weight_samples: int = 100
     output_dir: str | Path | None = None
     run_name: str = "nested_sampling"
+    progress_bar: bool = True
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,7 @@ class NestedSamplingSettings:
     log_weight_samples: int
     output_dir: str | Path | None
     run_name: str
+    progress_bar: bool
 
 
 @dataclass(frozen=True)
@@ -250,11 +255,24 @@ def run_nested_sampling(
     dead_points: list[Any] = []
     n_steps = 0
 
+    progress = tqdm(
+        total=settings.max_steps,
+        desc=settings.run_name,
+        unit="step",
+        disable=not settings.progress_bar,
+    )
     while _should_continue_nested_sampling(state, settings, n_steps):
         key, step_key = jax.random.split(key)
         state, info = step(step_key, state)
         dead_points.append(info)
         n_steps += 1
+        progress.update(1)
+        progress.set_postfix(
+            logz=float(state.logZ),
+            delta_logz=_evidence_delta(state),
+            refresh=False,
+        )
+    progress.close()
 
     converged = _evidence_delta(state) < settings.logz_live_threshold
     result = _result_from_state(
@@ -320,6 +338,7 @@ def resolve_nested_sampling_settings(
         log_weight_samples=cfg.log_weight_samples,
         output_dir=cfg.output_dir,
         run_name=cfg.run_name,
+        progress_bar=cfg.progress_bar,
     )
 
 

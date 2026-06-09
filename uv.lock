@@ -27,6 +27,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "scipy" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -73,6 +74,7 @@ requires-dist = [
     { name = "orbax-checkpoint", marker = "extra == 'cuda13'" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "scipy" },
+    { name = "tqdm" },
 ]
 provides-extras = ["cpu", "cuda12", "cuda13", "dev"]
 
@@ -2126,6 +2128,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/01/99/2ea3b37864adb2e9f6e724c6959ab2b7f56aa4dad01964d4b32adf211e68/tensorstore-0.1.84-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:98e10cae5b3fc0828967b8ddf36242b3b26ac8bc79880bc3e36346063259212a", size = 14990904, upload-time = "2026-05-16T06:17:51.464Z" },
     { url = "https://files.pythonhosted.org/packages/ff/26/fe72887d7b91e832bef3033d244c4c548993d1b6fb19177dff3895659c12/tensorstore-0.1.84-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:98edbc57d453ba8ebcf0d19bc28e4de6de95922bee2eca0805955b0833b8ce26", size = 19365698, upload-time = "2026-05-16T06:17:53.748Z" },
     { url = "https://files.pythonhosted.org/packages/37/74/35a1d41343f86f6e2ef135e81f6b8107b9f16c777a3e8be9e3fbce541d18/tensorstore-0.1.84-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0bd20de85c1b83dd3ca94db24e7bd449bdb055590a1b162b05691f6b81fff00f", size = 20986107, upload-time = "2026-05-16T06:17:56.571Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.68.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/b3/36c8ecf72e8925200671613332db156d84b99b3aee742a41c1938ebb0808/tqdm-4.68.1.tar.gz", hash = "sha256:fc163d96b287bd031e1aa24421ce4411b25559bd0a1be4fe649bdaa4d2c02bf5", size = 171236, upload-time = "2026-06-05T17:23:15.267Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/aa/218a0eb34de1f753c83e4d0d1c8e7c4cef27f20dcb8342e024f63a80dc86/tqdm-4.68.1-py3-none-any.whl", hash = "sha256:fea4a90e4023f764914569f7802a297277c5ab1a66be5144143e142e1a4031d8", size = 78354, upload-time = "2026-06-05T17:23:13.654Z" },
 ]
 
 [[package]]

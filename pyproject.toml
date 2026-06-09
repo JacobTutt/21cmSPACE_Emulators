@@ -15,6 +15,7 @@ dependencies = [
   "matplotlib",
   "numpy",
   "scipy",
+  "tqdm",
 ]
 
 [project.optional-dependencies]
