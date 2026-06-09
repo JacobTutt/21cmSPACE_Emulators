@@ -207,6 +207,7 @@ def plot_prior_posterior_corner(
     output_path: str | Path,
     rng: np.random.Generator,
     n_corner_points: int,
+    title: str = "HERA Prior and Posterior Samples",
 ) -> None:
     """
     Plot one-dimensional and two-dimensional prior/posterior marginals.
@@ -269,7 +270,7 @@ def plot_prior_posterior_corner(
             ax.grid(alpha=0.15, linewidth=0.5)
 
     axes[0, 0].legend(loc="best", frameon=False, fontsize=9)
-    fig.suptitle("HERA Prior and Posterior Samples", y=0.995)
+    fig.suptitle(title, y=0.995)
     fig.tight_layout()
     fig.savefig(output_path, dpi=240)
     plt.close(fig)
