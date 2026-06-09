@@ -46,6 +46,7 @@ dev = [
 21cmspace-delta21-infer = "examples_21cmspace.delta21.file_inference:main"
 21cmspace-t21-infer = "examples_21cmspace.t21.file_inference:main"
 21cmspace-hera-infer = "examples_21cmspace.delta21.hera_inference:main"
+21cmspace-hera-diagnostics = "examples_21cmspace.delta21.hera_diagnostics:main"
 21cmspace-nenufar-infer = "examples_21cmspace.delta21.nenufar_inference:main"
 
 [tool.setuptools.packages.find]
