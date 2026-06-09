@@ -213,13 +213,7 @@ def plot_prior_posterior_corner(
     """
     configure_matplotlib()
     ndim = len(names)
-    posterior_draw = weighted_resample(
-        posterior_samples,
-        posterior_weights,
-        n_corner_points,
-        rng,
-    )
-    prior_draw = prior_samples[
+    prior_grid_samples = prior_samples[
         rng.choice(prior_samples.shape[0], size=min(n_corner_points, prior_samples.shape[0]), replace=False)
     ]
 
@@ -253,21 +247,13 @@ def plot_prior_posterior_corner(
                     label="Posterior" if row == 0 else None,
                 )
             else:
-                ax.scatter(
-                    prior_draw[:, col],
-                    prior_draw[:, row],
-                    s=2,
-                    c="0.65",
-                    alpha=0.12,
-                    linewidths=0,
-                )
-                ax.scatter(
-                    posterior_draw[:, col],
-                    posterior_draw[:, row],
-                    s=3,
-                    c="#2b6cb0",
-                    alpha=0.22,
-                    linewidths=0,
+                plot_2d_pdf_grid(
+                    ax,
+                    prior_grid_samples[:, col],
+                    prior_grid_samples[:, row],
+                    posterior_samples[:, col],
+                    posterior_samples[:, row],
+                    posterior_weights,
                 )
 
             if row == ndim - 1:
@@ -287,6 +273,34 @@ def plot_prior_posterior_corner(
     fig.tight_layout()
     fig.savefig(output_path, dpi=240)
     plt.close(fig)
+
+
+def plot_2d_pdf_grid(
+    ax: plt.Axes,
+    prior_x: np.ndarray,
+    prior_y: np.ndarray,
+    posterior_x: np.ndarray,
+    posterior_y: np.ndarray,
+    posterior_weights: np.ndarray,
+) -> None:
+    """
+    Plot prior and posterior two-dimensional PDFs on a shared grid.
+    """
+    x_bins = _histogram_bins(prior_x, posterior_x)
+    y_bins = _histogram_bins(prior_y, posterior_y)
+    prior_pdf, _, _ = np.histogram2d(prior_x, prior_y, bins=(x_bins, y_bins), density=True)
+    posterior_pdf, _, _ = np.histogram2d(
+        posterior_x,
+        posterior_y,
+        bins=(x_bins, y_bins),
+        weights=posterior_weights,
+        density=True,
+    )
+
+    prior_mesh = np.ma.masked_where(prior_pdf.T <= 0.0, prior_pdf.T)
+    posterior_mesh = np.ma.masked_where(posterior_pdf.T <= 0.0, posterior_pdf.T)
+    ax.pcolormesh(x_bins, y_bins, prior_mesh, cmap="Greys", alpha=0.18, shading="auto")
+    ax.pcolormesh(x_bins, y_bins, posterior_mesh, cmap="Blues", alpha=0.72, shading="auto")
 
 
 def plot_prior_posterior_predictive(
