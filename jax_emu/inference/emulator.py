@@ -83,6 +83,7 @@ class Emulator:
         self.metadata = metadata
         self.spec = metadata.emulator_spec
         self.parameter_adapter = parameter_adapter
+        self.graphdef, self.state = nnx.split(model)
 
         self._validate_feature_order()
         self._predict = self._build_compiled_predictor()
@@ -111,7 +112,7 @@ class Emulator:
         """
         # Keep the public method small: validation and compilation details are
         # handled at initialization, while `_predict` owns the numerical route.
-        return self._predict(self.model, parameters, *axes)
+        return self._predict(self.state, parameters, *axes)
 
     def compile(self, parameters: jax.Array, *axes: jax.Array) -> None:
         """
@@ -148,12 +149,14 @@ class Emulator:
         target_scaling = self.metadata.target_scaling
         target_std = None if target_scaling is None else target_scaling.std
         parameter_adapter = self.parameter_adapter
+        graphdef = self.graphdef
 
-        @nnx.jit
-        def _predict(model_instance: Any, parameters: jax.Array, *axes: jax.Array) -> jax.Array:
+        @jax.jit
+        def _predict(model_state: nnx.State, parameters: jax.Array, *axes: jax.Array) -> jax.Array:
             """
             Run the compiled numerical inference path.
             """
+            model_instance = nnx.merge(graphdef, model_state)
             if len(axes) != len(spec.axes):
                 raise ValueError(
                     f"Expected {len(spec.axes)} independent axes, received {len(axes)}."
@@ -265,6 +268,7 @@ class FixedEmulator:
         self.metadata = metadata
         self.spec = metadata.emulator_spec
         self.parameter_adapter = parameter_adapter
+        self.graphdef, self.state = nnx.split(model)
 
         self._validate_feature_order()
         if axes is not None:
@@ -305,7 +309,7 @@ class FixedEmulator:
         jax.Array
             Physical prediction array with shape `(n_sims, *output_shape)`.
         """
-        return self._predict(self.model, parameters, self.scaled_axis_features)
+        return self._predict(self.state, parameters, self.scaled_axis_features)
 
     def compile(self, parameters: jax.Array) -> None:
         """
@@ -337,16 +341,18 @@ class FixedEmulator:
         n_axes = len(spec.axes)
         parameter_scaling = input_scaling[n_axes:]
         output_shape = self.output_shape
+        graphdef = self.graphdef
 
-        @nnx.jit
+        @jax.jit
         def _predict(
-            model_instance: Any,
+            model_state: nnx.State,
             parameters: jax.Array,
             scaled_axis_features: jax.Array,
         ) -> jax.Array:
             """
             Run the compiled fixed-output numerical inference path.
             """
+            model_instance = nnx.merge(graphdef, model_state)
             # Convert parameters into transformed parameter columns.
             prepared_parameters = (
                 _prepare_parameters_from_spec(parameters, spec.parameters)
