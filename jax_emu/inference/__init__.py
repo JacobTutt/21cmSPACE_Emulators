@@ -1,6 +1,6 @@
 """Reusable inference utilities for emulator-based Bayesian analyses."""
 
-from jax_emu.inference.emulator import Emulator, FixedCoordinateEmulator, FixedGridEmulator
+from jax_emu.inference.emulator import Emulator, FixedEmulator
 from jax_emu.inference.likelihood import (
     GaussianLikelihood,
     GlobalSignalForegroundLikelihood,
@@ -31,8 +31,7 @@ __all__ = [
     "DiscretePrior",
     "Emulator",
     "FixedPrior",
-    "FixedCoordinateEmulator",
-    "FixedGridEmulator",
+    "FixedEmulator",
     "GaussianLikelihood",
     "GlobalSignalForegroundLikelihood",
     "GlobalSignalLikelihood",

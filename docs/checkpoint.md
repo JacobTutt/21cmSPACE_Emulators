@@ -165,7 +165,7 @@ emulator = build_delta21_fixed_grid_emulator(
     compile_parameters=physical_parameters,
 )
 
-# Reuse the compiled fixed-grid forward model inside an inference loop.
+# Reuse the compiled fixed-grid emulator inside an inference loop.
 delta21 = emulator.emulate(physical_parameters)
 ```
 

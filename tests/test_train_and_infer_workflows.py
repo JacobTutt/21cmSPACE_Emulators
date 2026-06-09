@@ -91,7 +91,7 @@ def test_delta21_training_and_inference_round_trip(tmp_path: Path) -> None:
         package_path,
         compile_inputs=(raw_parameters, z, k),
     )
-    emulator_predictions = emulator.forward_model(raw_parameters, z, k)
+    emulator_predictions = emulator.emulate(raw_parameters, z, k)
     fixed_grid_emulator = build_delta21_fixed_grid_emulator(
         package_path,
         z,
@@ -163,7 +163,7 @@ def test_t21_training_and_inference_round_trip(tmp_path: Path) -> None:
         package_path,
         compile_inputs=(raw_parameters, z),
     )
-    emulator_predictions = emulator.forward_model(raw_parameters, z)
+    emulator_predictions = emulator.emulate(raw_parameters, z)
     fixed_grid_emulator = build_t21_fixed_grid_emulator(
         package_path,
         z,

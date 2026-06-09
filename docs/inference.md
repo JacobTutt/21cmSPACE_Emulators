@@ -8,7 +8,7 @@ coordinates as the data before sampling starts.
 
 ```text
 observed redshift / k points
-  -> fixed emulator forward model
+  -> fixed emulator
   -> likelihood(parameters)
   -> nested sampler
 ```

@@ -13,7 +13,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
+from jax_emu.inference import Emulator, FixedEmulator
 from jax_emu.utils.checkpointing import load
 from examples_21cmspace.t21.data import t21_spec
 
@@ -90,10 +90,9 @@ def build_t21_predictor(
     """
     Build a reusable JIT-compiled T21 prediction function.
     """
-    # Keep the existing function-style API by returning the generic emulator's
-    # forward model method.
+    # Keep the function-style API by returning the generic emulator call.
     emulator = build_t21_emulator(package_or_path, compile_inputs=compile_inputs)
-    return emulator.forward_model
+    return emulator.emulate
 
 
 def build_t21_fixed_grid_emulator(
@@ -101,22 +100,21 @@ def build_t21_fixed_grid_emulator(
     z_values: jax.Array,
     *,
     compile_parameters: jax.Array | None = None,
-) -> FixedGridEmulator:
+) -> FixedEmulator:
     """
     Build a reusable T21 emulator for one fixed redshift grid.
 
     The redshift grid is transformed and scaled once during initialization.
-    Later calls only pass parameter tables to `emulate(...)` or
-    `forward_model(...)`.
+    Later calls only pass parameter tables to `emulate(...)`.
     """
-    # Resolve and validate the package outside JIT. The fixed-grid wrapper then
-    # stores the compiled parameter-only forward model.
+    # Resolve and validate the package outside JIT. The fixed wrapper then
+    # stores the compiled parameter-only emulator call.
     package = (
         load_t21_package(package_or_path)
         if isinstance(package_or_path, (str, Path))
         else _validate_t21_package(package_or_path)
     )
-    return FixedGridEmulator(
+    return FixedEmulator(
         package=package,
         axes=(z_values,),
         parameter_adapter=_prepare_parameter_values,
@@ -129,7 +127,7 @@ def build_t21_fixed_coordinate_emulator(
     z_points: jax.Array,
     *,
     compile_parameters: jax.Array | None = None,
-) -> FixedCoordinateEmulator:
+) -> FixedEmulator:
     """
     Build a reusable T21 emulator for one fixed redshift coordinate list.
 
@@ -141,7 +139,7 @@ def build_t21_fixed_coordinate_emulator(
         if isinstance(package_or_path, (str, Path))
         else _validate_t21_package(package_or_path)
     )
-    return FixedCoordinateEmulator(
+    return FixedEmulator(
         package=package,
         coordinates=(z_points,),
         parameter_adapter=_prepare_parameter_values,

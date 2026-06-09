@@ -17,7 +17,7 @@ import jax.numpy as jnp
 from examples_21cmspace.delta21.data import (
     delta21_spec,
 )
-from jax_emu.inference import Emulator, FixedCoordinateEmulator, FixedGridEmulator
+from jax_emu.inference import Emulator, FixedEmulator
 from jax_emu.inference.prior import DiscretePrior, PriorSpec, UniformPrior
 from jax_emu.utils.checkpointing import load
 
@@ -75,7 +75,7 @@ def build_delta21_emulator(
     Build a reusable Delta21 emulator object.
 
     This resolves the checkpoint package and validates the metadata once, then
-    delegates the compiled forward model to the generic `jax_emu.Emulator`
+    delegates the compiled emulator call to the generic `jax_emu.Emulator`
     wrapper.
 
     Parameters
@@ -89,7 +89,7 @@ def build_delta21_emulator(
     Returns
     -------
     Emulator
-        Reusable emulator object with a compiled `forward_model` method.
+        Reusable emulator object with a compiled `emulate` method.
     """
     # Resolve and validate the package outside JIT. File I/O and metadata checks
     # should happen once before repeated accelerator-side inference calls.
@@ -113,10 +113,9 @@ def build_delta21_predictor(
     """
     Build a reusable JIT-compiled Delta21 prediction function.
     """
-    # Keep the existing function-style API by returning the generic emulator's
-    # forward model method.
+    # Keep the function-style API by returning the generic emulator call.
     emulator = build_delta21_emulator(package_or_path, compile_inputs=compile_inputs)
-    return emulator.forward_model
+    return emulator.emulate
 
 
 def build_delta21_fixed_grid_emulator(
@@ -125,22 +124,21 @@ def build_delta21_fixed_grid_emulator(
     k_values: jax.Array,
     *,
     compile_parameters: jax.Array | None = None,
-) -> FixedGridEmulator:
+) -> FixedEmulator:
     """
     Build a reusable Delta21 emulator for one fixed `(z, k)` grid.
 
     The redshift and wavenumber grid is transformed and scaled once during
-    initialization. Later calls only pass parameter tables to `emulate(...)` or
-    `forward_model(...)`.
+    initialization. Later calls only pass parameter tables to `emulate(...)`.
     """
-    # Resolve and validate the package outside JIT. The fixed-grid wrapper then
-    # stores the compiled parameter-only forward model.
+    # Resolve and validate the package outside JIT. The fixed wrapper then
+    # stores the compiled parameter-only emulator call.
     package = (
         load_delta21_package(package_or_path)
         if isinstance(package_or_path, (str, Path))
         else _validate_delta21_package(package_or_path)
     )
-    return FixedGridEmulator(
+    return FixedEmulator(
         package=package,
         axes=(z_values, k_values),
         parameter_adapter=_prepare_parameter_values,
@@ -154,7 +152,7 @@ def build_delta21_fixed_coordinate_emulator(
     k_points: jax.Array,
     *,
     compile_parameters: jax.Array | None = None,
-) -> FixedCoordinateEmulator:
+) -> FixedEmulator:
     """
     Build a reusable Delta21 emulator for one fixed coordinate list.
 
@@ -166,7 +164,7 @@ def build_delta21_fixed_coordinate_emulator(
         if isinstance(package_or_path, (str, Path))
         else _validate_delta21_package(package_or_path)
     )
-    return FixedCoordinateEmulator(
+    return FixedEmulator(
         package=package,
         coordinates=(z_points, k_points),
         parameter_adapter=_prepare_parameter_values,
@@ -179,7 +177,7 @@ def build_delta21_fixed_point_emulator(
     coordinates: jax.Array,
     *,
     compile_parameters: jax.Array | None = None,
-) -> FixedCoordinateEmulator:
+) -> FixedEmulator:
     """
     Build a reusable Delta21 emulator from explicit `(z, k)` coordinate pairs.
 

@@ -2,7 +2,7 @@
 Reusable inference wrapper for trained JAX emulators.
 
 The `Emulator` class combines a trained model with its checkpoint metadata and
-builds a compiled forward model. It owns the generic inference route:
+builds a compiled emulator call. It owns the generic inference route:
 physical parameters and independent axes -> transformed/scaled network inputs
 -> model prediction -> inverse target scaling/transform -> physical output.
 """
@@ -30,7 +30,7 @@ ParameterAdapter = Callable[[jax.Array], jax.Array]
 
 # Emulator
 # --------
-# Reusable compiled forward models for trained emulators.
+# Reusable compiled prediction calls for trained emulators.
 
 class Emulator:
     """
@@ -92,7 +92,7 @@ class Emulator:
         if compile_inputs is not None:
             self.compile(*compile_inputs)
 
-    def forward_model(self, parameters: jax.Array, *axes: jax.Array) -> jax.Array:
+    def emulate(self, parameters: jax.Array, *axes: jax.Array) -> jax.Array:
         """
         Evaluate the physical emulator prediction.
 
@@ -113,18 +113,9 @@ class Emulator:
         # handled at initialization, while `_predict` owns the numerical route.
         return self._predict(self.model, parameters, *axes)
 
-    def forwardmodel(self, parameters: jax.Array, *axes: jax.Array) -> jax.Array:
-        """
-        Alias for `forward_model`.
-
-        This keeps the call site compact for users who prefer
-        `emulator.forwardmodel(...)`.
-        """
-        return self.forward_model(parameters, *axes)
-
     def compile(self, parameters: jax.Array, *axes: jax.Array) -> None:
         """
-        Compile the forward model for a representative set of input shapes.
+        Compile the emulator for a representative set of input shapes.
 
         JAX compiles on first use for each input shape. Calling this method is
         useful before an MCMC or repeated-inference loop where the same shapes
@@ -132,7 +123,7 @@ class Emulator:
         """
         # Block so the compilation cost is paid here rather than hidden inside
         # the first real inference call.
-        self.forward_model(parameters, *axes).block_until_ready()
+        self.emulate(parameters, *axes).block_until_ready()
 
     def _validate_feature_order(self) -> None:
         """
@@ -215,195 +206,24 @@ class Emulator:
         return _predict
 
 
-class FixedGridEmulator:
+class FixedEmulator:
     """
-    Generic compiled inference wrapper for one fixed output grid.
+    Generic compiled inference wrapper for one fixed output set.
 
-    This is the inference path to use when the redshift / k grid is known in
-    advance, for example inside an MCMC likelihood. The independent-axis grid is
-    transformed and scaled once at initialization. Each later call only has to
-    transform the physical parameters, tile them against the stored grid, run
-    the network, and invert the target transform.
+    This is the inference path to use inside likelihoods and repeated
+    inference loops. The redshift / k points are known at initialization, so
+    their transforms and scaling are done once. Each later call only transforms
+    the physical parameters, pairs them with the stored output points, runs the
+    network, and inverts the target transform.
 
     Parameters
     ----------
     axes:
-        Fixed physical coordinate arrays, for example `(z,)` for T21 or
-        `(z, k)` for Delta21.
-    package:
-        Loaded checkpoint package containing at least `model` and `metadata`.
-    model:
-        Live trained model. Used when `package` is not supplied.
-    metadata:
-        Checkpoint metadata. Used when `package` is not supplied.
-    parameter_adapter:
-        Optional function that maps incoming physical parameter arrays into the
-        transformed parameter columns expected by the model.
-    compile_parameters:
-        Optional parameter array used to force JIT compilation during
-        initialization. If omitted, compilation happens on the first call.
-    """
-
-    def __init__(
-        self,
-        *,
-        axes: tuple[jax.Array, ...],
-        package: dict[str, Any] | None = None,
-        model: Any | None = None,
-        metadata: CheckpointMetadata | None = None,
-        parameter_adapter: ParameterAdapter | None = None,
-        compile_parameters: jax.Array | None = None,
-    ) -> None:
-        # Accept either a loaded checkpoint package or explicit model/metadata.
-        if package is not None:
-            model = package["model"]
-            metadata = package["metadata"]
-
-        if model is None:
-            raise ValueError("FixedGridEmulator requires a model or a package containing a model.")
-        if metadata is None:
-            raise ValueError("FixedGridEmulator requires checkpoint metadata.")
-
-        self.model = model
-        self.metadata = metadata
-        self.spec = metadata.emulator_spec
-        self.parameter_adapter = parameter_adapter
-        self.axis_shape = tuple(int(jnp.asarray(axis).size) for axis in axes)
-
-        self._validate_feature_order()
-        self.scaled_axis_features = _build_scaled_axis_features_jax(
-            axes,
-            self.spec.axes,
-            self.metadata.input_scaling,
-        )
-        self._predict = self._build_compiled_predictor()
-
-        # Optional warm-up call. This compiles the parameter-only call path for
-        # the stored grid and the supplied parameter shape.
-        if compile_parameters is not None:
-            self.compile(compile_parameters)
-
-    def forward_model(self, parameters: jax.Array) -> jax.Array:
-        """
-        Evaluate the physical emulator prediction on the stored grid.
-
-        Parameters
-        ----------
-        parameters:
-            Parameter table for one or more simulations.
-
-        Returns
-        -------
-        jax.Array
-            Physical prediction array with shape `(n_sims, *axis_shape)`.
-        """
-        return self._predict(self.model, parameters, self.scaled_axis_features)
-
-    def forwardmodel(self, parameters: jax.Array) -> jax.Array:
-        """
-        Alias for `forward_model`.
-        """
-        return self.forward_model(parameters)
-
-    def emulate(self, parameters: jax.Array) -> jax.Array:
-        """
-        Alias for `forward_model`.
-
-        This gives fixed-grid inference a compact call site:
-        `emulator.emulate(parameters)`.
-        """
-        return self.forward_model(parameters)
-
-    def compile(self, parameters: jax.Array) -> None:
-        """
-        Compile the fixed-grid forward model for a representative parameter shape.
-        """
-        self.forward_model(parameters).block_until_ready()
-
-    def _validate_feature_order(self) -> None:
-        """
-        Ensure saved feature scaling follows the emulator input contract.
-        """
-        expected_names = self.spec.input_feature_names()
-        actual_names = tuple(feature.name for feature in self.metadata.input_scaling)
-        if actual_names != expected_names:
-            raise ValueError(
-                "Saved feature scaling order does not match the emulator spec. "
-                f"Expected {expected_names}, received {actual_names}."
-            )
-
-    def _build_compiled_predictor(self) -> Callable[..., jax.Array]:
-        """
-        Build the NNX-jitted fixed-grid inference function.
-        """
-        spec = self.spec
-        input_scaling = self.metadata.input_scaling
-        target_scaling = self.metadata.target_scaling
-        target_std = None if target_scaling is None else target_scaling.std
-        parameter_adapter = self.parameter_adapter
-        n_axes = len(spec.axes)
-        parameter_scaling = input_scaling[n_axes:]
-        axis_shape = self.axis_shape
-
-        @nnx.jit
-        def _predict(
-            model_instance: Any,
-            parameters: jax.Array,
-            scaled_axis_features: jax.Array,
-        ) -> jax.Array:
-            """
-            Run the compiled fixed-grid numerical inference path.
-            """
-            # Convert parameters into transformed parameter columns.
-            prepared_parameters = (
-                _prepare_parameters_from_spec(parameters, spec.parameters)
-                if parameter_adapter is None
-                else parameter_adapter(parameters)
-            )
-
-            # Scale the parameter columns. The axis columns were already
-            # transformed and scaled when this fixed-grid emulator was created.
-            scaled_parameters = _scale_features_jax(prepared_parameters, parameter_scaling)
-
-            # Tile the stored grid against the incoming parameter table.
-            repeated_axes = jnp.tile(scaled_axis_features, (scaled_parameters.shape[0], 1))
-            repeated_parameters = jnp.repeat(
-                scaled_parameters,
-                repeats=scaled_axis_features.shape[0],
-                axis=0,
-            )
-            scaled_features = jnp.concatenate([repeated_axes, repeated_parameters], axis=1)
-
-            # Evaluate the network and return to physical target space.
-            flat_predictions = model_instance(scaled_features).squeeze(-1)
-            if target_std is not None:
-                flat_predictions = flat_predictions * target_std
-            physical_predictions = _invert_transform_jax(
-                flat_predictions,
-                spec.target_transform,
-                offset=spec.target_offset,
-            )
-
-            # Fold the flat predictions back onto the stored independent-axis grid.
-            output_shape = (prepared_parameters.shape[0], *axis_shape)
-            return physical_predictions.reshape(output_shape)
-
-        return _predict
-
-
-class FixedCoordinateEmulator:
-    """
-    Generic compiled inference wrapper for one fixed coordinate list.
-
-    This is the inference path to use when the requested output points are not
-    a full rectangular grid. For example, an observational likelihood may need
-    predictions only at selected model-side coordinate points.
-
-    Parameters
-    ----------
+        Fixed physical coordinate arrays to expand into a rectangular grid, for
+        example `(z,)` for T21 or `(z, k)` for Delta21.
     coordinates:
-        One coordinate array per emulator axis. All arrays must have the same
-        length, for example `(z_points, k_points)` for Delta21.
+        Fixed coordinate arrays to keep as an explicit point list. All arrays
+        must have the same length, for example `(z_points, k_points)`.
     package:
         Loaded checkpoint package containing at least `model` and `metadata`.
     model:
@@ -421,7 +241,8 @@ class FixedCoordinateEmulator:
     def __init__(
         self,
         *,
-        coordinates: tuple[jax.Array, ...],
+        axes: tuple[jax.Array, ...] | None = None,
+        coordinates: tuple[jax.Array, ...] | None = None,
         package: dict[str, Any] | None = None,
         model: Any | None = None,
         metadata: CheckpointMetadata | None = None,
@@ -434,34 +255,45 @@ class FixedCoordinateEmulator:
             metadata = package["metadata"]
 
         if model is None:
-            raise ValueError(
-                "FixedCoordinateEmulator requires a model or a package containing a model."
-            )
+            raise ValueError("FixedEmulator requires a model or a package containing a model.")
         if metadata is None:
-            raise ValueError("FixedCoordinateEmulator requires checkpoint metadata.")
+            raise ValueError("FixedEmulator requires checkpoint metadata.")
+        if (axes is None) == (coordinates is None):
+            raise ValueError("FixedEmulator requires exactly one of axes or coordinates.")
 
         self.model = model
         self.metadata = metadata
         self.spec = metadata.emulator_spec
         self.parameter_adapter = parameter_adapter
-        self.n_coordinates = _coordinate_count(coordinates)
 
         self._validate_feature_order()
-        self.scaled_axis_features = _build_scaled_coordinate_features_jax(
-            coordinates,
-            self.spec.axes,
-            self.metadata.input_scaling,
-        )
+        if axes is not None:
+            self.output_shape = tuple(int(jnp.asarray(axis).size) for axis in axes)
+            self.scaled_axis_features = _build_scaled_axis_features_jax(
+                axes,
+                self.spec.axes,
+                self.metadata.input_scaling,
+            )
+        else:
+            if coordinates is None:
+                raise ValueError("FixedEmulator requires coordinate arrays.")
+            self.output_shape = (_coordinate_count(coordinates),)
+            self.scaled_axis_features = _build_scaled_coordinate_features_jax(
+                coordinates,
+                self.spec.axes,
+                self.metadata.input_scaling,
+            )
+
         self._predict = self._build_compiled_predictor()
 
         # Optional warm-up call. This compiles the parameter-only call path for
-        # the stored coordinate list and the supplied parameter shape.
+        # the stored output points and the supplied parameter shape.
         if compile_parameters is not None:
             self.compile(compile_parameters)
 
-    def forward_model(self, parameters: jax.Array) -> jax.Array:
+    def emulate(self, parameters: jax.Array) -> jax.Array:
         """
-        Evaluate the physical emulator prediction on the stored coordinates.
+        Evaluate the physical emulator prediction on the stored output points.
 
         Parameters
         ----------
@@ -471,27 +303,15 @@ class FixedCoordinateEmulator:
         Returns
         -------
         jax.Array
-            Physical prediction array with shape `(n_sims, n_coordinates)`.
+            Physical prediction array with shape `(n_sims, *output_shape)`.
         """
         return self._predict(self.model, parameters, self.scaled_axis_features)
 
-    def forwardmodel(self, parameters: jax.Array) -> jax.Array:
-        """
-        Alias for `forward_model`.
-        """
-        return self.forward_model(parameters)
-
-    def emulate(self, parameters: jax.Array) -> jax.Array:
-        """
-        Alias for `forward_model`.
-        """
-        return self.forward_model(parameters)
-
     def compile(self, parameters: jax.Array) -> None:
         """
-        Compile the fixed-coordinate forward model for one parameter shape.
+        Compile the fixed-output emulator for one parameter shape.
         """
-        self.forward_model(parameters).block_until_ready()
+        self.emulate(parameters).block_until_ready()
 
     def _validate_feature_order(self) -> None:
         """
@@ -507,7 +327,7 @@ class FixedCoordinateEmulator:
 
     def _build_compiled_predictor(self) -> Callable[..., jax.Array]:
         """
-        Build the NNX-jitted fixed-coordinate inference function.
+        Build the NNX-jitted fixed-output inference function.
         """
         spec = self.spec
         input_scaling = self.metadata.input_scaling
@@ -516,7 +336,7 @@ class FixedCoordinateEmulator:
         parameter_adapter = self.parameter_adapter
         n_axes = len(spec.axes)
         parameter_scaling = input_scaling[n_axes:]
-        n_coordinates = self.n_coordinates
+        output_shape = self.output_shape
 
         @nnx.jit
         def _predict(
@@ -525,7 +345,7 @@ class FixedCoordinateEmulator:
             scaled_axis_features: jax.Array,
         ) -> jax.Array:
             """
-            Run the compiled fixed-coordinate numerical inference path.
+            Run the compiled fixed-output numerical inference path.
             """
             # Convert parameters into transformed parameter columns.
             prepared_parameters = (
@@ -534,11 +354,11 @@ class FixedCoordinateEmulator:
                 else parameter_adapter(parameters)
             )
 
-            # Scale parameter columns per call. The coordinate columns were
-            # transformed and scaled once when the wrapper was initialized.
+            # Scale parameter columns per call. The output coordinate columns
+            # were transformed and scaled once when the wrapper was initialized.
             scaled_parameters = _scale_features_jax(prepared_parameters, parameter_scaling)
 
-            # Pair every parameter row with every stored coordinate row.
+            # Pair every parameter row with every stored output point.
             repeated_axes = jnp.tile(scaled_axis_features, (scaled_parameters.shape[0], 1))
             repeated_parameters = jnp.repeat(
                 scaled_parameters,
@@ -557,7 +377,7 @@ class FixedCoordinateEmulator:
                 offset=spec.target_offset,
             )
 
-            return physical_predictions.reshape((prepared_parameters.shape[0], n_coordinates))
+            return physical_predictions.reshape((prepared_parameters.shape[0], *output_shape))
 
         return _predict
 
