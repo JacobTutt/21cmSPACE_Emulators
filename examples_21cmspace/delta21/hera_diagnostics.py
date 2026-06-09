@@ -216,7 +216,7 @@ def plot_prior_posterior_corner(
     posterior_draw = weighted_resample(
         posterior_samples,
         posterior_weights,
-        min(n_corner_points, posterior_samples.shape[0]),
+        n_corner_points,
         rng,
     )
     prior_draw = prior_samples[
@@ -316,7 +316,7 @@ def plot_prior_posterior_predictive(
     posterior_draw = weighted_resample(
         posterior_samples,
         posterior_weights,
-        min(n_pencil, posterior_samples.shape[0]),
+        n_pencil,
         rng,
     )
 
