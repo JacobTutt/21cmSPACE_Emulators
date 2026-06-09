@@ -10,14 +10,19 @@ returning JAX-ready arrays for the new inference layer.
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+import h5py
 import numpy as np
 
 from jax_emu.inference.likelihood import PowerSpectrumData
 
+
+HERA_21CM_REST_FREQUENCY_HZ = 1420.40575177e6
+SPEED_OF_LIGHT_KM_S = 299792.458
 
 DEFAULT_HERA_IDR2_ROOT = (
     Path(__file__).resolve().parents[1] / "data" / "hera" / "observations_H1C_IDR2"
@@ -129,37 +134,30 @@ def extract_hera_observation(selection: HERADataSelection) -> HERAObservation:
     """
     Extract one HERA observation from an HDF5 data product.
 
-    This uses `hera_pspec` when available. That keeps the data extraction
-    aligned with the old analysis code and avoids reimplementing the HERA
-    cosmology and k-bin helpers by hand.
+    The HDF5 file stores the power-spectrum values, covariance, frequency and
+    delay coordinates, cosmology, and window matrix. This function reads those
+    arrays directly with `h5py` and applies the same band, k-range, and
+    decimation choices used by the HERA-only workflow.
     """
-    try:
-        import hera_pspec as hp
-    except ImportError as exc:
-        raise ImportError(
-            "Reading HERA HDF5 products requires `hera_pspec`. Either install "
-            "hera_pspec or use `load_hera_power_spectrum_npz(...)` with an "
-            "already extracted cache."
-        ) from exc
-
     path = _format_selection_path(selection.path, selection.field)
-    uvp = hp.UVPSpec()
-    uvp.read_hdf5(path)
+    with h5py.File(path, "r") as file:
+        # H1C IDR2 files store both bands in each field file. Band 1 maps to
+        # spectral window 0, band 2 maps to spectral window 1.
+        spw_index = _spectral_window_for_band(file, selection.band)
 
-    # H1C IDR2 files store both bands in each field file. The old code selected
-    # the band key by index and used the matching spectral-window index.
-    band_key = uvp.get_all_keys()[selection.band - 1]
-    spw_index = uvp.spw_array[selection.band - 1]
+        # Match the previous reader route: redshift is calculated from the
+        # spectral-window frequency range, while k_parallel is calculated from
+        # delay bins and the cosmology stored in the file.
+        z = _hera_redshift_from_spw_range(file, spw_index)
+        k_data = _hera_k_parallel(file, spw_index)
 
-    # Convert the spectral-window frequency range into a central redshift.
-    spw_frequencies = uvp.get_spw_ranges()[spw_index][:2]
-    z = float(uvp.cosmo.f2z(np.mean(spw_frequencies)))
-
-    # Pull data, diagonal errors, model k bins, and window matrix.
-    k_data = np.asarray(uvp.get_kparas(spw_index), dtype=float)
-    upper_limit = np.asarray(uvp.get_data(band_key)[0].real.copy(), dtype=float)
-    sigma = np.sqrt(np.asarray(uvp.get_cov(band_key)[0].diagonal().real.copy(), dtype=float))
-    window_matrix = np.asarray(uvp.get_window_function(band_key)[0], dtype=float)
+        # Pull data, diagonal errors, and the window matrix for the selected
+        # spectral window. The files contain one averaged baseline-time row and
+        # one polarization, so those singleton axes are removed.
+        upper_limit = np.asarray(file[f"data_spw{spw_index}"])[0, :, 0].real.copy()
+        covariance = np.asarray(file[f"cov_real_spw{spw_index}"])[0, :, :, 0].real
+        sigma = np.sqrt(np.diag(covariance))
+        window_matrix = np.asarray(file[f"window_function_spw{spw_index}"])[0, :, :, 0]
 
     if selection.set_negative_to_zero:
         upper_limit = upper_limit.copy()
@@ -274,6 +272,109 @@ def _format_selection_path(path: str | Path, field: str | int) -> Path:
     if "{" in path_string:
         return Path(path_string.format(field))
     return Path(path_string)
+
+
+def _spectral_window_for_band(file: h5py.File, band: int) -> int:
+    """
+    Return the spectral-window index corresponding to a one-indexed band.
+    """
+    spw_array = _hdf5_array(file, "spw_array").astype(int)
+    band_index = int(band) - 1
+    if band_index < 0 or band_index >= len(spw_array):
+        raise ValueError(f"Band {band!r} is not available in this HERA file.")
+    return int(spw_array[band_index])
+
+
+def _hera_redshift_from_spw_range(file: h5py.File, spw: int) -> float:
+    """
+    Return the central redshift used for one spectral-window observation.
+    """
+    frequencies = _spw_frequencies(file, spw)
+    spacing = np.median(np.diff(frequencies))
+    range_start = float(np.min(frequencies))
+    range_stop = range_start + len(frequencies) * float(spacing)
+    central_frequency = 0.5 * (range_start + range_stop)
+    return float(HERA_21CM_REST_FREQUENCY_HZ / central_frequency - 1.0)
+
+
+def _hera_k_parallel(file: h5py.File, spw: int, *, little_h: bool = True) -> np.ndarray:
+    """
+    Calculate k_parallel for the delay bins stored in a HERA HDF5 file.
+    """
+    delays = _hdf5_array(file, "dly_array").astype(float)
+    spw_dly = _hdf5_array(file, "spw_dly_array").astype(int)
+    band_delays = delays[spw_dly == spw]
+
+    cosmology = _hdf5_cosmology(file)
+    frequencies = _spw_frequencies(file, spw)
+    channel_mean_redshift = float(HERA_21CM_REST_FREQUENCY_HZ / np.mean(frequencies) - 1.0)
+    tau_to_kpara = _tau_to_k_parallel_conversion(
+        channel_mean_redshift,
+        cosmology,
+        little_h=little_h,
+    )
+    return band_delays * tau_to_kpara
+
+
+def _tau_to_k_parallel_conversion(
+    redshift: float,
+    cosmology: dict[str, float],
+    *,
+    little_h: bool,
+) -> float:
+    """
+    Return the conversion from delay in seconds to radial wave number.
+    """
+    h0 = float(cosmology["H0"])
+    little_h_value = h0 / 100.0
+    expansion = np.sqrt(
+        float(cosmology["Om_M"]) * (1.0 + redshift) ** 3
+        + float(cosmology.get("Om_k", 0.0)) * (1.0 + redshift) ** 2
+        + float(cosmology["Om_L"])
+    )
+    hubble_z = h0 * expansion
+    y_mpc_per_hz = (
+        SPEED_OF_LIGHT_KM_S
+        * (1.0 + redshift) ** 2
+        / (hubble_z * HERA_21CM_REST_FREQUENCY_HZ)
+    )
+    k_mpc = 2.0 * np.pi / y_mpc_per_hz
+    return k_mpc / little_h_value if little_h else k_mpc
+
+
+def _spw_frequencies(file: h5py.File, spw: int) -> np.ndarray:
+    """
+    Return the channel frequencies for one spectral window.
+    """
+    frequencies = _hdf5_array(file, "freq_array").astype(float)
+    spw_freq = _hdf5_array(file, "spw_freq_array").astype(int)
+    selected = frequencies[spw_freq == spw]
+    if selected.size == 0:
+        raise ValueError(f"Spectral window {spw!r} has no frequency channels.")
+    return selected
+
+
+def _hdf5_cosmology(file: h5py.File) -> dict[str, float]:
+    """
+    Return the cosmology dictionary stored in the HERA file.
+    """
+    raw = file.attrs["cosmo"]
+    if isinstance(raw, bytes):
+        raw = raw.decode()
+    if isinstance(raw, str):
+        return dict(ast.literal_eval(raw))
+    return dict(raw)
+
+
+def _hdf5_array(file: h5py.File, name: str) -> np.ndarray:
+    """
+    Return an array stored either as an HDF5 dataset or attribute.
+    """
+    if name in file:
+        return np.asarray(file[name])
+    if name in file.attrs:
+        return np.asarray(file.attrs[name])
+    raise KeyError(f"HERA HDF5 file is missing {name!r}.")
 
 
 def _decimate_observation(

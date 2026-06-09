@@ -28,7 +28,9 @@ from jax_emu.inference import (
 from examples_21cmspace.delta21.hera_data import (
     HERAObservation,
     combine_hera_observations,
+    default_h1c_idr2_selections,
     hera_dataset_summary,
+    load_hera_power_spectrum_dataset,
     load_hera_power_spectrum_npz,
     save_hera_power_spectrum_npz,
 )
@@ -350,6 +352,24 @@ def test_hera_observations_combine_into_block_window_dataset(tmp_path) -> None:
         np.asarray(cached.power_data.window_matrix),
         np.asarray(dataset.power_data.window_matrix),
     )
+
+
+def test_hera_hdf5_loader_returns_expected_idr2_arrays() -> None:
+    dataset = load_hera_power_spectrum_dataset(default_h1c_idr2_selections(field="1"))
+    summary = hera_dataset_summary(dataset)
+
+    assert summary["n_model_points"] == 21
+    assert summary["n_data_bins"] == 21
+    assert summary["window_shape"] == [21, 21]
+    np.testing.assert_allclose(summary["redshifts"], [7.9287629, 10.3721304], rtol=1e-6)
+    np.testing.assert_allclose(summary["k_min"], 0.128, rtol=1e-6)
+    np.testing.assert_allclose(summary["k_max"], 1.408, rtol=1e-6)
+
+    first, second = dataset.observations
+    np.testing.assert_allclose(first.k_model[:3], [0.128, 0.256, 0.384], rtol=1e-6)
+    np.testing.assert_allclose(second.k_model[:3], [0.192, 0.320, 0.448], rtol=1e-6)
+    assert first.window_matrix.shape == (11, 11)
+    assert second.window_matrix.shape == (10, 10)
 
 
 def test_nenufar_table4_loader_returns_direct_upper_limit_data() -> None:

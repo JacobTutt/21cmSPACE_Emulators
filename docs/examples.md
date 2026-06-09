@@ -916,9 +916,10 @@ likelihood = PowerSpectrumUpperLimitLikelihood(
 loglike = likelihood(physical_parameters)
 ```
 
-Direct HDF5 extraction requires `hera_pspec`, because the HERA products store
-cosmology, k bins, covariances, and window functions in the HERA data format.
-Once extracted, save a portable cache and reuse it without reading the HDF5 file
+Direct HDF5 extraction uses `h5py`. The HERA products store the data values,
+covariances, frequency and delay metadata, cosmology, and window functions in
+the file, so the example loader can build the likelihood arrays directly. Once
+extracted, save a portable cache and reuse it without reading the HDF5 file
 again:
 
 ```bash

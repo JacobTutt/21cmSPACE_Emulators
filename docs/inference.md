@@ -200,9 +200,10 @@ likelihood = PowerSpectrumUpperLimitLikelihood(
 loglike = likelihood(theta)
 ```
 
-Direct HDF5 extraction uses `hera_pspec`, matching the older analysis code. If
-that package is only available on one machine, extract once and save a portable
-cache:
+Direct HDF5 extraction uses `h5py`. The loader reads the stored power-spectrum
+values, covariance, spectral-window metadata, cosmology, and window matrices,
+then applies the same band and k-bin selections used by the older HERA-only
+workflow. You can still extract once and save a portable cache:
 
 ```bash
 21cmspace-hera-infer \

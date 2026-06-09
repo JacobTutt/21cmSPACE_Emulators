@@ -13,16 +13,16 @@ hera/observations_H1C_IDR2/
   pspec_h1c_idr2_field3.h5
 ```
 
-These are HERA Phase I H1C IDR2 power-spectrum files in the `hera_pspec`
-`UVPSpec` HDF5 format. They are used by:
+These are HERA Phase I H1C IDR2 power-spectrum HDF5 files. They are used by:
 
 ```text
 examples_21cmspace/delta21/hera_data.py
 examples_21cmspace/delta21/hera_inference.py
 ```
 
-The loader extracts the selected field and band, applies the same k-bin
-selection and decimation used by the older HERA-only workflow, and returns:
+The loader reads the HDF5 arrays directly, extracts the selected field and
+band, applies the same k-bin selection and decimation used by the older
+HERA-only workflow, and returns:
 
 - explicit model coordinates, `(z, k)`
 - upper-limit data values
