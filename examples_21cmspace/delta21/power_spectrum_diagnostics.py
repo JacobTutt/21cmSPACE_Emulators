@@ -28,6 +28,7 @@ from examples_21cmspace.delta21.hera_data import load_hera_power_spectrum_npz
 from examples_21cmspace.delta21.hera_diagnostics import (
     CORNER_PARAMETER_NAMES,
     configure_matplotlib,
+    corner_parameter_names,
     draw_prior_samples,
     plot_prior_posterior_corner,
     positive_for_log,
@@ -87,6 +88,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--t21-z-min", type=float, default=6.0)
     parser.add_argument("--t21-z-max", type=float, default=27.0)
     parser.add_argument("--t21-z-points", type=int, default=240)
+    parser.add_argument(
+        "--corner-mode",
+        choices=("cosmic_string", "luminosity"),
+        default="cosmic_string",
+        help=(
+            "Parameters shown in the corner plot. `cosmic_string` plots "
+            "log10(fstarII), log10(fstarIII), log10(fX), and log10(Ar)."
+        ),
+    )
+    parser.add_argument(
+        "--log10-radio-min",
+        type=float,
+        default=-1.0,
+        help=(
+            "Lower prior bound for the radio-like parameter column. Use -6 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
+    parser.add_argument(
+        "--log10-radio-max",
+        type=float,
+        default=5.0,
+        help=(
+            "Upper prior bound for the radio-like parameter column. Use 3 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
     return parser
 
 
@@ -99,7 +127,9 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(args.seed)
-    prior = default_delta21_inference_prior()
+    prior = default_delta21_inference_prior(
+        radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+    )
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
     fit_configs = tuple(parse_fit_config(value) for value in args.fit)
 
@@ -115,12 +145,13 @@ def main() -> None:
     t21_panels = []
     for fit in fit_configs:
         posterior_samples, posterior_weights = read_anesthetic_csv(fit.nested_results, prior.names)
-        corner_plot = output_dir / f"{fit.name}_five_parameter_prior_posterior.png"
+        corner_names = corner_parameter_names(args.corner_mode)
+        corner_plot = output_dir / f"{fit.name}_{len(corner_names)}_parameter_prior_posterior.png"
         plot_prior_posterior_corner(
-            select_corner_parameters(prior_samples, prior.names),
-            select_corner_parameters(posterior_samples, prior.names),
+            select_corner_parameters(prior_samples, prior.names, mode=args.corner_mode),
+            select_corner_parameters(posterior_samples, prior.names, mode=args.corner_mode),
             posterior_weights,
-            names=CORNER_PARAMETER_NAMES,
+            names=corner_names,
             output_path=corner_plot,
             rng=rng,
             n_corner_points=args.n_corner_points,

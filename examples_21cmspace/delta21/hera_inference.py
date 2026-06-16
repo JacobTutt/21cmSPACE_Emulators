@@ -64,6 +64,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--logz-live-threshold", type=float, default=-3.0)
     parser.add_argument("--theory-fractional-error", type=float, default=0.2)
     parser.add_argument(
+        "--log10-radio-min",
+        type=float,
+        default=-1.0,
+        help=(
+            "Lower prior bound for the radio-like parameter column. Use -6 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
+    parser.add_argument(
+        "--log10-radio-max",
+        type=float,
+        default=5.0,
+        help=(
+            "Upper prior bound for the radio-like parameter column. Use 3 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
+    parser.add_argument(
         "--summary-only",
         action="store_true",
         help="Load the HERA data and print shapes without running nested sampling.",
@@ -94,7 +112,9 @@ def main() -> None:
         return
 
     package = load_delta21_package(args.package)
-    prior = default_delta21_hera_prior()
+    prior = default_delta21_hera_prior(
+        radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+    )
 
     # Compile the emulator on the HERA model-side coordinates before sampling.
     compile_parameters = prior.transform(jnp.full((prior.ndim,), 0.5, dtype=jnp.float32))

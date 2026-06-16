@@ -36,12 +36,20 @@ DEFAULT_PARAMETER_LABELS = {
     "nu_0": r"$\nu_0$",
     "tau": r"$\tau$",
     "log10fradio": r"$\log_{10} f_\mathrm{radio}$",
+    "log10Aradio": r"$\log_{10}(A_r)$",
     "log10Lr_per_SFR": r"$\log_{10}(L_r/\mathrm{SFR})$",
     "pop": "Pop.",
 }
 
 
 CORNER_PARAMETER_NAMES = (
+    "log10fstarII",
+    "log10fstarIII",
+    "log10fX",
+    "log10Aradio",
+)
+
+LUMINOSITY_CORNER_PARAMETER_NAMES = (
     "log10fstarIII",
     "log10fstarII",
     "log10Vc",
@@ -81,6 +89,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-prior", type=int, default=10_000)
     parser.add_argument("--n-corner-points", type=int, default=4_000)
     parser.add_argument("--n-pencil", type=int, default=1_000)
+    parser.add_argument(
+        "--log10-radio-min",
+        type=float,
+        default=-1.0,
+        help=(
+            "Lower prior bound for the radio-like parameter column. Use -6 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
+    parser.add_argument(
+        "--log10-radio-max",
+        type=float,
+        default=5.0,
+        help=(
+            "Upper prior bound for the radio-like parameter column. Use 3 for "
+            "the cosmic-string/aradio emulator."
+        ),
+    )
+    parser.add_argument(
+        "--corner-mode",
+        choices=("cosmic_string", "luminosity"),
+        default="cosmic_string",
+        help=(
+            "Parameters shown in the corner plot. `cosmic_string` plots "
+            "log10(fstarII), log10(fstarIII), log10(fX), and log10(Ar)."
+        ),
+    )
     return parser
 
 
@@ -98,18 +133,24 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(args.seed)
-    prior = default_delta21_hera_prior()
+    prior = default_delta21_hera_prior(
+        radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+    )
     posterior_samples, posterior_weights = read_anesthetic_csv(nested_results, prior.names)
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
-    corner_prior_samples = select_corner_parameters(prior_samples, prior.names)
-    corner_posterior_samples = select_corner_parameters(posterior_samples, prior.names)
+    corner_prior_samples = select_corner_parameters(prior_samples, prior.names, mode=args.corner_mode)
+    corner_posterior_samples = select_corner_parameters(
+        posterior_samples,
+        prior.names,
+        mode=args.corner_mode,
+    )
 
     corner_path = output_dir / "hera_prior_posterior_corner.png"
     plot_prior_posterior_corner(
         corner_prior_samples,
         corner_posterior_samples,
         posterior_weights,
-        names=CORNER_PARAMETER_NAMES,
+        names=corner_parameter_names(args.corner_mode),
         output_path=corner_path,
         rng=rng,
         n_corner_points=args.n_corner_points,
@@ -182,11 +223,39 @@ def draw_prior_samples(prior: Any, n_samples: int, rng: np.random.Generator) -> 
     return np.asarray(jax.device_get(prior.transform(jnp.asarray(unit))), dtype=np.float64)
 
 
-def select_corner_parameters(samples: np.ndarray, names: tuple[str, ...]) -> np.ndarray:
+def corner_parameter_names(mode: str = "cosmic_string") -> tuple[str, ...]:
     """
-    Select the paper-style parameters used in the HERA corner plot.
+    Return the plotted parameter names for one corner-plot convention.
+    """
+    if mode == "cosmic_string":
+        return CORNER_PARAMETER_NAMES
+    if mode == "luminosity":
+        return LUMINOSITY_CORNER_PARAMETER_NAMES
+    raise ValueError(f"Unknown corner plot mode {mode!r}.")
+
+
+def select_corner_parameters(
+    samples: np.ndarray,
+    names: tuple[str, ...],
+    *,
+    mode: str = "cosmic_string",
+) -> np.ndarray:
+    """
+    Select the plotted parameters used in the HERA corner plot.
     """
     index = {name: column for column, name in enumerate(names)}
+    if mode == "cosmic_string":
+        return np.column_stack(
+            [
+                samples[:, index["log10fstarII"]],
+                samples[:, index["log10fstarIII"]],
+                samples[:, index["log10fX"]],
+                samples[:, index["log10fradio"]],
+            ]
+        )
+    if mode != "luminosity":
+        raise ValueError(f"Unknown corner plot mode {mode!r}.")
+
     return np.column_stack(
         [
             samples[:, index["log10fstarIII"]],

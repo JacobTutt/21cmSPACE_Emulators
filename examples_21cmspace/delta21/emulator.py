@@ -252,7 +252,10 @@ def describe_delta21_package(path: str | Path) -> dict[str, Any]:
 # ------
 # Reference prior used by the power-spectrum nested-sampling examples.
 
-def default_delta21_inference_prior() -> PriorSpec:
+def default_delta21_inference_prior(
+    *,
+    radio_log10_range: tuple[float, float] = (-1.0, 5.0),
+) -> PriorSpec:
     """
     Return a default prior for the prepared Delta21 emulator inputs.
 
@@ -261,7 +264,16 @@ def default_delta21_inference_prior() -> PriorSpec:
     prepared table directly, so log-scaled parameters are sampled in log10
     space and discrete simulation parameters are sampled from their allowed
     values.
+
+    Parameters
+    ----------
+    radio_log10_range:
+        Prior range for the final radio-like parameter column. The original
+        21cmSPACE emulator used `fradio` with `[-1, 5]`; the cosmic-string
+        dataset uses the same column position for `aradio`, which should use
+        its own training range, for example `[-6, 3]`.
     """
+    radio_min, radio_max = radio_log10_range
     return PriorSpec(
         [
             UniformPrior("log10fstarII", -3.0, float(jnp.log10(0.5))),
@@ -274,17 +286,20 @@ def default_delta21_inference_prior() -> PriorSpec:
                 [*range(100, 1600, 100), 2000, 3000],
             ),
             UniformPrior("tau", 0.054 - 3.0 * 0.007, 0.054 + 3.0 * 0.007),
-            UniformPrior("log10fradio", -1.0, 5.0),
+            UniformPrior("log10fradio", radio_min, radio_max),
             DiscretePrior("pop", [231.0, 232.0, 233.0]),
         ]
     )
 
 
-def default_delta21_hera_prior() -> PriorSpec:
+def default_delta21_hera_prior(
+    *,
+    radio_log10_range: tuple[float, float] = (-1.0, 5.0),
+) -> PriorSpec:
     """
     Return the default prior used by the HERA example workflow.
     """
-    return default_delta21_inference_prior()
+    return default_delta21_inference_prior(radio_log10_range=radio_log10_range)
 
 
 # Internal Helpers
