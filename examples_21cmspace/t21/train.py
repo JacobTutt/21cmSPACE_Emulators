@@ -175,6 +175,7 @@ def train_t21_from_dataset_root(
     epochs: int | None = None,
     batch_size: int | None = None,
     validation_every_epochs: int | None = None,
+    learning_rate: float | None = None,
     learning_rate_schedule: str | None = None,
     learning_rate_final_fraction: float | None = None,
     learning_rate_warmup_epochs: int | None = None,
@@ -199,6 +200,8 @@ def train_t21_from_dataset_root(
         Optional override for the number of rows used in each optimizer update.
     validation_every_epochs:
         Optional override for the number of epochs between validation passes.
+    learning_rate:
+        Optional override for the initial optimizer learning rate.
     learning_rate_schedule:
         Optional schedule override. Supported values are `constant`, `cosine`,
         `warmup_cosine`, and `exponential_decay`.
@@ -228,6 +231,11 @@ def train_t21_from_dataset_root(
         shuffle_seed=shuffle_seed,
     )
     config = t21_config()
+    initial_learning_rate = (
+        config.optimizer.learning_rate
+        if learning_rate is None
+        else learning_rate
+    )
     schedule_name = (
         config.optimizer.learning_rate_schedule
         if learning_rate_schedule is None
@@ -265,7 +273,7 @@ def train_t21_from_dataset_root(
         prepared.train_targets,
         prepared.validation_features,
         prepared.validation_targets,
-        learning_rate=config.optimizer.learning_rate,
+        learning_rate=initial_learning_rate,
         weight_decay=config.optimizer.weight_decay,
         learning_rate_schedule=schedule_name,
         learning_rate_final_fraction=schedule_final_fraction,
@@ -309,7 +317,13 @@ def train_t21_from_dataset_root(
         target_scaling=prepared.target_scaling,
         training_config={
             "mlp": asdict(config.mlp),
-            "optimizer": asdict(config.optimizer),
+            "optimizer": {
+                **asdict(config.optimizer),
+                "learning_rate": initial_learning_rate,
+                "learning_rate_schedule": schedule_name,
+                "learning_rate_final_fraction": schedule_final_fraction,
+                "learning_rate_warmup_epochs": schedule_warmup_epochs,
+            },
             "training": asdict(config.training),
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
@@ -339,7 +353,7 @@ def train_t21_from_dataset_root(
         metadata=metadata,
         epochs=config.training.epochs if epochs is None else epochs,
         patience=config.training.early_stopping_patience if config.training.early_stop else None,
-        learning_rate=config.optimizer.learning_rate,
+        learning_rate=initial_learning_rate,
         weight_decay=config.optimizer.weight_decay,
         learning_rate_schedule=schedule_name,
         learning_rate_final_fraction=schedule_final_fraction,
@@ -435,6 +449,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of epochs between validation passes.",
     )
     parser.add_argument(
+        "--learning-rate",
+        type=float,
+        help="Initial optimizer learning-rate override.",
+    )
+    parser.add_argument(
         "--learning-rate-schedule",
         choices=["constant", "cosine", "warmup_cosine", "exponential_decay"],
         help="Learning-rate schedule override.",
@@ -502,21 +521,21 @@ def main() -> None:
         pprint(result)
         return
     if args.dataset_root:
-        # Prepare the real dataset.
-        prepared = prepare_twentyonecmspace_t21_training_split(
-            args.dataset_root,
-            shuffle_seed=args.shuffle_seed,
-        )
-        summary = {
-            "feature_names": prepared.feature_names,
-            "train_features_shape": prepared.train_features.shape,
-            "train_targets_shape": prepared.train_targets.shape,
-            "validation_features_shape": prepared.validation_features.shape,
-            "validation_targets_shape": prepared.validation_targets.shape,
-            "test_features_shape": prepared.test_features.shape,
-            "test_targets_shape": prepared.test_targets.shape,
-        }
         if args.prepare_only:
+            # Prepare the real dataset and print a summary without training.
+            prepared = prepare_twentyonecmspace_t21_training_split(
+                args.dataset_root,
+                shuffle_seed=args.shuffle_seed,
+            )
+            summary = {
+                "feature_names": prepared.feature_names,
+                "train_features_shape": prepared.train_features.shape,
+                "train_targets_shape": prepared.train_targets.shape,
+                "validation_features_shape": prepared.validation_features.shape,
+                "validation_targets_shape": prepared.validation_targets.shape,
+                "test_features_shape": prepared.test_features.shape,
+                "test_targets_shape": prepared.test_targets.shape,
+            }
             # Print preparation summary and exit.
             pprint(summary)
             return
@@ -528,6 +547,7 @@ def main() -> None:
             epochs=args.epochs,
             batch_size=args.batch_size,
             validation_every_epochs=args.validation_every_epochs,
+            learning_rate=args.learning_rate,
             learning_rate_schedule=args.learning_rate_schedule,
             learning_rate_final_fraction=args.learning_rate_final_fraction,
             learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
