@@ -82,6 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude prior. Use `aradio` for cosmic-string datasets.",
+    )
+    parser.add_argument(
         "--summary-only",
         action="store_true",
         help="Load the HERA data and print shapes without running nested sampling.",
@@ -114,6 +119,7 @@ def main() -> None:
     package = load_delta21_package(args.package)
     prior = default_delta21_hera_prior(
         radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+        radio_parameter_name=args.radio_parameter_name,
     )
 
     # Compile the emulator on the HERA model-side coordinates before sampling.

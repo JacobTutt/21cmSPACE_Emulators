@@ -172,6 +172,7 @@ def train_t21_from_dataset_root(
     dataset_root: str,
     *,
     output_path: str | Path | None = None,
+    radio_parameter_name: str = "fradio",
     epochs: int | None = None,
     batch_size: int | None = None,
     validation_every_epochs: int | None = None,
@@ -194,6 +195,9 @@ def train_t21_from_dataset_root(
         Path to the 21cmSPACE dataset.
     output_path:
         Optional custom path for the saved .nenemu package.
+    radio_parameter_name:
+        Name assigned to the radio-amplitude column. Use `aradio` for the
+        cosmic-string dataset.
     epochs:
         Optional override for the number of training epochs. This also defines
         the horizon for decay-based learning-rate schedules.
@@ -233,6 +237,7 @@ def train_t21_from_dataset_root(
     prepared = prepare_twentyonecmspace_t21_training_split(
         dataset_root,
         shuffle_seed=shuffle_seed,
+        radio_parameter_name=radio_parameter_name,
     )
     config = t21_config()
     initial_learning_rate = (
@@ -319,7 +324,7 @@ def train_t21_from_dataset_root(
     metadata = CheckpointMetadata(
         model_name="t21",
         package_version=_installed_package_version(),
-        emulator_spec=t21_spec(),
+        emulator_spec=t21_spec(radio_parameter_name=radio_parameter_name),
         input_scaling=prepared.feature_scaling,
         target_scaling=prepared.target_scaling,
         training_config={
@@ -334,6 +339,7 @@ def train_t21_from_dataset_root(
             "training": asdict(config.training),
             "early_stopping_patience": patience,
             "feature_names": list(prepared.feature_names),
+            "radio_parameter_name": radio_parameter_name,
             "dataset_root": str(dataset_root),
             "shuffle_seed": shuffle_seed,
             "data_device_mode": config.training.data_device_mode,
@@ -449,6 +455,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         help="Path to the output .nenemu checkpoint directory written after training.",
     )
+    parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude column. Use `aradio` for cosmic-string datasets.",
+    )
     parser.add_argument("--epochs", type=int, help="Epoch count override for real training.")
     parser.add_argument("--batch-size", type=int, help="Batch size override for real training.")
     parser.add_argument(
@@ -539,6 +550,7 @@ def main() -> None:
             prepared = prepare_twentyonecmspace_t21_training_split(
                 args.dataset_root,
                 shuffle_seed=args.shuffle_seed,
+                radio_parameter_name=args.radio_parameter_name,
             )
             summary = {
                 "feature_names": prepared.feature_names,
@@ -557,6 +569,7 @@ def main() -> None:
         summary = train_t21_from_dataset_root(
             args.dataset_root,
             output_path=args.output,
+            radio_parameter_name=args.radio_parameter_name,
             epochs=args.epochs,
             batch_size=args.batch_size,
             validation_every_epochs=args.validation_every_epochs,

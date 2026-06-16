@@ -126,6 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--delta21-log-target-floor", type=float, default=DELTA21_LOG_TARGET_FLOOR)
     parser.add_argument("--t21-random-examples", type=int, default=20)
     parser.add_argument("--delta21-random-examples", type=int, default=10)
+    parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude column. Use `aradio` for cosmic-string datasets.",
+    )
     return parser
 
 
@@ -152,6 +157,7 @@ def main() -> None:
             random_state=args.random_state,
             fe_floor_mk=args.t21_fe_floor_mk,
             prediction_batch_size=args.prediction_batch_size,
+            radio_parameter_name=args.radio_parameter_name,
         )
         plot_t21_random_examples(
             t21_eval,
@@ -186,6 +192,7 @@ def main() -> None:
             log_fe_floor=args.delta21_log_fe_floor,
             log_target_floor=args.delta21_log_target_floor,
             prediction_batch_size=args.prediction_batch_size,
+            radio_parameter_name=args.radio_parameter_name,
         )
         plot_delta21_fractional_error_maps(
             delta21_eval,
@@ -239,6 +246,7 @@ def evaluate_t21_test_set(
     random_state: int,
     fe_floor_mk: float,
     prediction_batch_size: int,
+    radio_parameter_name: str,
 ) -> T21Evaluation:
     """
     Evaluate a T21 package on the held-out test simulations.
@@ -246,6 +254,7 @@ def evaluate_t21_test_set(
     z_grid, test_parameters, truth = prepare_t21_test_grid(
         dataset_root,
         random_state=random_state,
+        radio_parameter_name=radio_parameter_name,
     )
     package = load_t21_package(package_path)
     emulator = build_t21_fixed_grid_emulator(
@@ -277,6 +286,7 @@ def evaluate_delta21_test_set(
     log_fe_floor: float,
     log_target_floor: float,
     prediction_batch_size: int,
+    radio_parameter_name: str,
 ) -> Delta21Evaluation:
     """
     Evaluate a Delta21 package on the held-out test simulations.
@@ -285,6 +295,7 @@ def evaluate_delta21_test_set(
         dataset_root,
         random_state=random_state,
         log_target_floor=log_target_floor,
+        radio_parameter_name=radio_parameter_name,
     )
     k_grid = np.power(10.0, log_k_grid)
 
@@ -322,13 +333,17 @@ def prepare_t21_test_grid(
     dataset_root: str | Path,
     *,
     random_state: int,
+    radio_parameter_name: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Return T21 test parameters and physical test targets on the emulator grid.
     """
     product = load_twentyonecmspace_t21(dataset_root)
-    parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
-    spec = t21_spec()
+    parameters = prepare_twentyonecmspace_t21_parameters(
+        product.parameters,
+        radio_parameter_name=radio_parameter_name,
+    )
+    spec = t21_spec(radio_parameter_name=radio_parameter_name)
     target = transform_target(product.target, data_log=False, offset=None)
 
     _, _, test_parameters, _, _, test_target = split_simulations(
@@ -358,13 +373,17 @@ def prepare_delta21_test_grid(
     *,
     random_state: int,
     log_target_floor: float,
+    radio_parameter_name: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Return Delta21 test parameters and log-space test targets on the emulator grid.
     """
     product = load_twentyonecmspace_delta21(dataset_root)
-    parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
-    spec = delta21_spec()
+    parameters = prepare_twentyonecmspace_delta21_parameters(
+        product.parameters,
+        radio_parameter_name=radio_parameter_name,
+    )
+    spec = delta21_spec(radio_parameter_name=radio_parameter_name)
     transformed_target = transform_target(
         product.target,
         data_log=True,

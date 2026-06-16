@@ -41,6 +41,18 @@ TWENTYONECMSPACE_COLUMNS = (
 )
 
 
+def twentyonecmspace_columns(*, radio_parameter_name: str = "fradio") -> tuple[str, ...]:
+    """
+    Return the raw 21cmSPACE parameter-column names for one dataset variant.
+
+    The original radio-background simulations use `fradio`. The cosmic-string
+    datasets use the same raw column position for `aradio`.
+    """
+    columns = list(TWENTYONECMSPACE_COLUMNS)
+    columns[8] = radio_parameter_name
+    return tuple(columns)
+
+
 # Data Containers
 # ---------------
 # Structured objects for holding the loaded 21cmSPACE data.

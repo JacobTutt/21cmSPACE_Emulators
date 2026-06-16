@@ -218,7 +218,7 @@ def _prepare_parameter_values(raw_parameters: jax.Array) -> jax.Array:
                 array[:, 4],  # alpha
                 array[:, 5],  # nu_0
                 array[:, 7],  # tau
-                jnp.log10(array[:, 8]),  # fradio
+                jnp.log10(array[:, 8]),  # radio amplitude: fradio or aradio
                 array[:, 9],  # pop
             ],
             axis=1,

@@ -15,8 +15,8 @@ import numpy as np
 
 from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from examples_21cmspace.twentyonecmspace import (
-    TWENTYONECMSPACE_COLUMNS,
     load_twentyonecmspace_t21,
+    twentyonecmspace_columns,
 )
 from jax_emu.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
 from jax_emu.data_preprocessing.preparation import (
@@ -29,9 +29,9 @@ from jax_emu.data_preprocessing.preparation import (
 # ----------------------
 # Defines the input/output contract for the T21 (brightness temperature) model.
 
-def t21_spec() -> EmulatorSpec:
+def t21_spec(*, radio_parameter_name: str = "fradio") -> EmulatorSpec:
     """
-    Return the baseline 21cmSPACE T21 contract using ``fradio``.
+    Return the baseline 21cmSPACE T21 contract.
 
     The network sees one redshift axis plus the transformed astrophysical
     parameters that control the global signal.
@@ -61,7 +61,7 @@ def t21_spec() -> EmulatorSpec:
                 discrete_values=tuple(float(v) for v in [*range(100, 1600, 100), 2000, 3000]),
             ),
             ParameterSpec(name="tau"),
-            ParameterSpec(name="fradio", transform="log10"),
+            ParameterSpec(name=radio_parameter_name, transform="log10"),
             ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
         # Target brightness temperature is trained in linear physical space.
@@ -74,7 +74,11 @@ def t21_spec() -> EmulatorSpec:
 # ---------------------
 # Logic for processing raw simulation parameters into model features.
 
-def prepare_twentyonecmspace_t21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
+def prepare_twentyonecmspace_t21_parameters(
+    raw_parameters: np.ndarray,
+    *,
+    radio_parameter_name: str = "fradio",
+) -> PreparedFeatures:
     """
     Prepare 21cmSPACE parameter tables for the current T21 emulator.
 
@@ -85,6 +89,10 @@ def prepare_twentyonecmspace_t21_parameters(raw_parameters: np.ndarray) -> Prepa
     ----------
     raw_parameters:
         The raw 12-column parameter table loaded from the 21cmSPACE dataset.
+    radio_parameter_name:
+        Name assigned to the radio-amplitude column. Use `fradio` for the
+        original radio-background dataset and `aradio` for the cosmic-string
+        dataset.
 
     Returns
     -------
@@ -93,9 +101,9 @@ def prepare_twentyonecmspace_t21_parameters(raw_parameters: np.ndarray) -> Prepa
     """
     return prepare_feature_matrix(
         raw_parameters,
-        TWENTYONECMSPACE_COLUMNS,
+        twentyonecmspace_columns(radio_parameter_name=radio_parameter_name),
         # Apply log10 to specified astrophysical parameters.
-        transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
+        transform_params=("fstarII", "fstarIII", "Vc", "fX", radio_parameter_name),
         # Discard parameters that are not used in the current T21 architecture.
         discard_params=("zeta", "feed", "delay"),
         # Mark parameters that were sampled from a fixed set of discrete values.
@@ -112,6 +120,7 @@ def prepare_twentyonecmspace_t21_training_split(
     *,
     random_state: int = 42,
     shuffle_seed: int = 42,
+    radio_parameter_name: str = "fradio",
 ) -> PreparedSplit:
     """
     Prepare 21cmSPACE `T21` arrays on one shared redshift grid.
@@ -124,6 +133,8 @@ def prepare_twentyonecmspace_t21_training_split(
         Seed for splitting simulations into train/val/test sets.
     shuffle_seed:
         Seed for shuffling the final flattened rows.
+    radio_parameter_name:
+        Name assigned to the radio-amplitude column.
 
     Returns
     -------
@@ -133,9 +144,12 @@ def prepare_twentyonecmspace_t21_training_split(
     # Load the raw 21cmSPACE brightness temperature data.
     product = load_twentyonecmspace_t21(dataset_root)
     # Process the raw parameter table into the transformed feature set.
-    prepared_parameters = prepare_twentyonecmspace_t21_parameters(product.parameters)
+    prepared_parameters = prepare_twentyonecmspace_t21_parameters(
+        product.parameters,
+        radio_parameter_name=radio_parameter_name,
+    )
     # Get the T21 emulator contract.
-    spec = t21_spec()
+    spec = t21_spec(radio_parameter_name=radio_parameter_name)
 
     # Run the generic preparation workflow with T21-specific settings.
     return prepare_fixed_grid_training_split(
@@ -153,7 +167,7 @@ def prepare_twentyonecmspace_t21_training_split(
             "alpha": "minmax_zero_to_one",
             "nu_0": "minmax_zero_to_one",
             "tau": "zscore",
-            "log10fradio": "zscore",
+            f"log10{radio_parameter_name}": "zscore",
             "pop": "minmax_zero_to_one",
         },
         # T21 signals are trained in linear space (no log transform on targets).

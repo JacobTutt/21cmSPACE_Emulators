@@ -57,6 +57,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--logz-live-threshold", type=float, default=-3.0)
     parser.add_argument("--theory-fractional-error", type=float, default=0.2)
     parser.add_argument(
+        "--log10-radio-min",
+        type=float,
+        default=-1.0,
+        help="Lower prior bound for the radio-amplitude parameter.",
+    )
+    parser.add_argument(
+        "--log10-radio-max",
+        type=float,
+        default=5.0,
+        help="Upper prior bound for the radio-amplitude parameter.",
+    )
+    parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude prior. Use `aradio` for cosmic-string datasets.",
+    )
+    parser.add_argument(
         "--summary-only",
         action="store_true",
         help="Load the NenuFAR data and print shapes without running nested sampling.",
@@ -80,7 +97,10 @@ def main() -> None:
         return
 
     package = load_delta21_package(args.package)
-    prior = default_delta21_inference_prior()
+    prior = default_delta21_inference_prior(
+        radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+        radio_parameter_name=args.radio_parameter_name,
+    )
 
     # Compile the emulator on the NenuFAR coordinate list before sampling.
     compile_parameters = prior.transform(jnp.full((prior.ndim,), 0.5, dtype=jnp.float32))

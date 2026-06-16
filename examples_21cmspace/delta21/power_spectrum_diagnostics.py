@@ -115,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
             "the cosmic-string/aradio emulator."
         ),
     )
+    parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude prior. Use `aradio` for cosmic-string datasets.",
+    )
     return parser
 
 
@@ -129,6 +134,7 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
     prior = default_delta21_inference_prior(
         radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+        radio_parameter_name=args.radio_parameter_name,
     )
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
     fit_configs = tuple(parse_fit_config(value) for value in args.fit)

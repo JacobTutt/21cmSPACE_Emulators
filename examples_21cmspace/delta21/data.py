@@ -17,8 +17,8 @@ import numpy as np
 from jax_emu.data_preprocessing.specs import AxisSpec, EmulatorSpec, ParameterSpec
 from examples_21cmspace.twentyonecmspace import (
     DIMENSIONLESS_HUBBLE_PARAMETER,
-    TWENTYONECMSPACE_COLUMNS,
     load_twentyonecmspace_delta21,
+    twentyonecmspace_columns,
 )
 from jax_emu.data_preprocessing.parameters import PreparedFeatures, prepare_feature_matrix
 from jax_emu.data_preprocessing.preparation import PreparedSplit, prepare_fixed_grid_training_split
@@ -32,7 +32,7 @@ DELTA21_LOW_Z_GRID_POWER = 1.8
 # ----------------------
 # Defines the input/output contract for the Delta21 (power spectrum) model.
 
-def delta21_spec() -> EmulatorSpec:
+def delta21_spec(*, radio_parameter_name: str = "fradio") -> EmulatorSpec:
     """
     Return the baseline 21cmSPACE Delta21 emulator contract.
 
@@ -77,7 +77,7 @@ def delta21_spec() -> EmulatorSpec:
                 discrete_values=tuple(float(v) for v in [*range(100, 1600, 100), 2000, 3000]),
             ),
             ParameterSpec(name="tau"),
-            ParameterSpec(name="fradio", transform="log10"),
+            ParameterSpec(name=radio_parameter_name, transform="log10"),
             ParameterSpec(name="pop", discrete_values=(231.0, 232.0, 233.0)),
         ),
         # Target power spectrum is trained in log10 space with a small positive offset.
@@ -90,19 +90,27 @@ def delta21_spec() -> EmulatorSpec:
 # ---------------------
 # Logic for processing raw simulation parameters into model features.
 
-def prepare_twentyonecmspace_delta21_parameters(raw_parameters: np.ndarray) -> PreparedFeatures:
+def prepare_twentyonecmspace_delta21_parameters(
+    raw_parameters: np.ndarray,
+    *,
+    radio_parameter_name: str = "fradio",
+) -> PreparedFeatures:
     """
     Prepare 21cmSPACE 12-parameter arrays for the `Delta21` emulator.
 
     The raw table contains 12 columns, but the workflow uses only nine of
     them. It drops `zeta`, `feed`, and `delay`, and logs the star-formation and
-    radio-efficiency style parameters, while keeping `alpha`, `nu_0`, and
+    radio-amplitude style parameters, while keeping `alpha`, `nu_0`, and
     `pop` available as explicitly discrete metadata.
 
     Parameters
     ----------
     raw_parameters:
         The raw 12-column parameter table loaded from the 21cmSPACE dataset.
+    radio_parameter_name:
+        Name assigned to the radio-amplitude column. Use `fradio` for the
+        original radio-background dataset and `aradio` for the cosmic-string
+        dataset.
 
     Returns
     -------
@@ -111,9 +119,9 @@ def prepare_twentyonecmspace_delta21_parameters(raw_parameters: np.ndarray) -> P
     """
     return prepare_feature_matrix(
         raw_parameters,
-        TWENTYONECMSPACE_COLUMNS,
+        twentyonecmspace_columns(radio_parameter_name=radio_parameter_name),
         # Apply log10 to specified astrophysical parameters.
-        transform_params=("fstarII", "fstarIII", "Vc", "fX", "fradio"),
+        transform_params=("fstarII", "fstarIII", "Vc", "fX", radio_parameter_name),
         # Discard parameters that are not used in the current Delta21 architecture.
         discard_params=("zeta", "feed", "delay"),
         # Mark parameters that were sampled from a fixed set of discrete values.
@@ -130,6 +138,7 @@ def prepare_twentyonecmspace_delta21_training_split(
     *,
     random_state: int = 42,
     shuffle_seed: int = 42,
+    radio_parameter_name: str = "fradio",
 ) -> PreparedSplit:
     """
     Prepare 21cmSPACE `Delta21` arrays on one shared `(z, k)` grid.
@@ -142,6 +151,8 @@ def prepare_twentyonecmspace_delta21_training_split(
         Seed for splitting simulations into train/val/test sets.
     shuffle_seed:
         Seed for shuffling the final flattened rows.
+    radio_parameter_name:
+        Name assigned to the radio-amplitude column.
 
     Returns
     -------
@@ -151,9 +162,12 @@ def prepare_twentyonecmspace_delta21_training_split(
     # Load the raw 21cmSPACE power-spectrum data.
     product = load_twentyonecmspace_delta21(dataset_root)
     # Process the raw parameter table into the transformed feature set.
-    prepared_parameters = prepare_twentyonecmspace_delta21_parameters(product.parameters)
+    prepared_parameters = prepare_twentyonecmspace_delta21_parameters(
+        product.parameters,
+        radio_parameter_name=radio_parameter_name,
+    )
     # Get the Delta21 emulator contract.
-    spec = delta21_spec()
+    spec = delta21_spec(radio_parameter_name=radio_parameter_name)
     sampled_axes = delta21_low_z_sampled_axes(spec.axes)
 
     # Run the generic preparation workflow with Delta21-specific settings.
@@ -173,7 +187,7 @@ def prepare_twentyonecmspace_delta21_training_split(
             "alpha": "minmax_zero_to_one",
             "nu_0": "minmax_zero_to_one",
             "tau": "zscore",
-            "log10fradio": "zscore",
+            f"log10{radio_parameter_name}": "zscore",
             "pop": "minmax_zero_to_one",
         },
         # Delta21 signals are trained in log10 space with a small positive offset.

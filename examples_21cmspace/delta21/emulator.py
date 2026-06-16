@@ -255,6 +255,7 @@ def describe_delta21_package(path: str | Path) -> dict[str, Any]:
 def default_delta21_inference_prior(
     *,
     radio_log10_range: tuple[float, float] = (-1.0, 5.0),
+    radio_parameter_name: str = "fradio",
 ) -> PriorSpec:
     """
     Return a default prior for the prepared Delta21 emulator inputs.
@@ -272,6 +273,9 @@ def default_delta21_inference_prior(
         21cmSPACE emulator used `fradio` with `[-1, 5]`; the cosmic-string
         dataset uses the same column position for `aradio`, which should use
         its own training range, for example `[-6, 3]`.
+    radio_parameter_name:
+        Name used for the radio-amplitude prior. Use `fradio` for the original
+        radio-background dataset and `aradio` for the cosmic-string dataset.
     """
     radio_min, radio_max = radio_log10_range
     return PriorSpec(
@@ -286,7 +290,7 @@ def default_delta21_inference_prior(
                 [*range(100, 1600, 100), 2000, 3000],
             ),
             UniformPrior("tau", 0.054 - 3.0 * 0.007, 0.054 + 3.0 * 0.007),
-            UniformPrior("log10fradio", radio_min, radio_max),
+            UniformPrior(f"log10{radio_parameter_name}", radio_min, radio_max),
             DiscretePrior("pop", [231.0, 232.0, 233.0]),
         ]
     )
@@ -295,11 +299,15 @@ def default_delta21_inference_prior(
 def default_delta21_hera_prior(
     *,
     radio_log10_range: tuple[float, float] = (-1.0, 5.0),
+    radio_parameter_name: str = "fradio",
 ) -> PriorSpec:
     """
     Return the default prior used by the HERA example workflow.
     """
-    return default_delta21_inference_prior(radio_log10_range=radio_log10_range)
+    return default_delta21_inference_prior(
+        radio_log10_range=radio_log10_range,
+        radio_parameter_name=radio_parameter_name,
+    )
 
 
 # Internal Helpers
@@ -324,7 +332,7 @@ def _prepare_parameter_values(raw_parameters: jax.Array) -> jax.Array:
                 array[:, 4],  # alpha
                 array[:, 5],  # nu_0
                 array[:, 7],  # tau
-                jnp.log10(array[:, 8]),  # fradio
+                jnp.log10(array[:, 8]),  # radio amplitude: fradio or aradio
                 array[:, 9],  # pop
             ],
             axis=1,

@@ -36,7 +36,7 @@ DEFAULT_PARAMETER_LABELS = {
     "nu_0": r"$\nu_0$",
     "tau": r"$\tau$",
     "log10fradio": r"$\log_{10} f_\mathrm{radio}$",
-    "log10Aradio": r"$\log_{10}(A_r)$",
+    "log10aradio": r"$\log_{10}(A_r)$",
     "log10Lr_per_SFR": r"$\log_{10}(L_r/\mathrm{SFR})$",
     "pop": "Pop.",
 }
@@ -46,7 +46,7 @@ CORNER_PARAMETER_NAMES = (
     "log10fstarII",
     "log10fstarIII",
     "log10fX",
-    "log10Aradio",
+    "log10aradio",
 )
 
 LUMINOSITY_CORNER_PARAMETER_NAMES = (
@@ -108,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--radio-parameter-name",
+        default="fradio",
+        help="Name for the radio-amplitude prior. Use `aradio` for cosmic-string datasets.",
+    )
+    parser.add_argument(
         "--corner-mode",
         choices=("cosmic_string", "luminosity"),
         default="cosmic_string",
@@ -135,6 +140,7 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
     prior = default_delta21_hera_prior(
         radio_log10_range=(args.log10_radio_min, args.log10_radio_max),
+        radio_parameter_name=args.radio_parameter_name,
     )
     posterior_samples, posterior_weights = read_anesthetic_csv(nested_results, prior.names)
     prior_samples = draw_prior_samples(prior, args.n_prior, rng)
@@ -245,26 +251,38 @@ def select_corner_parameters(
     """
     index = {name: column for column, name in enumerate(names)}
     if mode == "cosmic_string":
+        radio_index = _first_available_index(index, ("log10aradio", "log10fradio"))
         return np.column_stack(
             [
                 samples[:, index["log10fstarII"]],
                 samples[:, index["log10fstarIII"]],
                 samples[:, index["log10fX"]],
-                samples[:, index["log10fradio"]],
+                samples[:, radio_index],
             ]
         )
     if mode != "luminosity":
         raise ValueError(f"Unknown corner plot mode {mode!r}.")
 
+    radio_index = _first_available_index(index, ("log10fradio", "log10aradio"))
     return np.column_stack(
         [
             samples[:, index["log10fstarIII"]],
             samples[:, index["log10fstarII"]],
             samples[:, index["log10Vc"]],
             samples[:, index["log10fX"]] + LOG10_LX_PER_SFR_OFFSET,
-            samples[:, index["log10fradio"]] + LOG10_LR_PER_SFR_OFFSET,
+            samples[:, radio_index] + LOG10_LR_PER_SFR_OFFSET,
         ]
     )
+
+
+def _first_available_index(index: dict[str, int], names: tuple[str, ...]) -> int:
+    """
+    Return the first available column index from a set of aliases.
+    """
+    for name in names:
+        if name in index:
+            return index[name]
+    raise KeyError(f"None of the requested columns are available: {names}.")
 
 
 def plot_prior_posterior_corner(
