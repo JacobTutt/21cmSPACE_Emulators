@@ -48,6 +48,7 @@ dev = [
 21cmspace-hera-infer = "examples_21cmspace.delta21.hera_inference:main"
 21cmspace-hera-diagnostics = "examples_21cmspace.delta21.hera_diagnostics:main"
 21cmspace-nenufar-infer = "examples_21cmspace.delta21.nenufar_inference:main"
+21cmspace-publication-performance-plots = "examples_21cmspace.publication_performance_plots:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
