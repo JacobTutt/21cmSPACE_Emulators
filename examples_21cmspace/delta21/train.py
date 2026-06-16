@@ -184,6 +184,7 @@ def train_delta21_from_dataset_root(
     learning_rate_schedule: str | None = None,
     learning_rate_final_fraction: float | None = None,
     learning_rate_warmup_epochs: int | None = None,
+    early_stopping_patience: int | None = None,
     max_runtime_seconds: float | None = None,
     shutdown_margin_seconds: float | None = None,
     shuffle_seed: int = 42,
@@ -216,6 +217,9 @@ def train_delta21_from_dataset_root(
     learning_rate_warmup_epochs:
         Optional number of warmup epochs for `warmup_cosine`. Ignored by the
         other schedules.
+    early_stopping_patience:
+        Optional override for the number of validation epochs without
+        improvement before early stopping.
     max_runtime_seconds:
         Optional wall-clock training budget for graceful shutdown.
     shutdown_margin_seconds:
@@ -261,6 +265,11 @@ def train_delta21_from_dataset_root(
         if validation_every_epochs is None
         else validation_every_epochs
     )
+    patience = (
+        config.training.early_stopping_patience
+        if early_stopping_patience is None
+        else early_stopping_patience
+    )
 
     # 2. Build the neural network architecture.
     model = DenseMLP(
@@ -289,9 +298,7 @@ def train_delta21_from_dataset_root(
         batches_per_block=config.training.batches_per_block,
         validation_every_epochs=validation_interval,
         seed=shuffle_seed,
-        early_stopping_patience=(
-            config.training.early_stopping_patience if config.training.early_stop else None
-        ),
+        early_stopping_patience=patience if config.training.early_stop else None,
         early_stopping_min_delta=config.training.early_stopping_min_delta,
         max_runtime_seconds=(
             config.training.terminate_time_seconds
@@ -330,6 +337,7 @@ def train_delta21_from_dataset_root(
                 "learning_rate_warmup_epochs": schedule_warmup_epochs,
             },
             "training": asdict(config.training),
+            "early_stopping_patience": patience,
             "feature_names": list(prepared.feature_names),
             "dataset_root": str(dataset_root),
             "shuffle_seed": shuffle_seed,
@@ -357,7 +365,7 @@ def train_delta21_from_dataset_root(
         loss=config.training.loss_name,
         metadata=metadata,
         epochs=config.training.epochs if epochs is None else epochs,
-        patience=config.training.early_stopping_patience if config.training.early_stop else None,
+        patience=patience if config.training.early_stop else None,
         learning_rate=initial_learning_rate,
         weight_decay=config.optimizer.weight_decay,
         learning_rate_schedule=schedule_name,
@@ -474,6 +482,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Warmup epoch count for warmup_cosine only.",
     )
     parser.add_argument(
+        "--early-stopping-patience",
+        type=int,
+        help="Validation patience override for early stopping.",
+    )
+    parser.add_argument(
         "--max-runtime-seconds",
         type=float,
         help="Stop cleanly when the training wall-clock budget is nearly exhausted.",
@@ -556,6 +569,7 @@ def main() -> None:
             learning_rate_schedule=args.learning_rate_schedule,
             learning_rate_final_fraction=args.learning_rate_final_fraction,
             learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
+            early_stopping_patience=args.early_stopping_patience,
             max_runtime_seconds=args.max_runtime_seconds,
             shutdown_margin_seconds=args.shutdown_margin_seconds,
             shuffle_seed=args.shuffle_seed,
